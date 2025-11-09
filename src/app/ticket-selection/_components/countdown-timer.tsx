@@ -3,7 +3,7 @@
 import { useCountdown } from '@/hooks/use-countdown'
 import { useRouter } from 'next/navigation'
 import { Clock } from 'lucide-react'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+// import { Alert, AlertDescription } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
 
 interface CountdownTimerProps {
@@ -37,12 +37,12 @@ export function CountdownTimer({ onExpired, className }: CountdownTimerProps) {
 
   if (expired) {
     return (
-      <Alert className="border-red-500 bg-red-50">
+      <div className="border border-red-500 bg-red-50 rounded-lg p-4 flex items-center space-x-2">
         <Clock className="h-4 w-4 text-red-500" />
-        <AlertDescription className="text-red-700">
+        <span className="text-red-700">
           Your session has expired. You will be redirected to the queue.
-        </AlertDescription>
-      </Alert>
+        </span>
+      </div>
     )
   }
 
@@ -67,18 +67,18 @@ export function CountdownTimer({ onExpired, className }: CountdownTimerProps) {
       </div>
       
       {isWarning && (
-        <Alert className={cn(
-          "ml-4",
+        <div className={cn(
+          "ml-4 border rounded-lg p-3",
           isCritical ? "border-red-500 bg-red-50" : "border-yellow-500 bg-yellow-50"
         )}>
-          <AlertDescription className={cn(
+          <span className={cn(
             isCritical ? "text-red-700" : "text-yellow-700"
           )}>
             {isCritical 
               ? "⚠️ Less than 30 seconds remaining!" 
               : "⏰ Less than 2 minutes remaining!"}
-          </AlertDescription>
-        </Alert>
+          </span>
+        </div>
       )}
     </div>
   )

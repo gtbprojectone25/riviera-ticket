@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { PageContainer } from '@/components/page-container'
 import { Button } from '@/components/ui/button'
@@ -27,16 +27,20 @@ export default function ConfirmationPage() {
   const searchParams = useSearchParams()
   const orderId = searchParams.get('orderId')
   
-  const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null)
-
-  useEffect(() => {
-    // Load order details from localStorage (in real app, from API)
+  // Initialize orderDetails from localStorage
+  const [orderDetails] = useState<OrderDetails | null>(() => {
+    if (typeof window === 'undefined') return null
+    
     const savedOrder = localStorage.getItem('last-order')
     if (savedOrder) {
-      const order = JSON.parse(savedOrder) as OrderDetails
-      setOrderDetails(order)
+      try {
+        return JSON.parse(savedOrder) as OrderDetails
+      } catch {
+        return null
+      }
     }
-  }, [])
+    return null
+  })
 
   if (!orderDetails) {
     return (
@@ -44,7 +48,7 @@ export default function ConfirmationPage() {
         <div className="text-center py-12">
           <h1 className="text-2xl font-bold text-white mb-4">Order not found</h1>
           <p className="text-muted-foreground mb-6">
-            We couldn't find your order. Please check your email for confirmation details.
+            We couldn&apos;t find your order. Please check your email for confirmation details.
           </p>
           <Button 
             onClick={() => router.push('/')}
@@ -58,8 +62,8 @@ export default function ConfirmationPage() {
   }
 
   const { cart, total } = orderDetails
-  const standardSeats = cart.seats.filter((seat: any) => seat.type === 'STANDARD')
-  const vipSeats = cart.seats.filter((seat: any) => seat.type === 'VIP')
+  const standardSeats = cart.seats.filter((seat: CartSeat) => seat.type === 'STANDARD')
+  const vipSeats = cart.seats.filter((seat: CartSeat) => seat.type === 'VIP')
 
   const handleDownloadTickets = () => {
     // In real app, this would generate and download PDF tickets
@@ -78,7 +82,7 @@ export default function ConfirmationPage() {
       start: '2026-04-16T16:00:00',
       end: '2026-04-16T18:30:00',
       location: 'Roxy Cinema',
-      description: `Seats: ${cart.seats.map((s: any) => s.seatId).join(', ')}`
+      description: `Seats: ${cart.seats.map((s: CartSeat) => s.seatId).join(', ')}`
     }
     
     // Generate Google Calendar URL
@@ -155,7 +159,7 @@ export default function ConfirmationPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {cart.seats.map((seat: any) => (
+                  {cart.seats.map((seat: CartSeat) => (
                     <div key={seat.seatId} className="text-center p-3 bg-muted/20 rounded-lg">
                       <div className="w-10 h-10 bg-blue-600 rounded mx-auto mb-2 flex items-center justify-center text-white font-bold">
                         {seat.seatId}
@@ -181,10 +185,10 @@ export default function ConfirmationPage() {
                 <div className="inline-block p-4 bg-white rounded-lg mb-4">
                   {/* Mock QR Code - in real app, use a QR code library */}
                   <div className="w-32 h-32 bg-black rounded grid grid-cols-8 gap-px p-2">
-                    {Array.from({ length: 64 }).map((_, i) => (
+                    {Array.from({ length: 64 }, (_, i) => (
                       <div 
                         key={i} 
-                        className={`${Math.random() > 0.5 ? 'bg-black' : 'bg-white'} rounded-sm`}
+                        className={`${i % 3 === 0 ? 'bg-black' : 'bg-white'} rounded-sm`}
                       />
                     ))}
                   </div>
@@ -214,7 +218,7 @@ export default function ConfirmationPage() {
                         Standard Tickets ({standardSeats.length}x)
                       </span>
                       <span className="text-white">
-                        {formatCurrency(standardSeats.reduce((sum: number, seat: any) => sum + seat.price, 0))}
+                        {formatCurrency(standardSeats.reduce((sum: number, seat: CartSeat) => sum + seat.price, 0))}
                       </span>
                     </div>
                   )}
@@ -225,7 +229,7 @@ export default function ConfirmationPage() {
                         VIP Tickets ({vipSeats.length}x)
                       </span>
                       <span className="text-white">
-                        {formatCurrency(vipSeats.reduce((sum: number, seat: any) => sum + seat.price, 0))}
+                        {formatCurrency(vipSeats.reduce((sum: number, seat: CartSeat) => sum + seat.price, 0))}
                       </span>
                     </div>
                   )}
