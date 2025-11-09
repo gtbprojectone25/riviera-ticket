@@ -1,8 +1,14 @@
-import { redirect } from 'next/navigation'
+import { PageContainer } from '@/components/page-container'
+import { HeroSection } from './components/hero-section'
 
 /**
- * Root page that redirects to main landing page
+ * Main landing page for Riviera Ticket - Frame 2
+ * Features hero section with movie information and ticket CTA
  */
-export default function RootPage() {
-  redirect('/(main)')
+export default function HomePage() {
+  return (
+    <PageContainer className="relative">
+      <HeroSection />
+    </PageContainer>
+  )
 }
