@@ -3,112 +3,104 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Calendar, Clock, MapPin } from 'lucide-react'
+import { MapPin } from 'lucide-react'
+import { useState } from 'react'
+import { LocationModal } from './location-modal'
 
-/**
- * Hero section component for the landing page
- * Features the main movie poster, title, and primary CTA
- */
 export function HeroSection() {
+  const [showLocationModal, setShowLocationModal] = useState(false)
+
   return (
-    <section className="relative py-12 lg:py-20">
-      <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-        {/* Movie Poster */}
-        <div className="order-2 lg:order-1 flex justify-center">
-          <Card className="w-full max-w-md bg-gradient-to-b from-gray-900 to-gray-800 border-gray-700">
-            <CardContent className="p-6">
-              {/* Poster Image Placeholder */}
-              <div className="aspect-[2/3] bg-gradient-to-b from-orange-900 via-red-900 to-gray-900 rounded-lg mb-4 relative overflow-hidden">
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center text-white">
-                    <h3 className="text-2xl font-bold mb-2">THE ODYSSEY</h3>
-                    <p className="text-sm opacity-80">DEFY THE GODS</p>
-                    <p className="text-lg font-semibold mt-4">07.17.26</p>
+    <div className="min-h-screen bg-black text-white relative overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-800">
+        <div className="text-white font-bold">LOGO</div>
+        <div className="text-blue-400 font-bold text-xl">IMAX</div>
+      </div>
+
+      <div className="container mx-auto px-4 py-8 relative z-10">
+        <div className="max-w-sm mx-auto space-y-6">
+          {/* Movie Poster */}
+          <Card className="bg-gray-900 border-gray-700 overflow-hidden">
+            <CardContent className="p-0">
+              {/* Poster Image */}
+              <div className="aspect-[2/3] bg-gradient-to-b from-orange-900/50 to-black relative">
+                <div className="absolute inset-0 flex flex-col justify-center items-center text-center p-6">
+                  {/* Movie Title */}
+                  <div className="space-y-2 mb-8">
+                    <div className="text-xs text-gray-400 tracking-wider">
+                      UMA EXPERIÊNCIA SENSORIAL
+                    </div>
+                    <h1 className="text-3xl font-bold tracking-wider">
+                      THE <span className="text-orange-400">ODYSSEY</span>
+                    </h1>
+                    <div className="text-orange-400 text-sm tracking-wider">
+                      DEFY THE GODS
+                    </div>
+                    <div className="text-2xl font-bold text-white mt-4">
+                      07.17.25
+                    </div>
+                  </div>
+
+                  {/* Planet/Visual Element */}
+                  <div className="w-32 h-32 rounded-full bg-gradient-to-b from-orange-600 to-orange-900 relative mb-8">
+                    <div className="absolute inset-2 rounded-full bg-gradient-to-b from-orange-700 to-orange-950"></div>
+                    {/* Floating particles effect */}
+                    <div className="absolute -top-2 -right-2 w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
+                    <div className="absolute -bottom-1 -left-1 w-1 h-1 bg-orange-300 rounded-full animate-pulse delay-300"></div>
+                    <div className="absolute top-1/3 -right-3 w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse delay-700"></div>
                   </div>
                 </div>
-                
-                {/* IMAX Badge */}
-                <div className="absolute top-4 right-4">
-                  <Badge className="bg-blue-600 text-white">IMAX</Badge>
+
+                {/* Genre/Rating Tags */}
+                <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2 justify-center">
+                  <Badge variant="secondary" className="bg-white/20 text-white text-xs px-2 py-1">
+                    Drama
+                  </Badge>
+                  <Badge variant="secondary" className="bg-white/20 text-white text-xs px-2 py-1">
+                    70%
+                  </Badge>
+                  <Badge variant="secondary" className="bg-white/20 text-white text-xs px-2 py-1">
+                    Adult Content
+                  </Badge>
+                  <Badge variant="secondary" className="bg-white/20 text-white text-xs px-2 py-1">
+                    +18
+                  </Badge>
                 </div>
               </div>
 
-              {/* Movie Tags */}
-              <div className="flex flex-wrap gap-2 mb-4">
-                <Badge variant="outline" className="text-xs">Premium</Badge>
-                <Badge variant="outline" className="text-xs">70mm</Badge>
-                <Badge variant="outline" className="text-xs">Adult Cinema</Badge>
-                <Badge variant="outline" className="text-xs">+18</Badge>
-              </div>
-
-              {/* Movie Info */}
-              <div className="text-white text-sm space-y-2">
-                <p className="font-medium">Você está na fila</p>
-                <p className="text-xs text-gray-400">
-                  Aguarde sua vez para comprar os ingressos
+              {/* Movie Info Section */}
+              <div className="bg-gray-900 p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-white font-medium">Você está no fila</h3>
+                  <div className="text-blue-400 font-bold">IMAX</div>
+                </div>
+                
+                <p className="text-gray-400 text-sm leading-relaxed">
+                  Os melhores lugares estão à venda no cinema, 
+                  aguarde seu tempo.
                 </p>
+
+                {/* Location Button */}
+                <Button
+                  onClick={() => setShowLocationModal(true)}
+                  variant="outline"
+                  className="w-full bg-transparent border-gray-600 text-white hover:bg-gray-800 flex items-center gap-2"
+                >
+                  <MapPin className="w-4 h-4" />
+                  Buscar localização mais próxima
+                </Button>
               </div>
             </CardContent>
           </Card>
         </div>
-
-        {/* Hero Content */}
-        <div className="order-1 lg:order-2 text-center lg:text-left">
-          <div className="space-y-6">
-            {/* Main Headline */}
-            <div>
-              <h1 className="text-4xl lg:text-6xl font-bold text-white leading-tight">
-                THE ODYSSEY
-              </h1>
-              <p className="text-xl lg:text-2xl text-red-400 font-semibold mt-2">
-                DEFY THE GODS
-              </p>
-              <p className="text-lg text-gray-300 mt-2">
-                07.17.26
-              </p>
-            </div>
-
-            {/* Movie Details */}
-            <div className="space-y-3 text-gray-300">
-              <div className="flex items-center justify-center lg:justify-start gap-2">
-                <Calendar className="w-5 h-5" />
-                <span>July 17, 2026</span>
-              </div>
-              <div className="flex items-center justify-center lg:justify-start gap-2">
-                <Clock className="w-5 h-5" />
-                <span>Multiple Sessions Available</span>
-              </div>
-              <div className="flex items-center justify-center lg:justify-start gap-2">
-                <MapPin className="w-5 h-5" />
-                <span>IMAX Theaters</span>
-              </div>
-            </div>
-
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-              <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-8">
-                Get Tickets Now
-              </Button>
-              <Button size="lg" variant="outline" className="border-gray-600 text-white hover:bg-gray-800">
-                Watch Trailer
-              </Button>
-            </div>
-
-            {/* IMAX Experience Note */}
-            <div className="bg-blue-600/10 border border-blue-600/20 rounded-lg p-4 mt-8">
-              <div className="flex items-center gap-3">
-                <div className="bg-blue-600 px-3 py-1 rounded">
-                  <span className="text-white font-bold text-sm">IMAX</span>
-                </div>
-                <div className="text-sm text-gray-300">
-                  <p className="font-medium">Experience THE ODYSSEY in IMAX 70mm</p>
-                  <p className="text-gray-400">The most immersive film experience</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
-    </section>
+
+      {/* Location Modal */}
+      <LocationModal 
+        isOpen={showLocationModal} 
+        onClose={() => setShowLocationModal(false)} 
+      />
+    </div>
   )
 }

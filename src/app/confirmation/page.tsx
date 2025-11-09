@@ -96,12 +96,15 @@ export default function ConfirmationPage() {
       <div className="space-y-8">
         {/* Success Header */}
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500 rounded-full mb-4">
-            <CheckCircle className="h-8 w-8 text-white" />
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-green-500 rounded-full mb-6">
+            <CheckCircle className="h-10 w-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Payment Successful!</h1>
-          <p className="text-muted-foreground text-lg">
-            Your tickets have been confirmed. Get ready for an amazing IMAX experience!
+          <h1 className="text-4xl font-bold text-white mb-4">Purchase Completed!</h1>
+          <p className="text-muted-foreground text-lg mb-2">
+            Thank you for your purchase! Your IMAX experience awaits.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Order #{orderId} • {new Date(orderDetails.purchaseDate).toLocaleDateString()}
           </p>
         </div>
 

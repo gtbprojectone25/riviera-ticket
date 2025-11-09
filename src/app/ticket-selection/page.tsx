@@ -1,39 +1,50 @@
 'use client'
 
 import { useState } from 'react'
-import { PageContainer } from '@/components/page-container'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { SeatSelection } from './_components/seat-selection'
-import { CountdownTimer } from './_components/countdown-timer'
 import { useCart } from '@/hooks/use-cart'
 import { useRouter } from 'next/navigation'
 import { formatCurrency } from '@/lib/utils'
+import { ChevronLeft, MapPin, Calendar, Clock } from 'lucide-react'
 import type { Seat } from '@/types'
 
-/**
- * Ticket Selection Page - Main seat selection interface
- * Includes session info, seat picker, and cart summary
- */
 export default function TicketSelectionPage() {
   const router = useRouter()
   const { cart, getCartSummary } = useCart()
+  const [selectedShowtime, setSelectedShowtime] = useState('18:30')
   const [isLoading, setIsLoading] = useState(false)
 
-  // Mock session data - in real app, this would come from API
   const sessionData = {
     id: 'session_1',
     movieTitle: 'Die Odyssee',
-    startTime: '16:00',
-    endTime: '18:30',
-    date: '16/04/2026',
     cinemaName: 'Roxy Cinema',
+    location: 'São Paulo - SP',
+    date: '16/04/2026',
+    showtimes: ['14:00', '16:30', '18:30', '21:00'],
     screenType: 'IMAX 70MM' as const,
-    totalSeats: 200,
-    availableSeats: 156
   }
 
-  // Generate mock seat data - in real app, this would come from API
+  const ticketTypes = [
+    {
+      id: 'standard',
+      name: 'Standard Ticket',
+      description: 'Comfortable seating with great view',
+      price: 2999,
+      available: true
+    },
+    {
+      id: 'vip',
+      name: 'VIP',
+      description: 'Premium seating with luxury amenities',
+      price: 4999,
+      available: true
+    }
+  ]
+
+  // Generate mock seat data
   const generateMockSeats = (): Seat[] => {
     const availableSeats: Seat[] = []
     const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
@@ -41,7 +52,6 @@ export default function TicketSelectionPage() {
     rows.forEach(row => {
       for (let seat = 1; seat <= 20; seat++) {
         const seatId = `${row}${seat}`
-        // Randomly make some seats unavailable for demo
         const isAvailable = Math.random() > 0.2
         
         availableSeats.push({
@@ -62,159 +72,194 @@ export default function TicketSelectionPage() {
   }
 
   const availableSeats = generateMockSeats()
-
   const cartSummary = getCartSummary()
 
   const handleContinueToCart = () => {
     if (cart && cart.seats.length > 0) {
       setIsLoading(true)
-      // Simulate API call delay
       setTimeout(() => {
         router.push('/cart')
       }, 1000)
     }
   }
 
-  const handleSessionExpired = () => {
-    router.push('/queue-expired')
-  }
-
   return (
-    <PageContainer>
-      <div className="space-y-6">
-        {/* Header with countdown */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Select Your Seats</h1>
-            <p className="text-muted-foreground">
-              Choose your preferred seats for an unforgettable IMAX experience
-            </p>
-          </div>
-          <CountdownTimer onExpired={handleSessionExpired} />
+    <div className="min-h-screen bg-black text-white">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-800">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.back()}
+            className="text-white hover:bg-gray-800"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <div className="text-white font-bold">PASSO 01</div>
+        </div>
+        <div className="text-blue-400 font-bold text-xl">IMAX</div>
+      </div>
+
+      <div className="container mx-auto px-4 py-6 max-w-md">
+        {/* Movie Info */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-white mb-2">{sessionData.movieTitle}</h1>
+          <div className="text-gray-400 text-sm">Apresentado</div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-          {/* Main seat selection area */}
-          <div className="xl:col-span-3">
-            <SeatSelection
-              sessionId={sessionData.id}
-              availableSeats={availableSeats}
-            />
+        {/* Cinema Info */}
+        <Card className="bg-gray-900 border-gray-700 mb-6">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-white font-medium">{sessionData.cinemaName}</h3>
+              <div className="text-gray-400 text-sm">{sessionData.location}</div>
+            </div>
+            
+            <div className="space-y-2 text-sm text-gray-400">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                <span>Terça-feira, 16 Abril 2026</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                <span>Sessão {selectedShowtime}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4" />
+                <span>Sala 1 • IMAX 70MM</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Session Times */}
+        <div className="mb-6">
+          <h3 className="text-white font-medium mb-3">Choose the session time</h3>
+          <div className="grid grid-cols-2 gap-3">
+            {sessionData.showtimes.map((time) => (
+              <Button
+                key={time}
+                variant={selectedShowtime === time ? "default" : "outline"}
+                className={`h-12 ${
+                  selectedShowtime === time 
+                    ? "bg-blue-600 text-white hover:bg-blue-700" 
+                    : "border-gray-600 text-white hover:bg-gray-800"
+                }`}
+                onClick={() => setSelectedShowtime(time)}
+              >
+                {time}
+              </Button>
+            ))}
           </div>
+        </div>
 
-          {/* Sidebar with session info and cart */}
-          <div className="space-y-6">
-            {/* Session Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg text-white">Session Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <h3 className="font-semibold text-white text-lg mb-1">{sessionData.movieTitle}</h3>
-                  <p className="text-sm text-muted-foreground">Presented by</p>
-                </div>
-                
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cinema:</span>
-                    <span className="text-white">{sessionData.cinemaName}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Date:</span>
-                    <span className="text-white">{sessionData.date}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Time:</span>
-                    <span className="text-white">{sessionData.startTime} - {sessionData.endTime}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Format:</span>
-                    <div className="bg-blue-600 px-2 py-1 rounded text-xs text-white font-semibold">
-                      {sessionData.screenType}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-border">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Available seats:</span>
-                    <span className="text-white font-semibold">{sessionData.availableSeats}/{sessionData.totalSeats}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Cart Summary */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg text-white">Your Selection</CardTitle>
-                <CardDescription>
-                  {cartSummary.totalSeats === 0 
-                    ? "No seats selected yet" 
-                    : `${cartSummary.totalSeats} seat${cartSummary.totalSeats > 1 ? 's' : ''} selected`
-                  }
-                </CardDescription>
-              </CardHeader>
-              
-              {cart && cart.seats.length > 0 && (
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    {cart.seats.map(seat => (
-                      <div key={seat.seatId} className="flex justify-between items-center text-sm">
-                        <span className="text-white">
-                          Seat {seat.seatId} ({seat.type})
-                        </span>
-                        <span className="text-white font-semibold">
-                          {formatCurrency(seat.price)}
-                        </span>
+        {/* Ticket Types */}
+        <div className="mb-6">
+          <h3 className="text-white font-medium mb-3">Choose the type of ticket you will buy</h3>
+          <div className="space-y-3">
+            {ticketTypes.map((ticket) => (
+              <Card key={ticket.id} className="bg-gray-800 border-gray-600">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="text-white font-medium">{ticket.name}</h4>
+                        <Badge variant="secondary" className="bg-gray-700 text-white text-xs">
+                          {ticket.id === 'standard' ? 'R$30' : 'R$50'}
+                        </Badge>
                       </div>
-                    ))}
-                  </div>
-                  
-                  <div className="border-t border-border pt-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-semibold text-white">Total:</span>
-                      <span className="text-xl font-bold text-white">
-                        {formatCurrency(cartSummary.totalAmount)}
-                      </span>
+                      <p className="text-gray-400 text-sm">{ticket.description}</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-white font-bold">
+                        {formatCurrency(ticket.price)}
+                      </div>
+                      <div className="text-xs text-gray-400">Amount</div>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Button size="sm" variant="outline" className="w-8 h-8 p-0 border-gray-600">
+                          -
+                        </Button>
+                        <span className="text-white w-8 text-center">0</span>
+                        <Button size="sm" variant="outline" className="w-8 h-8 p-0 border-gray-600">
+                          +
+                        </Button>
+                      </div>
                     </div>
                   </div>
-
-                  <Button 
-                    onClick={handleContinueToCart}
-                    disabled={isLoading || cartSummary.totalSeats === 0}
-                    className="w-full bg-blue-600 hover:bg-blue-700"
-                  >
-                    {isLoading ? 'Processing...' : 'Continue to Cart'}
-                  </Button>
                 </CardContent>
-              )}
-              
-              {(!cart || cart.seats.length === 0) && (
-                <CardContent>
-                  <p className="text-center text-muted-foreground text-sm py-8">
-                    Select seats from the cinema layout to continue
-                  </p>
-                </CardContent>
-              )}
-            </Card>
-
-            {/* Help Information */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm text-white">Need Help?</CardTitle>
-              </CardHeader>
-              <CardContent className="text-xs text-muted-foreground space-y-2">
-                <p>• Maximum 4 tickets per person</p>
-                <p>• VIP seats include premium amenities</p>
-                <p>• Session expires in 10 minutes</p>
-                <p>• Seats are held during selection</p>
-              </CardContent>
-            </Card>
+              </Card>
+            ))}
           </div>
+        </div>
+
+        {/* Seat Selection */}
+        <div className="mb-6">
+          <h3 className="text-white font-medium mb-3">Reserve</h3>
+          <div className="text-gray-400 text-sm mb-4">Clique Reservar</div>
+          
+          <Card className="bg-gray-900 border-gray-700">
+            <CardContent className="p-4">
+              <SeatSelection
+                sessionId={sessionData.id}
+                availableSeats={availableSeats}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Summary */}
+        {cart && cart.seats.length > 0 && (
+          <Card className="bg-gray-900 border-gray-700 mb-6">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-white font-medium">Resumo</span>
+              </div>
+              
+              <div className="space-y-2 text-sm mb-4">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Ticket Premium + {cart.seats.length}</span>
+                  <span className="text-white">R$ {(cart.seats.length * 50).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Taxa de Reserva</span>
+                  <span className="text-white">R$ {(cart.seats.length * 4).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">16/04/2026</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">15:00 às 17:30pm</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">***{cart.seats.map(s => s.seatId).join(', ')}***</span>
+                </div>
+              </div>
+              
+              <div className="border-t border-gray-700 pt-3 mb-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-white font-bold text-lg">
+                    ${formatCurrency(cartSummary.totalAmount).replace('R$', '').trim()}
+                  </span>
+                </div>
+              </div>
+
+              <Button 
+                onClick={handleContinueToCart}
+                disabled={isLoading || cartSummary.totalSeats === 0}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                {isLoading ? 'Processando...' : 'Continue to checkout'}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Footer Info */}
+        <div className="text-center text-gray-400 text-xs">
+          Após clicar em reservar com cinema 1&2 disponível
         </div>
       </div>
-    </PageContainer>
+    </div>
   )
 }

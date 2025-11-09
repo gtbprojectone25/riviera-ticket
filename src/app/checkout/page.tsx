@@ -1,466 +1,283 @@
 'use client'
 
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { PageContainer } from '@/components/page-container'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { CountdownTimer } from '../ticket-selection/_components/countdown-timer'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { useCart } from '@/hooks/use-cart'
 import { useRouter } from 'next/navigation'
 import { formatCurrency } from '@/lib/utils'
-import { CreditCard, Lock, ArrowLeft } from 'lucide-react'
+import { ChevronLeft, CheckCircle, Clock } from 'lucide-react'
 
-// Zod schema for payment form
-const paymentSchema = z.object({
-  cardNumber: z.string().min(16, 'Card number must be 16 digits').max(19, 'Invalid card number'),
-  expiryMonth: z.string().min(2, 'Required').max(2, 'Invalid month'),
-  expiryYear: z.string().min(2, 'Required').max(2, 'Invalid year'),
-  cvv: z.string().min(3, 'CVV must be 3-4 digits').max(4, 'Invalid CVV'),
-  cardholderName: z.string().min(2, 'Name must be at least 2 characters'),
-  billingAddress: z.object({
-    line1: z.string().min(5, 'Address is required'),
-    line2: z.string().optional(),
-    city: z.string().min(2, 'City is required'),
-    state: z.string().min(2, 'State is required'),
-    postalCode: z.string().min(5, 'Postal code is required'),
-    country: z.string().min(2, 'Country is required'),
-  })
-})
-
-type PaymentFormData = z.infer<typeof paymentSchema>
-
-/**
- * Checkout Page - Payment processing and order completion
- * Integrates with Stripe for secure payment handling
- */
 export default function CheckoutPage() {
   const router = useRouter()
   const { cart, clearCart, getCartSummary } = useCart()
   const [isProcessing, setIsProcessing] = useState(false)
+  const [standardQuantity, setStandardQuantity] = useState(2)
+  const [vipQuantity, setVipQuantity] = useState(1)
 
   const cartSummary = getCartSummary()
 
-  // Payment form
-  const form = useForm<PaymentFormData>({
-    resolver: zodResolver(paymentSchema),
-    defaultValues: {
-      cardNumber: '',
-      expiryMonth: '',
-      expiryYear: '',
-      cvv: '',
-      cardholderName: '',
-      billingAddress: {
-        line1: '',
-        line2: '',
-        city: '',
-        state: '',
-        postalCode: '',
-        country: 'US',
-      }
-    }
-  })
-
-  // Redirect if no cart or expired
-  if (!cart || cartSummary.isExpired || cartSummary.totalSeats === 0) {
-    return (
-      <PageContainer>
-        <div className="text-center py-12">
-          <h1 className="text-2xl font-bold text-white mb-4">No items to checkout</h1>
-          <p className="text-muted-foreground mb-6">
-            {cartSummary.isExpired 
-              ? "Your session has expired. Please start over."
-              : "You haven't selected any seats yet."
-            }
-          </p>
-          <Button 
-            onClick={() => router.push('/ticket-selection')}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            Select Seats
-          </Button>
-        </div>
-      </PageContainer>
-    )
-  }
-
-  const handlePayment = async (data: PaymentFormData) => {
+  const handlePayment = async () => {
     setIsProcessing(true)
     try {
-      // Simulate Stripe payment processing
       await new Promise(resolve => setTimeout(resolve, 3000))
       
-      console.log('Payment data:', data)
-      console.log('Cart data:', cart)
-      
-      // Generate mock order ID
       const orderId = `order_${Date.now()}`
-      
-      // Store order details
       const orderDetails = {
         id: orderId,
         cart,
-        paymentData: data,
         status: 'completed',
         purchaseDate: new Date().toISOString(),
         total: cartSummary.totalAmount
       }
       
       localStorage.setItem('last-order', JSON.stringify(orderDetails))
-      
-      // Clear cart
       clearCart()
-      
-      // Redirect to confirmation
       router.push(`/confirmation?orderId=${orderId}`)
       
     } catch (error) {
       console.error('Payment error:', error)
-      alert('Payment failed. Please try again.')
     } finally {
       setIsProcessing(false)
     }
   }
 
-  const handleBackToCart = () => {
-    router.push('/cart')
-  }
-
-  const handleSessionExpired = () => {
-    clearCart()
-    router.push('/queue-expired')
-  }
-
-  // Format card number input
-  const formatCardNumber = (value: string) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '')
-    const matches = v.match(/\d{4,16}/g)
-    const match = matches && matches[0] || ''
-    const parts = []
-    
-    for (let i = 0, len = match.length; i < len; i += 4) {
-      parts.push(match.substring(i, i + 4))
-    }
-    
-    if (parts.length) {
-      return parts.join(' ')
-    } else {
-      return v
-    }
-  }
-
-  const standardSeats = cart.seats.filter(seat => seat.type === 'STANDARD')
-  const vipSeats = cart.seats.filter(seat => seat.type === 'VIP')
+  const standardPrice = 3000 // R$ 30
+  const vipPrice = 5000 // R$ 50
+  const totalPrice = (standardQuantity * standardPrice) + (vipQuantity * vipPrice)
 
   return (
-    <PageContainer>
-      <div className="space-y-6">
-        {/* Header with countdown */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Secure Checkout</h1>
-            <p className="text-muted-foreground">
-              Complete your purchase securely with our encrypted payment system
-            </p>
+    <div className="min-h-screen bg-black text-white">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-800">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.back()}
+            className="text-white hover:bg-gray-800"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <div className="text-white font-bold">Order summary</div>
+        </div>
+        <div className="text-blue-400 font-bold text-xl">IMAX</div>
+      </div>
+
+      <div className="container mx-auto px-4 py-6 max-w-md">
+        {/* Movie Info */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-white mb-2">Die Odyssee</h1>
+          <div className="space-y-1 text-sm text-gray-400">
+            <div>Roxy Cinema</div>
+            <div>2 Premium Ticket</div>
+            <div>16/04/2026</div>
+            <div>15:00 às 17:30pm</div>
+            <div>***D7, D6***</div>
           </div>
-          <CountdownTimer onExpired={handleSessionExpired} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Payment Form */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-white flex items-center">
-                  <CreditCard className="h-5 w-5 mr-2" />
-                  Payment Information
-                </CardTitle>
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Lock className="h-4 w-4 mr-1" />
-                  Your payment information is encrypted and secure
+        {/* Seat Map Preview */}
+        <Card className="bg-gray-900 border-gray-700 mb-6">
+          <CardContent className="p-4">
+            <div className="text-center mb-4">
+              <div className="text-white font-medium mb-2">Screen</div>
+              <div className="w-full h-1 bg-gray-600 rounded mb-6"></div>
+            </div>
+            
+            {/* Simplified seat grid */}
+            <div className="space-y-2">
+              {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((row) => (
+                <div key={row} className="flex items-center justify-center gap-1">
+                  <div className="w-6 text-xs text-gray-400 text-center">{row}</div>
+                  {Array.from({ length: 14 }, (_, i) => {
+                    const isSelected = (row === 'D' && (i === 2 || i === 3)) // D6, D7
+                    const isOccupied = Math.random() < 0.3
+                    
+                    return (
+                      <div
+                        key={i}
+                        className={`w-3 h-3 rounded-sm ${
+                          isSelected 
+                            ? 'bg-blue-500' 
+                            : isOccupied 
+                              ? 'bg-gray-600' 
+                              : 'bg-gray-700 hover:bg-gray-600'
+                        }`}
+                      />
+                    )
+                  })}
                 </div>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={form.handleSubmit(handlePayment)} className="space-y-6">
-                  {/* Card Details */}
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="cardNumber">Card Number</Label>
-                      <Input
-                        id="cardNumber"
-                        placeholder="1234 5678 9012 3456"
-                        maxLength={19}
-                        {...form.register('cardNumber')}
-                        onChange={(e) => {
-                          const formatted = formatCardNumber(e.target.value)
-                          e.target.value = formatted
-                          form.setValue('cardNumber', formatted.replace(/\s/g, ''))
-                        }}
-                      />
-                      {form.formState.errors.cardNumber && (
-                        <p className="text-sm text-red-500">
-                          {form.formState.errors.cardNumber.message}
-                        </p>
-                      )}
-                    </div>
+              ))}
+            </div>
 
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="expiryMonth">Month</Label>
-                        <Input
-                          id="expiryMonth"
-                          placeholder="MM"
-                          maxLength={2}
-                          {...form.register('expiryMonth')}
-                        />
-                        {form.formState.errors.expiryMonth && (
-                          <p className="text-sm text-red-500">
-                            {form.formState.errors.expiryMonth.message}
-                          </p>
-                        )}
-                      </div>
+            <div className="flex justify-center gap-4 mt-4 text-xs">
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 bg-gray-700 rounded-sm"></div>
+                <span className="text-gray-400">Available</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 bg-blue-500 rounded-sm"></div>
+                <span className="text-gray-400">Selected</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 bg-gray-600 rounded-sm"></div>
+                <span className="text-gray-400">Occupied</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="expiryYear">Year</Label>
-                        <Input
-                          id="expiryYear"
-                          placeholder="YY"
-                          maxLength={2}
-                          {...form.register('expiryYear')}
-                        />
-                        {form.formState.errors.expiryYear && (
-                          <p className="text-sm text-red-500">
-                            {form.formState.errors.expiryYear.message}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="cvv">CVV</Label>
-                        <Input
-                          id="cvv"
-                          placeholder="123"
-                          maxLength={4}
-                          {...form.register('cvv')}
-                        />
-                        {form.formState.errors.cvv && (
-                          <p className="text-sm text-red-500">
-                            {form.formState.errors.cvv.message}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="cardholderName">Cardholder Name</Label>
-                      <Input
-                        id="cardholderName"
-                        placeholder="John Doe"
-                        {...form.register('cardholderName')}
-                      />
-                      {form.formState.errors.cardholderName && (
-                        <p className="text-sm text-red-500">
-                          {form.formState.errors.cardholderName.message}
-                        </p>
-                      )}
-                    </div>
+        {/* Ticket Selection */}
+        <div className="space-y-4 mb-6">
+          <h3 className="text-white font-medium">Choose the type of ticket you will buy</h3>
+          
+          {/* Standard Ticket */}
+          <Card className="bg-gray-800 border-gray-600">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="text-white font-medium">Standard</h4>
+                    <Badge variant="secondary" className="bg-gray-700 text-white text-xs">
+                      R$30
+                    </Badge>
                   </div>
-
-                  {/* Billing Address */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-white">Billing Address</h3>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="line1">Address Line 1</Label>
-                      <Input
-                        id="line1"
-                        placeholder="123 Main Street"
-                        {...form.register('billingAddress.line1')}
-                      />
-                      {form.formState.errors.billingAddress?.line1 && (
-                        <p className="text-sm text-red-500">
-                          {form.formState.errors.billingAddress.line1.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="line2">Address Line 2 (Optional)</Label>
-                      <Input
-                        id="line2"
-                        placeholder="Apartment, suite, unit, etc."
-                        {...form.register('billingAddress.line2')}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="city">City</Label>
-                        <Input
-                          id="city"
-                          placeholder="New York"
-                          {...form.register('billingAddress.city')}
-                        />
-                        {form.formState.errors.billingAddress?.city && (
-                          <p className="text-sm text-red-500">
-                            {form.formState.errors.billingAddress.city.message}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="state">State</Label>
-                        <Input
-                          id="state"
-                          placeholder="NY"
-                          {...form.register('billingAddress.state')}
-                        />
-                        {form.formState.errors.billingAddress?.state && (
-                          <p className="text-sm text-red-500">
-                            {form.formState.errors.billingAddress.state.message}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="postalCode">Postal Code</Label>
-                        <Input
-                          id="postalCode"
-                          placeholder="10001"
-                          {...form.register('billingAddress.postalCode')}
-                        />
-                        {form.formState.errors.billingAddress?.postalCode && (
-                          <p className="text-sm text-red-500">
-                            {form.formState.errors.billingAddress.postalCode.message}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="country">Country</Label>
-                        <Input
-                          id="country"
-                          placeholder="US"
-                          {...form.register('billingAddress.country')}
-                        />
-                        {form.formState.errors.billingAddress?.country && (
-                          <p className="text-sm text-red-500">
-                            {form.formState.errors.billingAddress.country.message}
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                  <p className="text-gray-400 text-sm">Comfortable seating with great view</p>
+                </div>
+                <div className="text-right">
+                  <div className="text-white font-bold">
+                    {formatCurrency(standardPrice)}
                   </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex space-x-3 pt-6">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleBackToCart}
-                      className="flex-1"
+                  <div className="text-xs text-gray-400">Amount</div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-8 h-8 p-0 border-gray-600"
+                      onClick={() => setStandardQuantity(Math.max(0, standardQuantity - 1))}
                     >
-                      <ArrowLeft className="h-4 w-4 mr-2" />
-                      Back to Cart
+                      -
                     </Button>
-                    
-                    <Button
-                      type="submit"
-                      disabled={isProcessing}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700"
-                      size="lg"
+                    <span className="text-white w-8 text-center">{standardQuantity}</span>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-8 h-8 p-0 border-gray-600"
+                      onClick={() => setStandardQuantity(standardQuantity + 1)}
                     >
-                      {isProcessing ? 'Processing Payment...' : `Pay ${formatCurrency(cartSummary.totalAmount)}`}
+                      +
                     </Button>
                   </div>
-                </form>
-              </CardContent>
-            </Card>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* VIP Ticket */}
+          <Card className="bg-gray-800 border-gray-600">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="text-white font-medium">VIP</h4>
+                    <Badge variant="secondary" className="bg-gray-700 text-white text-xs">
+                      R$50
+                    </Badge>
+                  </div>
+                  <p className="text-gray-400 text-sm">Premium seating with luxury amenities</p>
+                </div>
+                <div className="text-right">
+                  <div className="text-white font-bold">
+                    {formatCurrency(vipPrice)}
+                  </div>
+                  <div className="text-xs text-gray-400">Amount</div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-8 h-8 p-0 border-gray-600"
+                      onClick={() => setVipQuantity(Math.max(0, vipQuantity - 1))}
+                    >
+                      -
+                    </Button>
+                    <span className="text-white w-8 text-center">{vipQuantity}</span>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-8 h-8 p-0 border-gray-600"
+                      onClick={() => setVipQuantity(vipQuantity + 1)}
+                    >
+                      +
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Summary Card */}
+        <Card className="bg-gray-900 border-gray-700 mb-6">
+          <CardContent className="p-4">
+            <div className="text-center mb-4">
+              <div className="text-4xl font-bold text-green-400 mb-2">
+                ${((standardQuantity * 30) + (vipQuantity * 50)).toFixed(0)}
+              </div>
+              <div className="text-lg font-bold text-white">
+                ${totalPrice.toFixed(0)}
+              </div>
+            </div>
+            
+            {/* Benefits */}
+            <div className="space-y-3 mb-6">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5" />
+                <div className="text-sm text-gray-300">
+                  <p className="font-medium">Ingressos garantidos</p>
+                  <p className="text-gray-400">Seus lugares estão reservados por 10 minutos.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5" />
+                <div className="text-sm text-gray-300">
+                  <p className="font-medium">Cancelamento flexível</p>
+                  <p className="text-gray-400">Cancele até 2 horas antes da sessão.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5" />
+                <div className="text-sm text-gray-300">
+                  <p className="font-medium">Experiência premium</p>
+                  <p className="text-gray-400">Audio e vídeo de alta qualidade IMAX.</p>
+                </div>
+              </div>
+            </div>
+
+            <Button 
+              onClick={handlePayment}
+              disabled={isProcessing}
+              className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-lg font-semibold"
+            >
+              {isProcessing ? 'Processando...' : `Pagar ${formatCurrency(totalPrice)}`}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Additional Info */}
+        <div className="text-center space-y-2">
+          <div className="flex items-center justify-center gap-2 text-gray-400 text-sm">
+            <Clock className="w-4 h-4" />
+            <span>Sua reserva expira em 8 minutos</span>
           </div>
-
-          {/* Order Summary Sidebar */}
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-white">Order Summary</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  <div>
-                    <h3 className="font-semibold text-white">Die Odyssee</h3>
-                    <p className="text-sm text-muted-foreground">16/04/2026 • 16:00 - 18:30</p>
-                    <p className="text-sm text-muted-foreground">Roxy Cinema • IMAX 70MM</p>
-                  </div>
-
-                  <div className="space-y-2">
-                    {cart.seats.map(seat => (
-                      <div key={seat.seatId} className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          Seat {seat.seatId} ({seat.type})
-                        </span>
-                        <span className="text-white">
-                          {formatCurrency(seat.price)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="border-t border-border pt-3 space-y-2">
-                    {standardSeats.length > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          Standard Tickets ({standardSeats.length}x)
-                        </span>
-                        <span className="text-white">
-                          {formatCurrency(standardSeats.reduce((sum, seat) => sum + seat.price, 0))}
-                        </span>
-                      </div>
-                    )}
-                    
-                    {vipSeats.length > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          VIP Tickets ({vipSeats.length}x)
-                        </span>
-                        <span className="text-white">
-                          {formatCurrency(vipSeats.reduce((sum, seat) => sum + seat.price, 0))}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="border-t border-border pt-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-semibold text-white">Total:</span>
-                      <span className="text-xl font-bold text-white">
-                        {formatCurrency(cartSummary.totalAmount)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm text-white">Security</CardTitle>
-              </CardHeader>
-              <CardContent className="text-xs text-muted-foreground space-y-2">
-                <p>• 256-bit SSL encryption</p>
-                <p>• PCI DSS compliant</p>
-                <p>• Stripe secure payment processing</p>
-                <p>• No card details stored</p>
-              </CardContent>
-            </Card>
+          <div className="text-gray-500 text-xs">
+            Todos os preços incluem taxas e impostos
           </div>
         </div>
       </div>
-    </PageContainer>
+    </div>
   )
 }
