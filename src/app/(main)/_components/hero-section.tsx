@@ -1,105 +1,115 @@
 'use client'
 
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { MapPin } from 'lucide-react'
 import { useState } from 'react'
 import { LocationModal } from './location-modal'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { AnimatedBackground } from '@/components/animated-background'
 
 export function HeroSection() {
   const [showLocationModal, setShowLocationModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter()
+
+  const handleNavigateToPreOrder = () => {
+    setIsLoading(true)
+    setTimeout(() => {
+      router.push('/pre-order')
+    }, 2000) 
+  }
 
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-800">
-        <div className="text-white font-bold">LOGO</div>
-        <div className="text-blue-400 font-bold text-xl">IMAX</div>
-      </div>
+    <div className="min-h-screen text-white relative overflow-y-auto flex gap-4">
+      {/* Animated Background */}
+      <AnimatedBackground />
 
-      <div className="container mx-auto px-4 py-8 relative z-10">
-        <div className="max-w-sm mx-auto space-y-6">
+      {/* Loading Overlay */}
+      {isLoading && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <AnimatedBackground />
+          <div className="relative z-10 text-center space-y-6">
+            <div className="w-20 h-20 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto shadow-lg shadow-blue-500/50" />
+            <p className="text-white text-2xl font-bold animate-pulse">Carregando...</p>
+          </div>
+        </div>
+      )}
+
+      <div className="container mx-auto px-4 py-4 relative z-10">
+        <div className="max-w-md mx-auto space-y-4">
           {/* Movie Poster */}
-          <Card className="bg-gray-900 border-gray-700 overflow-hidden">
-            <CardContent className="p-0">
-              {/* Poster Image */}
-              <div className="aspect-[2/3] bg-gradient-to-b from-orange-900/50 to-black relative">
-                <div className="absolute inset-0 flex flex-col justify-center items-center text-center p-6">
-                  {/* Movie Title */}
-                  <div className="space-y-2 mb-8">
-                    <div className="text-xs text-gray-400 tracking-wider">
-                      UMA EXPERIÊNCIA SENSORIAL
-                    </div>
-                    <h1 className="text-3xl font-bold tracking-wider">
-                      THE <span className="text-orange-400">ODYSSEY</span>
-                    </h1>
-                    <div className="text-orange-400 text-sm tracking-wider">
-                      DEFY THE GODS
-                    </div>
-                    <div className="text-2xl font-bold text-white mt-4">
-                      07.17.25
-                    </div>
+          <div 
+            className="relative aspect-2/3 rounded-2xl overflow-hidden p-4 mt-0 pt-0 cursor-pointer transition-transform "
+            onClick={handleNavigateToPreOrder}
+          >
+            {/* Movie Poster */}
+            <Image
+              src="/theodyssey.jpg"
+              alt="The Odyssey"
+              fill
+              className="object-cover"
+              priority
+            />
+
+            {/* Black fade gradient overlay */}
+           <div className="absolute bottom-0 left-0 right-0 h-[65%] bg-linear-to-t from-black to-transparent" />
+
+            {/* Badges */}
+            <div className="absolute bottom-4 left-0 right-0 flex flex-wrap gap-2 justify-center px-4 z-20">
+              <Badge variant="secondary" className="bg-white text-black text-sm px-3 py-1 rounded-full font-medium">
+                Pré-order
+              </Badge>
+              <Badge variant="secondary" className="bg-gray-900/80 backdrop-blur-sm text-white text-sm px-3 py-1 rounded-full">
+                2026
+              </Badge>
+              <Badge variant="secondary" className="bg-gray-900/80 backdrop-blur-sm text-white text-sm px-3 py-1 rounded-full">
+                Ação | Fantasia
+              </Badge>
+              <Badge variant="secondary" className="bg-gray-900/80 backdrop-blur-sm text-white text-sm px-3 py-1 rounded-full">
+                +18
+              </Badge>
+            </div>
+          </div>
+
+           
+
+          <div className="max-w-md mx-auto h-full bg-linear-to-br from-black to-slate-950 rounded-3xl p-4 space-y-5 mt-[-45px] " >
+            {/* Queue Status Card */}
+            <Card 
+              className="bg-linear-to-br from-slate-900 via-blue-950/30 to-slate-950 border-slate-800/50 overflow-hidden rounded-2xl shadow-xl mt-4 pt-0 cursor-pointer transition-transform hover:scale-[1.02]"
+              onClick={handleNavigateToPreOrder}
+            >
+              <CardContent className="p-5 space-y-3">
+                {/* Header with Title and IMAX */}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-white font-bold text-lg mb-1">Você está na fila</h3>
+                    <p className="text-gray-500 text-xs">Tamanho da fila</p>
                   </div>
-
-                  {/* Planet/Visual Element */}
-                  <div className="w-32 h-32 rounded-full bg-gradient-to-b from-orange-600 to-orange-900 relative mb-8">
-                    <div className="absolute inset-2 rounded-full bg-gradient-to-b from-orange-700 to-orange-950"></div>
-                    {/* Floating particles effect */}
-                    <div className="absolute -top-2 -right-2 w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
-                    <div className="absolute -bottom-1 -left-1 w-1 h-1 bg-orange-300 rounded-full animate-pulse delay-300"></div>
-                    <div className="absolute top-1/3 -right-3 w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse delay-700"></div>
-                  </div>
+                  <div className="text-blue-500 font-bold text-2xl">IMAX</div>
                 </div>
 
-                {/* Genre/Rating Tags */}
-                <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2 justify-center">
-                  <Badge variant="secondary" className="bg-white/20 text-white text-xs px-2 py-1">
-                    Drama
-                  </Badge>
-                  <Badge variant="secondary" className="bg-white/20 text-white text-xs px-2 py-1">
-                    70%
-                  </Badge>
-                  <Badge variant="secondary" className="bg-white/20 text-white text-xs px-2 py-1">
-                    Adult Content
-                  </Badge>
-                  <Badge variant="secondary" className="bg-white/20 text-white text-xs px-2 py-1">
-                    +18
-                  </Badge>
+                {/* Progress Bar */}
+                <div className="w-full bg-gray-800/50 rounded-full h-1.5">
+                  <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: '50%' }}></div>
                 </div>
-              </div>
 
-              {/* Movie Info Section */}
-              <div className="bg-gray-900 p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-white font-medium">Você está no fila</h3>
-                  <div className="text-blue-400 font-bold">IMAX</div>
-                </div>
-                
+                {/* Warning Text */}
                 <p className="text-gray-400 text-sm leading-relaxed">
-                  Os melhores lugares estão à venda no cinema, 
-                  aguarde seu tempo.
+                  Os ingressos podem esgotar a qualquer momento,<br />
+                  não saia desta página.
                 </p>
-
-                {/* Location Button */}
-                <Button
-                  onClick={() => setShowLocationModal(true)}
-                  variant="outline"
-                  className="w-full bg-transparent border-gray-600 text-white hover:bg-gray-800 flex items-center gap-2"
-                >
-                  <MapPin className="w-4 h-4" />
-                  Buscar localização mais próxima
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>          
         </div>
       </div>
 
       {/* Location Modal */}
-      <LocationModal 
-        isOpen={showLocationModal} 
-        onClose={() => setShowLocationModal(false)} 
+      <LocationModal
+        isOpen={showLocationModal}
+        onClose={() => setShowLocationModal(false)}
       />
     </div>
   )

@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { ChevronLeft, Eye, EyeOff } from 'lucide-react'
+import { useAuth } from '@/context/auth'
 
 export default function AuthPage() {
   const router = useRouter()
+  const { login } = useAuth()
   const [currentStep, setCurrentStep] = useState('login') // login, register, info, password, confirm, success
   const [email, setEmail] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -20,6 +22,7 @@ export default function AuthPage() {
     confirmPassword: ''
   })
   const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', ''])
+  const [isLoading, setIsLoading] = useState(false)
 
   const handleEmailSubmit = () => {
     if (email) {
@@ -35,8 +38,18 @@ export default function AuthPage() {
     setCurrentStep('confirm')
   }
 
-  const handleConfirmSubmit = () => {
-    setCurrentStep('success')
+  const handleConfirmSubmit = async () => {
+    setIsLoading(true)
+    try {
+      // Fazer login com o email
+      await login(email, formData.password)
+      setCurrentStep('success')
+    } catch (error) {
+      console.error('Login failed:', error)
+      alert('Erro ao fazer login. Tente novamente.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const renderLoginStep = () => (
@@ -71,7 +84,7 @@ export default function AuthPage() {
 
       <div className="space-y-2 text-xs text-gray-400">
         <div className="flex items-start gap-2">
-          <div className="w-1 h-1 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>
+          <div className="w-1 h-1 bg-gray-400 rounded-full mt-2 shrink-0"></div>
           <p>Account and personal data protection</p>
         </div>
         <p className="ml-3">
@@ -130,7 +143,7 @@ export default function AuthPage() {
 
       <div className="space-y-2 text-xs text-gray-400">
         <div className="flex items-start gap-2">
-          <div className="w-1 h-1 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>
+          <div className="w-1 h-1 bg-gray-400 rounded-full mt-2 shrink-0"></div>
           <p>Personal data and privacy</p>
         </div>
         <p className="ml-3">
@@ -195,7 +208,7 @@ export default function AuthPage() {
 
       <div className="space-y-2 text-xs text-gray-400">
         <div className="flex items-start gap-2">
-          <div className="w-1 h-1 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>
+          <div className="w-1 h-1 bg-gray-400 rounded-full mt-2 shrink-0"></div>
           <p>Account security</p>
         </div>
         <p className="ml-3">
@@ -242,9 +255,10 @@ export default function AuthPage() {
 
         <Button 
           onClick={handleConfirmSubmit}
+          disabled={isLoading}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white"
         >
-          Confirm
+          {isLoading ? 'Confirmando...' : 'Confirm'}
         </Button>
 
         <p className="text-xs text-gray-400 text-center">
@@ -254,7 +268,7 @@ export default function AuthPage() {
 
       <div className="space-y-2 text-xs text-gray-400">
         <div className="flex items-start gap-2">
-          <div className="w-1 h-1 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>
+          <div className="w-1 h-1 bg-gray-400 rounded-full mt-2 shrink-0"></div>
           <p>Account Verification</p>
         </div>
         <p className="ml-3">
@@ -271,7 +285,7 @@ export default function AuthPage() {
         <div className="w-20 h-20 mx-auto bg-gray-800 rounded-lg flex items-center justify-center mb-4">
           <div className="text-4xl">🎬</div>
         </div>
-        <h2 className="text-xl font-bold text-white">Matheus Linos</h2>
+        <h2 className="text-xl font-bold text-white">{formData.name} {formData.surname}</h2>
         <div className="text-gray-400 text-sm">Verificado</div>
       </div>
 
@@ -293,22 +307,22 @@ export default function AuthPage() {
           </div>
 
           <div className="space-y-3 mb-6">
-            <div className="text-white font-medium text-lg">3 Premium Ticket</div>
-            <div className="text-3xl font-bold text-white">$1,497</div>
+            <div className="text-white font-medium text-lg">Premium Tickets</div>
+            <div className="text-3xl font-bold text-white">IMAX 70MM</div>
           </div>
 
           <Button 
-            onClick={() => router.push('/ticket-selection')}
+            onClick={() => router.push('/my-tickets')}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white"
           >
-            Continue my reservation
+            Ver meus ingressos
           </Button>
         </CardContent>
       </Card>
 
       <div className="space-y-2 text-xs text-gray-400">
         <div className="flex items-start gap-2">
-          <div className="w-1 h-1 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>
+          <div className="w-1 h-1 bg-gray-400 rounded-full mt-2 shrink-0"></div>
           <p>Account verified successfully</p>
         </div>
         <p className="ml-3">

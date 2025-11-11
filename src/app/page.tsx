@@ -1,5 +1,5 @@
 import { PageContainer } from '@/components/page-container'
-import { HeroSection } from './components/hero-section'
+import { HeroSection } from './(main)/_components/hero-section'
 
 /**
  * Main landing page for Riviera Ticket - Frame 2

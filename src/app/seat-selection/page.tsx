@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useRouter } from 'next/navigation'
-import { formatCurrency } from '@/lib/utils'
 import { ChevronLeft, Users, Armchair } from 'lucide-react'
 
 interface SeatData {
@@ -19,7 +18,6 @@ interface SeatData {
 export default function SeatSelectionPage() {
   const router = useRouter()
   const [selectedSeats, setSelectedSeats] = useState<string[]>([])
-  const [isLoading, setIsLoading] = useState(false)
 
   // Generate seat layout (14 rows, varying seats per row)
   const generateSeats = (): SeatData[] => {
@@ -154,7 +152,7 @@ export default function SeatSelectionPage() {
 
         {/* Screen */}
         <div className="mb-8">
-          <div className="bg-gradient-to-r from-transparent via-white to-transparent h-1 rounded-full mb-2 opacity-60"></div>
+          <div className="bg-linear-to-r from-transparent via-white to-transparent h-1 rounded-full mb-2 opacity-60"></div>
           <div className="text-center text-gray-400 text-sm">SCREEN</div>
         </div>
 

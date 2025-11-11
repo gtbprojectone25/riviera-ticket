@@ -135,7 +135,7 @@ export function SeatSelection({
       <CardContent className="space-y-6">
         {/* Screen */}
         <div className="flex justify-center mb-8">
-          <div className="w-3/4 h-3 bg-gradient-to-r from-gray-600 via-gray-400 to-gray-600 rounded-full shadow-lg">
+          <div className="w-3/4 h-3 bg-linear-to-r from-gray-600 via-gray-400 to-gray-600 rounded-full shadow-lg">
             <div className="text-center text-xs text-muted-foreground mt-2">IMAX 70MM SCREEN</div>
           </div>
         </div>

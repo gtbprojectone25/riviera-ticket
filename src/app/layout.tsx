@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/header";
 import { AnimatedBackground } from "@/components/animated-background";
+import { AuthProvider } from "@/context/auth";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,12 +38,14 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <AnimatedBackground />
-        <div className="relative z-10">
-          <Header />
-          <main>
-            {children}
-          </main>
-        </div>
+        <AuthProvider>
+          <div className="relative z-10">
+            <Header />
+            <main>
+              {children}
+            </main>
+          </div>
+        </AuthProvider>
       </body>
     </html>
   );

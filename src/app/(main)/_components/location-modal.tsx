@@ -48,7 +48,7 @@ export function LocationModal({ isOpen, onClose }: LocationModalProps) {
       {/* Info Cards */}
       <div className="space-y-4">
         <div className="bg-blue-600/20 border border-blue-600/30 rounded-lg p-4 flex items-start gap-3">
-          <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+          <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
           <div className="text-sm text-gray-300">
             <p className="font-medium mb-1">Você está na fila de compra!</p>
             <p className="text-gray-400">
@@ -58,7 +58,7 @@ export function LocationModal({ isOpen, onClose }: LocationModalProps) {
         </div>
 
         <div className="bg-blue-600/20 border border-blue-600/30 rounded-lg p-4 flex items-start gap-3">
-          <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+          <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
           <div className="text-sm text-gray-300">
             <p className="font-medium mb-1">Localização automática ativada</p>
             <p className="text-gray-400">
@@ -68,7 +68,7 @@ export function LocationModal({ isOpen, onClose }: LocationModalProps) {
         </div>
 
         <div className="bg-blue-600/20 border border-blue-600/30 rounded-lg p-4 flex items-start gap-3">
-          <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+          <CheckCircle className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" />
           <div className="text-sm text-gray-300">
             <p className="font-medium mb-1">Reserva garantida por 10 minutos</p>
             <p className="text-gray-400">

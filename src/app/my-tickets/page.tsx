@@ -1,19 +1,47 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, Ticket, Download } from 'lucide-react'
-import Image from 'next/image'
+import { useAuth } from '@/context/auth'
 
 export default function MyTicketsPage() {
   const router = useRouter()
-  
+  const { isAuthenticated, isLoading } = useAuth()
+  const [isChecked, setIsChecked] = useState(false)
+
+  // Mover useMemo para antes dos retornos antecipados
   const barcodeHeights = useMemo(() => 
     // eslint-disable-next-line react-hooks/purity
     Array.from({ length: 30 }, () => Math.random() * 40 + 40),
     []
   )
+
+  // Verificar autenticação
+  useEffect(() => {
+    setIsChecked(true)
+    if (!isLoading && !isAuthenticated) {
+      router.push('/auth')
+    }
+  }, [isLoading, isAuthenticated, router])
+
+  // Mostrar loading enquanto verifica autenticação
+  if (isLoading || !isChecked) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <div className="text-center">
+          <Ticket className="w-12 h-12 text-blue-400 mx-auto mb-4 animate-pulse" />
+          <p className="text-gray-400">Carregando...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Se não autenticado, não renderiza nada (redireciona no useEffect)
+  if (!isAuthenticated) {
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-black text-white pb-20">
@@ -27,9 +55,9 @@ export default function MyTicketsPage() {
 
       <div className="container mx-auto max-w-md px-4 py-6">
         {/* Ticket Card */}
-        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl overflow-hidden border border-gray-700 shadow-2xl">
+        <div className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl overflow-hidden border border-gray-700 shadow-2xl">
           {/* Movie Poster Section */}
-          <div className="relative h-64 bg-gradient-to-b from-gray-800 to-gray-900">
+          <div className="relative h-64 bg-linear-to-b from-gray-800 to-gray-900">
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-40 h-56 bg-gray-700 rounded-lg shadow-xl flex items-center justify-center">
                 <Ticket className="w-16 h-16 text-gray-500" />
