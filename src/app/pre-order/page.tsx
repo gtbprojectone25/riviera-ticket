@@ -1,20 +1,30 @@
 'use client'
 
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { AnimatedBackground } from '@/components/animated-background'
+import { PurchaseWarningModal } from '@/components/PurchaseWarningModal'
 
 export default function PreOrderPage() {
-    const router = useRouter()
+    const [showWarningModal, setShowWarningModal] = useState(false)
 
     const notices = [
         'Para garantir seus ingressos, selecione a sessão disponível na sua região. Escolha a data, o horário e o cinema desejado.',
         'Decida quantos ingressos deseja reservar. Lembre-se: o limite é de até 4 ingressos por pessoa.',
-        'Adicione os ingressos ao carrinho e conclua o pagamento. Após a confirmação, você poderá acompanhar todas as atualizações na sua conta oficial do Reviera',
+        'Adicione os ingressos ao carrinho e conclua o pagamento. Após a confirmação, você poderá acompanhar todas as atualizações na sua conta oficial do Reviera',
     ]
+
+    const handleContinueClick = () => {
+        setShowWarningModal(true)
+    }
+
+    const handleModalTimeout = () => {
+        setShowWarningModal(false)
+        // Redirecionamento é feito no modal
+    }
 
     return (
         <div className="min-h-screen bg-black text-white relative overflow-hidden flex flex-col">
@@ -83,7 +93,7 @@ export default function PreOrderPage() {
                         {/* Continue Button */}
                         <div className="pt-4 mt-5">
                             <Button
-                                onClick={() => router.push('/ticket-selection')}
+                                onClick={handleContinueClick}
                                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-7 text-lg font-semibold rounded-xl shadow-lg cursor-pointer transition-transform"
                             >
                                 Continuar
@@ -92,6 +102,12 @@ export default function PreOrderPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Modal de Aviso */}
+            <PurchaseWarningModal
+                open={showWarningModal}
+                onTimeout={handleModalTimeout}
+            />
         </div>
     )
 }

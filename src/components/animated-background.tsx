@@ -43,7 +43,7 @@ export function AnimatedBackground() {
     // Initialize particles
     const initParticles = () => {
       particlesRef.current = []
-      const particleCount = Math.min(50, Math.floor((canvas.width * canvas.height) / 15000))
+      const particleCount = Math.min(80, Math.floor((canvas.width * canvas.height) / 10000))
       
       for (let i = 0; i < particleCount; i++) {
         createParticle()
@@ -55,11 +55,11 @@ export function AnimatedBackground() {
       const particle: Particle = {
         x: Math.random() * canvas.width,
         y: canvas.height + 20,
-        vx: (Math.random() - 0.5) * 0.5,
-        vy: -Math.random() * 2 - 1,
+        vx: (Math.random() - 0.5) * 0.8,
+        vy: -Math.random() * 2.5 - 1.2,
         life: 0,
-        maxLife: Math.random() * 120 + 60,
-        size: Math.random() * 3 + 1,
+        maxLife: Math.random() * 150 + 80,
+        size: Math.random() * 5 + 2,
         opacity: 0
       }
       particlesRef.current.push(particle)
@@ -90,7 +90,7 @@ export function AnimatedBackground() {
       })
 
       // Add new particles occasionally
-      if (Math.random() < 0.3 && particlesRef.current.length < 50) {
+      if (Math.random() < 0.5 && particlesRef.current.length < 80) {
         createParticle()
       }
     }
@@ -105,10 +105,10 @@ export function AnimatedBackground() {
           particle.x, particle.y, particle.size * 2
         )
 
-        // Red flame colors
-        gradient.addColorStop(0, `rgba(255, 100, 50, ${particle.opacity * 0.8})`)
-        gradient.addColorStop(0.5, `rgba(255, 60, 20, ${particle.opacity * 0.6})`)
-        gradient.addColorStop(1, `rgba(200, 40, 0, ${particle.opacity * 0.2})`)
+        // Red flame colors - mais intensos
+        gradient.addColorStop(0, `rgba(255, 120, 60, ${particle.opacity * 1.0})`)
+        gradient.addColorStop(0.5, `rgba(255, 80, 30, ${particle.opacity * 0.8})`)
+        gradient.addColorStop(1, `rgba(220, 60, 20, ${particle.opacity * 0.4})`)
 
         ctx.fillStyle = gradient
         ctx.beginPath()
@@ -143,7 +143,7 @@ export function AnimatedBackground() {
       ref={canvasRef}
       className="fixed inset-0 pointer-events-none z-0"
       style={{ 
-        background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0a0a 50%, #0a0a0a 100%)' 
+        background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0808 30%, #1a0a0a 60%, #0a0a0a 100%)' 
       }}
     />
   )
