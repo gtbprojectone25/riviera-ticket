@@ -6,9 +6,7 @@ import {
   DialogContent,
   DialogOverlay,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { AlertTriangle } from 'lucide-react'
 
 interface PurchaseWarningModalProps {
   open: boolean
@@ -18,7 +16,6 @@ interface PurchaseWarningModalProps {
 
 export function PurchaseWarningModal({
   open,
-  onContinue,
   onTimeout
 }: PurchaseWarningModalProps) {
   // Initialize with 15 and reset via key prop when modal reopens
@@ -47,43 +44,35 @@ export function PurchaseWarningModal({
   return (
     <Dialog open={open} onOpenChange={() => {}}>
       <DialogOverlay className="bg-black/70 backdrop-blur-sm" />
-      <DialogContent 
-        key={open ? 'open' : 'closed'} // Force reset when reopening
-        className="sm:max-w-lg max-w-[90%] bg-gray-950 border-gray-800 rounded-3xl p-0 overflow-hidden shadow-2xl"
+      <DialogContent
+        key={open ? 'open' : 'closed'}
+        className="w-[92vw] max-w-[370px] bg-gray-800/80 border-gray-800/60 backdrop-blur-md rounded-2xl p-0 shadow-xl flex flex-col items-center justify-center m-2"
+        style={{ minWidth: 0, maxHeight: '90vh', overflow: 'visible' }}
       >
-        <div className="p-8 space-y-6">
+        <div className="p-5 w-full flex flex-col items-center justify-center">
           {/* Icon */}
-          <div className="flex justify-center">
-            <div className="w-16 h-16 rounded-full bg-orange-500/20 flex items-center justify-center">
-              <AlertTriangle className="w-8 h-8 text-orange-500" />
+          <div className="flex justify-center mb-2">
+            <div className="w-12 h-12 rounded-full bg-orange-500/20 flex items-center justify-center">
             </div>
           </div>
 
           {/* Main Text */}
-          <div className="text-center space-y-4">
-            <p className="text-gray-200 text-sm leading-relaxed">
+          <div className="text-center">
+            <p className="text-gray-200 text-sm leading-relaxed pt-1 mt-3 mb-3">
               Para garantir que todos tenham a chance de assistir, apenas 4 ingressos foram disponibilizados a cada sessão, por isso caso você não finalize seu pedido em até 10 minutos, terá que entrar na fila novamente.
             </p>
 
             {/* Progress Bar */}
-            <div className="space-y-2">
-              <Progress 
-                value={progress} 
-                className="w-full h-2 bg-gray-800"
+            <div className="space-y-1">
+              <Progress
+                value={progress}
+                className="w-full h-[5px] bg-gray-800"
               />
-              <p className="text-xs text-gray-400">
+              <p className="text-[11px] text-gray-400">
                 Você será redirecionado em {timeLeft} segundo{timeLeft !== 1 ? 's' : ''}...
               </p>
             </div>
           </div>
-
-          {/* Continue Button */}
-          <Button
-            onClick={onContinue}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 text-lg font-semibold rounded-xl shadow-lg transition-colors"
-          >
-            Continuar
-          </Button>
         </div>
       </DialogContent>
     </Dialog>

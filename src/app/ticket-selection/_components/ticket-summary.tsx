@@ -30,7 +30,7 @@ export function TicketSummary({ tickets }: TicketSummaryProps) {
   }
 
   return (
-    <Card className="bg-[#1C1C1C] border-gray-800">
+    <Card className="bg-[#000000] border-gray-800">
       <CardContent className="p-6">
         <div className="flex items-center gap-3 mb-6">
           <ShoppingCart className="h-5 w-5 text-white" />
@@ -44,6 +44,7 @@ export function TicketSummary({ tickets }: TicketSummaryProps) {
                 <span className="text-white font-medium">
                   Ticket {ticket.name === 'VIP' ? 'VIP' : 'Standard'}
                 </span>
+                
                 <div className="text-sm text-gray-400">
                   {ticket.amount}x ${ticket.price}
                 </div>

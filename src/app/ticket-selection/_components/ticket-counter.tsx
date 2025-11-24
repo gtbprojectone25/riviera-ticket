@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Minus, Plus } from 'lucide-react'
 
@@ -26,7 +25,7 @@ export function TicketCounter({
   isVip = false
 }: TicketCounterProps) {
   return (
-    <div className={`bg-[#1C1C1C] border border-gray-800 rounded-lg p-6 ${isVip ? 'relative' : ''}`}>
+    <div className={`bg-[#000000] border border-gray-800 rounded-lg p-6 ${isVip ? 'relative' : ''}`}>
       {/* Gradiente VIP */}
       {isVip && (
         <div className="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-purple-500 via-blue-500 to-yellow-500 rounded-t-lg"></div>
@@ -39,6 +38,9 @@ export function TicketCounter({
           ${price}
         </div>
       </div>
+      
+      
+                 <hr className="border-gray-700 mb-4" />
 
       {/* Descrição */}
       <ul className="space-y-2 mb-6">

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600">
+  <g id="seats">
+    <rect id="A1" x="100" y="100" width="40" height="40" data-seat-type="STANDARD" />
+    <rect id="A2" x="150" y="100" width="40" height="40" data-seat-type="STANDARD" />
+    <rect id="A3" x="200" y="100" width="40" height="40" data-seat-type="STANDARD" />
+    <rect id="A4" x="250" y="100" width="40" height="40" data-seat-type="STANDARD" />
+    <rect id="A5" x="300" y="100" width="40" height="40" data-seat-type="STANDARD" />
+    <rect id="B1" x="100" y="150" width="40" height="40" data-seat-type="STANDARD" />
+    <rect id="B2" x="150" y="150" width="40" height="40" data-seat-type="STANDARD" />
+    <rect id="B3" x="200" y="150" width="40" height="40" data-seat-type="STANDARD" />
+    <rect id="B4" x="250" y="150" width="40" height="40" data-seat-type="STANDARD" />
+    <rect id="B5" x="300" y="150" width="40" height="40" data-seat-type="STANDARD" />
+    <rect id="C1" x="100" y="250" width="40" height="40" data-seat-type="VIP" />
+    <rect id="C2" x="150" y="250" width="40" height="40" data-seat-type="VIP" />
+    <rect id="C3" x="200" y="250" width="40" height="40" data-seat-type="VIP" />
+    <rect id="C4" x="250" y="250" width="40" height="40" data-seat-type="VIP" />
+    <rect id="C5" x="300" y="250" width="40" height="40" data-seat-type="VIP" />
+    <rect id="D1" x="100" y="300" width="40" height="40" data-seat-type="VIP" />
+    <rect id="D2" x="150" y="300" width="40" height="40" data-seat-type="VIP" />
+    <rect id="D3" x="200" y="300" width="40" height="40" data-seat-type="VIP" />
+    <rect id="D4" x="250" y="300" width="40" height="40" data-seat-type="VIP" />
+    <rect id="D5" x="300" y="300" width="40" height="40" data-seat-type="VIP" />
+  </g>
+</svg>

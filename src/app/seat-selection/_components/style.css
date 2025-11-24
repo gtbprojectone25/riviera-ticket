@@ -1,0 +1,22 @@
+.seat-picker-seat {
+  border-radius: 4px !important;
+  width: 30px !important;
+  height: 30px !important;
+  margin: 4px !important;
+}
+
+.seat-picker-seat.selected {
+  background-color: #FF7513 !important;
+}
+
+.seat-picker-seat.vip {
+  background-color: #7658F6 !important;
+}
+
+.seat-picker-seat.standard {
+  background-color: #4AA7F5 !important;
+}
+
+.seat-picker-seat.reserved {
+    background-color: #2A2A2A !important;
+}

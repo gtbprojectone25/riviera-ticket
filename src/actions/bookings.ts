@@ -5,6 +5,8 @@ import { sessions, seats, carts, cartItems } from '@/db/schema'
 import { eq, and, lte, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 
+
+
 type SelectedSeat = {
   id: string
   price: number
