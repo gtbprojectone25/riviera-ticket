@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Clock } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 
 // Componentes Visuais / UI
 import { AnimatedBackground } from '@/components/animated-background';
@@ -15,69 +15,15 @@ import { SeatMap } from './SeatMap';
 import { SelectedSeatsPanel } from './SelectedSeatsPanel';
 import { ApplyButton } from './ApplyButton';
 
-// Import do Resumo
-import { TicketSummary } from '../ticket-selection/_components/ticket-summary';
-
 // Store e Tipos
 import { useBookingStore } from '@/stores/booking';
 import type { Ticket, Seat, Row, SeatType } from './types';
    
 
-// --- GERADOR DE LAYOUT DO MAPA (Mantido) ---
-const generateSeats = (): Seat[] => {
-  const seats: Seat[] = [];
-  const rowsStandard = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
-  const rowsVip = ['M', 'N', 'O'];
-  const allRows = [...rowsStandard, ...rowsVip];
+// --- GERADOR DE LAYOUT DO MAPA (Removido - usa utils) ---
 
-  allRows.forEach((row) => {
-    const isVipRow = rowsVip.includes(row);
-    const defaultType: SeatType = isVipRow ? 'VIP' : 'STANDARD';
-    
-    for (let i = 1; i <= 25; i++) {
-      let seatType: SeatType = defaultType;
-      let status: 'available' | 'occupied' = 'available';
 
-      if (isVipRow) {
-        if (i >= 7 && i <= 18) {
-            seatType = 'VIP';
-        } else {
-            seatType = 'GAP';
-        }
-      } 
-      else {
-          if (row === 'E') {
-            if (i === 1 || i === 2) status = 'occupied';
-            else if (i === 3 || i === 4) seatType = 'STANDARD';
-            else if (i === 5 || i === 6) seatType = 'WHEELCHAIR';
-            else if (i >= 7 && i <= 10) seatType = 'GAP';
-            else if (i >= 11 && i <= 14) seatType = 'WHEELCHAIR';
-            else if (i === 15) seatType = 'GAP';
-            else if (i === 16 || i === 17) seatType = 'STANDARD';
-            else if (i >= 18) seatType = 'GAP';
-          } 
-          else if (row === 'F') {
-            if (i === 21 || i === 22) seatType = 'WHEELCHAIR';
-            else if (i === 23) seatType = 'GAP';
-            else if (i === 24 || i === 25) seatType = 'WHEELCHAIR';
-          } else if (row === 'O') {
-            if (i > 8 && i < 18) seatType = 'GAP';
-          }
-      }
-
-      seats.push({
-        id: `${row}${i}`,
-        row: row,
-        number: i,
-        type: seatType,
-        status: status,
-      });
-    }
-  });
-  return seats;
-};
-
-const INITIAL_SEATS = generateSeats();
+import { INITIAL_SEATS } from './utils';
 
 export default function SeatSelectionPage() {
   const router = useRouter();
@@ -86,10 +32,8 @@ export default function SeatSelectionPage() {
   const selectedCinema = useBookingStore((s) => s.selectedCinema);
   const selectedTicketsFromStore = useBookingStore((s) => s.selectedTickets); 
   
-  // 2. Inicialização Lazy (CORREÇÃO DO ERRO)
-  // Calculamos o estado inicial DENTRO do useState, em vez de no useEffect
+  // 2. Inicialização Lazy
   const [ticketsToAssign, setTicketsToAssign] = useState<Ticket[]>(() => {
-    // Se não houver tickets na store, retorna array vazio (o useEffect abaixo vai redirecionar)
     if (!selectedTicketsFromStore || selectedTicketsFromStore.length === 0) {
         return [];
     }
@@ -109,26 +53,13 @@ export default function SeatSelectionPage() {
     return expandedTickets;
   });
 
-  const [timeLeft, setTimeLeft] = useState(600);
-
-  // 3. Proteção de Rota (Apenas Redirecionamento)
+  // 3. Proteção de Rota
   useEffect(() => {
     if (!selectedCinema || !selectedTicketsFromStore || selectedTicketsFromStore.length === 0) {
       router.push('/ticket-selection');
     }
   }, [selectedCinema, selectedTicketsFromStore, router]);
 
-  // Timer
-  useEffect(() => {
-    const timer = setInterval(() => setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0)), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
 
   // --- DADOS PARA O RESUMO ---
   const summaryTickets = useMemo(() => {
@@ -181,7 +112,7 @@ export default function SeatSelectionPage() {
   };
 
   const handleApply = () => {
-    console.log("Finalizando com:", ticketsToAssign);
+    useBookingStore.getState().setFinalizedTickets(ticketsToAssign as any);
     router.push('/checkout');
   };
 
@@ -204,24 +135,18 @@ export default function SeatSelectionPage() {
   if (!selectedCinema) return null;
 
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-hidden">
+    <div className="min-h-screen bg-black text-white relative overflow-x-hidden">
       <AnimatedBackground />
 
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-[calc(100vh-100px)] pt-8">
+      <div className="relative z-10 flex flex-col items-center min-h-screen pt-6">
         
-        <div className="w-full max-w-md rounded-2xl mx-4 space-y-4 p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
+        <div className="w-full max-w-md space-y-6 relative rounded-2xl p-10 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
             
-            <div className="w-full bg-[#0266FC] p-3 flex items-center justify-center rounded-lg sticky top-0 z-30 shadow-lg">
-                <Clock className="h-4 w-4 text-white shrink-0 mr-2" />
-                <p className="text-white text-xs font-medium text-center">
-                    To guarantee your place, finish within {formatTime(timeLeft)}
-                </p>
-            </div>
-
-            <div className="space-y-2">
+            {/* Header */}
+            <div className="space-y-1">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold text-white">Die Odyssee</h1>
-                    <Badge variant="secondary" className="bg-gray-700 text-white px-3 py-1 rounded-full">
+                    <Badge variant="secondary" className="bg-[#2A2A2A] hover:bg-[#333] text-gray-300 px-4 py-1.5 rounded-full border-0 font-medium">
                         Pre-order
                     </Badge>
                 </div>
@@ -229,47 +154,60 @@ export default function SeatSelectionPage() {
                 <Button
                     variant="ghost"
                     onClick={() => router.back()}
-                    className="text-gray-400 hover:text-white p-0 h-auto font-normal hover:bg-transparent"
+                    className="text-gray-500 hover:text-white p-0 h-auto font-normal hover:bg-transparent text-sm flex items-center"
                 >
                     <ChevronLeft className="h-4 w-4 mr-1" />
                     To go back
                 </Button>
             </div>
+            
+            {/* Divider */}
+            <div className="h-px bg-white/10 w-full" />
 
-            <div className="bg-gray-900/50 rounded-xl p-4 border border-white/5">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <h2 className="text-lg font-semibold text-white">{selectedCinema.name}</h2>
-                        <p className="text-xs text-gray-400">
-                            {selectedCinema.address || `${selectedCinema.city}, ${selectedCinema.state}`}
-                        </p>
-                    </div>
-                    <div className="text-right">
-                         <div className="bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded text-xs font-bold inline-block mb-1">
-                            9.7
-                         </div>
-                        <p className="text-[10px] text-gray-500">2.987 reviews</p>
-                    </div>
+            {/* Cinema Info */}
+            <div className="flex justify-between items-start">
+                <div>
+                    <h2 className="text-xl font-bold text-white">Roxy Cinema</h2>
+                    <p className="text-xs text-gray-400 mt-1 max-w-[200px]">
+                        {selectedCinema.address || `${selectedCinema.city}, ${selectedCinema.state}`}
+                    </p>
+                </div>
+                <div className="text-right flex flex-col items-end">
+                        <div className="flex items-center gap-2 mb-1">
+                            <div className="bg-white/10 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-bold">
+                                9.7/10
+                            </div>
+                            <span className="text-[10px] font-medium text-white">Extraordinary</span>
+                        </div>
+                    <p className="text-[10px] text-gray-500">2.987 reviews</p>
                 </div>
             </div>
 
             {/* Resumo dos Tickets */}
-            <div className="py-2">
-                <TicketSummary tickets={summaryTickets} />
+            <div className="bg-[#171C20] rounded-2xl p-5 border border-white/5">
+              {summaryTickets.map((ticket, index) => (
+                <div key={ticket.id}>
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h3 className="text-white font-semibold text-base">{ticket.name}</h3>
+                            <p className="text-gray-500 text-xs mt-1">{ticket.amount}x ${ticket.price}</p>
+                        </div>
+                        <div className="px-4 py-2 rounded-full bg-[#2A2A2A] border border-white/5 text-white text-xs font-bold">
+                            ${ticket.price}
+                        </div>
+                    </div>
+                    {index < summaryTickets.length - 1 && (
+                        <div className="h-px bg-white/5 w-full my-4" />
+                    )}
+                </div>
+              ))}
             </div>
             
-            <div className="h-px bg-gray-800 w-full my-2" />
-
-            <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-medium text-white">Select Seats</h3>
-                    <span className="text-xs text-gray-400">Pinch to zoom</span>
-                </div>
-                
+            {/* Legenda e Mapa */}
+            <div className="space-y-2 pl-2 pr-2">
                 <SeatLegend />
 
-
-                <div className="relative w-full overflow-hidden bg-[#111] rounded-xl border border-white/5 p-2 min-h-[300px] flex items-center justify-center">
+                <div className="w-full mask-content-auto">
                      <SeatMap
                         rows={seatRows}
                         selectedSeats={selectedSeatIds}
@@ -280,17 +218,12 @@ export default function SeatSelectionPage() {
                 </div>
             </div>
 
+            {/* Painel de Seleção Inferior */}
             <SelectedSeatsPanel tickets={ticketsToAssign} onRemoveSeat={handleRemoveSeat} />
 
-            <div className="pt-2">
-                <ApplyButton onApply={handleApply} isReady={isAllSelected} />
-            </div>
+            {/* Botão Apply */}
+            <ApplyButton onApply={handleApply} isReady={isAllSelected} />
         </div>
-
-        <div className="text-center text-sm text-gray-500 pb-4 opacity-50 mt-4">
-           Screen is facing this way
-        </div>
-
       </div>
     </div>
   );

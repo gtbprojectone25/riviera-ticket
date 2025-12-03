@@ -20,6 +20,8 @@ export const users = pgTable('users', {
   name: text('name').notNull(),
   surname: text('surname').notNull(),
   hashedPassword: text('hashed_password'),
+  encryptedSsn: text('encrypted_ssn'),
+  ssnHash: text('ssn_hash'),
   emailVerified: boolean('email_verified').default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -91,6 +93,10 @@ export const tickets = pgTable('tickets', {
   price: integer('price').notNull(), // in cents
   status: ticketStatusEnum('status').notNull().default('RESERVED'),
   qrCode: text('qr_code'),
+  barcodePath: text('barcode_path'),
+  barcodeBlurredPath: text('barcode_blurred_path'),
+  barcodeRevealedAt: timestamp('barcode_revealed_at'),
+  barcodeData: text('barcode_data'),
   purchaseDate: timestamp('purchase_date').defaultNow().notNull(),
   expiresAt: timestamp('expires_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -103,6 +109,7 @@ export const paymentIntents = pgTable('payment_intents', {
   cartId: uuid('cart_id').references(() => carts.id, { onDelete: 'cascade' }).notNull(),
   userId: uuid('user_id').references(() => users.id),
   stripePaymentIntentId: text('stripe_payment_intent_id').unique(),
+  adyenPaymentId: text('adyen_payment_id'), // Adyen payment reference
   amount: integer('amount').notNull(), // in cents
   currency: text('currency').notNull().default('usd'),
   status: paymentStatusEnum('status').notNull().default('PENDING'),
@@ -250,3 +257,19 @@ export type UserSession = typeof userSessions.$inferSelect
 export type NewUserSession = typeof userSessions.$inferInsert
 export type Movie = typeof movies.$inferSelect
 export type NewMovie = typeof movies.$inferInsert
+
+// Email verifications table
+export const emailVerifications = pgTable('email_verifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull(),
+  code: text('code').notNull(), // 5 digit code
+  expiresAt: timestamp('expires_at').notNull(),
+  attempts: integer('attempts').default(0).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  emailIdx: index('idx_email_verifications_email').on(table.email),
+  expiresIdx: index('idx_email_verifications_expires').on(table.expiresAt),
+}))
+
+export type EmailVerification = typeof emailVerifications.$inferSelect
+export type NewEmailVerification = typeof emailVerifications.$inferInsert
