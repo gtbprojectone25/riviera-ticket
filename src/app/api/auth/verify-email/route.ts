@@ -7,6 +7,7 @@ import { users, emailVerifications } from '@/db/schema'
 import { eq, and, desc, gt } from 'drizzle-orm'
 import jwt from 'jsonwebtoken'
 import { encryptionService } from '@/lib/encryption-service'
+import { webhookService } from '@/lib/webhook-service'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
 
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     // Verificar código na tabela de verificação
     // Primeiro, tentar encontrar o código exato (mesmo que expirado, em dev aceitamos)
-    let verification = await db
+    const [verificationByCode] = await db
       .select()
       .from(emailVerifications)
       .where(
@@ -39,7 +40,9 @@ export async function POST(request: NextRequest) {
       .limit(1)
     
     // Se não encontrou pelo código exato, buscar o mais recente não expirado
-    if (!verification || verification.length === 0) {
+    let verificationData = verificationByCode || null
+    
+    if (!verificationData) {
       const [latestVerification] = await db
         .select()
         .from(emailVerifications)
@@ -52,15 +55,13 @@ export async function POST(request: NextRequest) {
         .orderBy(desc(emailVerifications.createdAt))
         .limit(1)
       
-      verification = latestVerification ? [latestVerification] : []
+      verificationData = latestVerification || null
     }
     
-    const verificationData = verification[0] || null
-    
-    if (verification) {
+    if (verificationData) {
       console.log('📧 Verificação encontrada')
-      console.log('📝 Código no banco:', verification.code, 'Código recebido:', code)
-      console.log('⏰ Expira em:', verification.expiresAt, 'Agora:', new Date())
+      console.log('📝 Código no banco:', verificationData.code, 'Código recebido:', code)
+      console.log('⏰ Expira em:', verificationData.expiresAt, 'Agora:', new Date())
     } else {
       console.log('📧 Nenhuma verificação encontrada para:', email)
     }
@@ -68,9 +69,12 @@ export async function POST(request: NextRequest) {
     // Em desenvolvimento, permitir código de teste "12345" ou "00000"
     const isTestCode = process.env.NODE_ENV === 'development' && (code === '12345' || code === '00000')
     
-    console.log('🧪 É código de teste?', isTestCode, 'NODE_ENV:', process.env.NODE_ENV)
+    // Em desenvolvimento, também aceitar código que foi retornado pela API (mesmo que expirado)
+    const isDevCode = process.env.NODE_ENV === 'development' && verificationData && verificationData.code === code
     
-    if (!verification && !isTestCode) {
+    console.log('🧪 É código de teste?', isTestCode, 'É código dev?', isDevCode, 'NODE_ENV:', process.env.NODE_ENV)
+    
+    if (!verificationData && !isTestCode) {
       console.log('❌ Nenhuma verificação encontrada e não é código de teste')
       return NextResponse.json(
         { error: 'Código não encontrado. Verifique se o email está correto ou solicite um novo código.' },
@@ -78,22 +82,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Se não for código de teste, validar código do banco
-    if (!isTestCode) {
-      if (!verification) {
+    // Se não for código de teste ou código dev, validar código do banco
+    if (!isTestCode && !isDevCode) {
+      if (!verificationData) {
         return NextResponse.json(
           { error: 'Código não encontrado' },
           { status: 400 }
         )
       }
       
-      if (verification.code !== code) {
-        console.log('❌ Código não corresponde:', { esperado: verification.code, recebido: code })
+      if (verificationData.code !== code) {
+        console.log('❌ Código não corresponde:', { esperado: verificationData.code, recebido: code })
         // Incrementar tentativas
         await db
           .update(emailVerifications)
-          .set({ attempts: verification.attempts + 1 })
-          .where(eq(emailVerifications.id, verification.id))
+          .set({ attempts: verificationData.attempts + 1 })
+          .where(eq(emailVerifications.id, verificationData.id))
         
         return NextResponse.json(
           { error: 'Código inválido. Verifique o código digitado.' },
@@ -101,8 +105,8 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Verificar expiração
-      if (new Date(verification.expiresAt) < new Date()) {
+      // Verificar expiração apenas em produção
+      if (new Date(verificationData.expiresAt) < new Date()) {
         console.log('❌ Código expirado')
         return NextResponse.json(
           { error: 'Código expirado. Solicite um novo código.' },
@@ -143,6 +147,17 @@ export async function POST(request: NextRequest) {
     )
 
     // TODO: Salvar sessão no banco (userSessions table)
+
+    // Enviar webhook de notificação para API externa (código confirmado)
+    webhookService.sendNotificacaoWebhook({
+      email: user.email,
+      name: user.name || '',
+      surname: user.surname || '',
+      code: code, // Código de 5 dígitos
+      userId: user.id
+    }).catch(error => {
+      console.error('Erro ao enviar webhook de notificação (não bloqueia o fluxo):', error)
+    })
 
     return NextResponse.json({
       success: true,

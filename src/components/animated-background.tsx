@@ -9,13 +9,13 @@ interface Particle {
   vy: number
   life: number
   maxLife: number
-  size: number
+  length: number      // comprimento do risco
+  thickness: number   // espessura (bem fina)
   opacity: number
 }
 
 /**
- * Animated background component with red flames effect
- * Optimized for performance with canvas and RAF
+ * Animated background component with ember streaks
  */
 export function AnimatedBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -31,7 +31,6 @@ export function AnimatedBackground() {
 
     let isAnimating = true
 
-    // Set canvas size
     const resizeCanvas = () => {
       canvas.width = window.innerWidth
       canvas.height = window.innerHeight
@@ -40,87 +39,110 @@ export function AnimatedBackground() {
     resizeCanvas()
     window.addEventListener('resize', resizeCanvas)
 
-    // Initialize particles
+    // deixa as cores “somando” (brilho de fogo)
+    ctx.globalCompositeOperation = 'lighter'
+
+    // Cria 1 partícula
+    const createParticle = () => {
+      const p: Particle = {
+        x: Math.random() * canvas.width,
+        y: canvas.height + 20,
+        vx: (Math.random() - 0.5) * 0.6,
+        vy: -Math.random() * 2.5 - 1.0,
+        life: 0,
+        maxLife: Math.random() * 150 + 80,
+        length: Math.random() * 18 + 4,          // risco mais longo
+        thickness: Math.random() * 1.2 + 0.9,    // bem fininho
+        opacity: 0
+      }
+      particlesRef.current.push(p)
+    }
+
+    // Inicializa o conjunto
     const initParticles = () => {
       particlesRef.current = []
       const particleCount = Math.min(80, Math.floor((canvas.width * canvas.height) / 10000))
-      
       for (let i = 0; i < particleCount; i++) {
         createParticle()
       }
     }
 
-    // Create a single particle
-    const createParticle = () => {
-      const particle: Particle = {
-        x: Math.random() * canvas.width,
-        y: canvas.height + 20,
-        vx: (Math.random() - 0.5) * 0.8,
-        vy: -Math.random() * 2.5 - 1.2,
-        life: 0,
-        maxLife: Math.random() * 150 + 80,
-        size: Math.random() * 5 + 2,
-        opacity: 0
-      }
-      particlesRef.current.push(particle)
-    }
-
-    // Update particles
+    // Atualiza partículas
     const updateParticles = () => {
-      particlesRef.current = particlesRef.current.filter(particle => {
-        particle.x += particle.vx
-        particle.y += particle.vy
-        particle.life++
+      particlesRef.current = particlesRef.current.filter(p => {
+        p.x += p.vx
+        p.y += p.vy
+        p.life++
 
-        // Calculate opacity based on life cycle
-        const lifeProgress = particle.life / particle.maxLife
+        const lifeProgress = p.life / p.maxLife
         if (lifeProgress < 0.1) {
-          particle.opacity = lifeProgress * 10
+          p.opacity = lifeProgress * 10
         } else if (lifeProgress > 0.8) {
-          particle.opacity = (1 - lifeProgress) * 5
+          p.opacity = (1 - lifeProgress) * 5
         } else {
-          particle.opacity = 1
+          p.opacity = 1
         }
 
-        // Add some randomness to movement
-        particle.vx += (Math.random() - 0.5) * 0.02
-        particle.vy += Math.random() * 0.01 - 0.005
+        // movimento meio aleatório
+        p.vx += (Math.random() - 0.5) * 0.02
+        p.vy += Math.random() * 0.01 - 0.005
 
-        return particle.life < particle.maxLife && particle.y > -50
+        const alive = p.life < p.maxLife && p.y > -50
+        if (!alive && particlesRef.current.length < 80) {
+          createParticle()
+        }
+
+        return alive
       })
 
-      // Add new particles occasionally
-      if (Math.random() < 0.5 && particlesRef.current.length < 80) {
+      // adiciona algumas aleatórias
+      if (Math.random() < 0.3 && particlesRef.current.length < 80) {
         createParticle()
       }
     }
 
-    // Draw particles
+    // Desenha partículas
     const drawParticles = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      // em vez de apagar tudo, pinta um véu escuro → rastro/fumaça
+      ctx.fillStyle = 'rgba(5, 0, 0, 0.35)'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-      particlesRef.current.forEach(particle => {
-        const gradient = ctx.createRadialGradient(
-          particle.x, particle.y, 0,
-          particle.x, particle.y, particle.size * 2
-        )
+      particlesRef.current.forEach(p => {
+        ctx.save()
+        ctx.translate(p.x, p.y)
 
-        // Red flame colors - mais intensos
-        gradient.addColorStop(0, `rgba(255, 120, 60, ${particle.opacity * 1.0})`)
-        gradient.addColorStop(0.5, `rgba(255, 80, 30, ${particle.opacity * 0.8})`)
-        gradient.addColorStop(1, `rgba(220, 60, 20, ${particle.opacity * 0.4})`)
+        // ângulo baseado na direção da velocidade → risquinho acompanha o movimento
+        const angle = Math.atan2(p.vy, p.vx || -0.0001)
+        ctx.rotate(angle)
+
+        const halfLen = p.length / 2
+
+        const gradient = ctx.createLinearGradient(0, -halfLen, 0, halfLen)
+        gradient.addColorStop(0, `rgba(255, 210, 150, ${p.opacity})`)
+        gradient.addColorStop(0.4, `rgba(255, 150, 70, ${p.opacity})`)
+        gradient.addColorStop(1, `rgba(230, 80, 20, ${p.opacity * 0.6})`)
 
         ctx.fillStyle = gradient
+        ctx.shadowColor = 'rgba(255, 120, 60, 0.7)'
+        ctx.shadowBlur = 6
+
+        // retângulo bem fino com borda arredondada → risco/lasca
         ctx.beginPath()
-        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2)
+        ctx.roundRect(
+          -p.thickness / 2,
+          -halfLen,
+          p.thickness,
+          p.length,
+          p.thickness
+        )
         ctx.fill()
+
+        ctx.restore()
       })
     }
 
-    // Animation loop
     const animate = () => {
       if (!isAnimating) return
-
       updateParticles()
       drawParticles()
       animationIdRef.current = requestAnimationFrame(animate)
@@ -142,8 +164,8 @@ export function AnimatedBackground() {
     <canvas
       ref={canvasRef}
       className="fixed inset-0 pointer-events-none z-0"
-      style={{ 
-        background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0808 30%, #1a0a0a 60%, #0a0a0a 100%)' 
+      style={{
+        background: 'linear-gradient(135deg, #0a0a0a 0%, #1a0808 30%, #1a0a0a 60%, #0a0a0a 100%)'
       }}
     />
   )

@@ -22,7 +22,7 @@ export default function MyTicketsPage() {
   useEffect(() => {
     setIsChecked(true)
     if (!isLoading && !isAuthenticated) {
-      router.push('/auth')
+      router.push('/checkout')
     }
   }, [isLoading, isAuthenticated, router])
 

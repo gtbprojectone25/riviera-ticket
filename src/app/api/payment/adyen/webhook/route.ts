@@ -1,72 +1,50 @@
-// API Route: POST /api/payment/stripe/webhook
-// Webhook do Stripe para confirmar pagamentos
+// API Route: POST /api/payment/adyen/webhook
+// Webhook do Adyen para confirmar pagamentos
 
 import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
+import crypto from 'crypto'
 import { db } from '@/db'
-import { paymentIntents, carts, tickets, seats, cartItems, users, sessions, type Session } from '@/db/schema'
+import { paymentIntents, carts, tickets, seats, cartItems, users, sessions } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { barcodeService } from '@/lib/barcode-service'
 import { emailService } from '@/lib/email-service'
 
-const stripeSecret = process.env.STRIPE_SECRET_KEY
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+const ADYEN_HMAC_KEY = process.env.ADYEN_HMAC_KEY || ''
 
 export async function POST(request: NextRequest) {
-  if (!stripeSecret || !webhookSecret) {
-    console.error('Stripe webhook missing configuration: STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET')
-    return NextResponse.json(
-      { error: 'Stripe not configured' },
-      { status: 500 }
-    )
-  }
-
-  const stripe = new Stripe(stripeSecret)
-
-  const body = await request.text()
-  const signature = request.headers.get('stripe-signature')
-
-  if (!signature) {
-    return NextResponse.json(
-      { error: 'Missing signature' },
-      { status: 400 }
-    )
-  }
-
-  let event: Stripe.Event
-
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    console.error('Webhook signature verification failed:', message)
-    return NextResponse.json(
-      { error: 'Invalid signature' },
-      { status: 400 }
-    )
-  }
+    const notification = await request.json()
 
-  try {
-    switch (event.type) {
-      case 'payment_intent.succeeded': {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent
-        await handlePaymentSuccess(paymentIntent)
-        break
-      }
-
-      case 'payment_intent.payment_failed': {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent
-        await handlePaymentFailure(paymentIntent)
-        break
-      }
-
-      default:
-        console.log(`Unhandled event type: ${event.type}`)
+    // Verificar HMAC signature
+    const hmacSignature = request.headers.get('x-adyen-signature')
+    if (hmacSignature && !verifyHMAC(JSON.stringify(notification), hmacSignature)) {
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 400 }
+      )
     }
 
-    return NextResponse.json({ received: true })
+    // Processar notificacoes
+    for (const notificationItem of notification.notificationItems || []) {
+      const event = notificationItem.NotificationRequestItem
+
+      switch (event.eventCode) {
+        case 'AUTHORISATION':
+          if (event.success === 'true') {
+            await handleAdyenPaymentSuccess(event)
+          } else {
+            await handleAdyenPaymentFailure(event)
+          }
+          break
+
+        default:
+          console.log(`Unhandled Adyen event: ${event.eventCode}`)
+      }
+    }
+
+    return NextResponse.json({ '[accepted]': true })
   } catch (error) {
-    console.error('Error processing webhook:', error)
+    console.error('Error processing Adyen webhook:', error)
     return NextResponse.json(
       { error: 'Webhook processing failed' },
       { status: 500 }
@@ -74,16 +52,30 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
-  // Atualizar payment intent no banco
+function verifyHMAC(payload: string, signature: string): boolean {
+  try {
+    const hmac = crypto.createHmac('sha256', ADYEN_HMAC_KEY)
+    hmac.update(payload)
+    const calculatedSignature = hmac.digest('base64')
+    return calculatedSignature === signature
+  } catch (error) {
+    console.error('HMAC verification error:', error)
+    return false
+  }
+}
+
+async function handleAdyenPaymentSuccess(event: any) {
+  const cartId = event.merchantReference
+
+  // Atualizar payment intent
   const [dbPaymentIntent] = await db
     .select()
     .from(paymentIntents)
-    .where(eq(paymentIntents.stripePaymentIntentId, paymentIntent.id))
+    .where(eq(paymentIntents.cartId, cartId))
     .limit(1)
 
   if (!dbPaymentIntent) {
-    console.error('Payment intent not found in database:', paymentIntent.id)
+    console.error('Payment intent not found:', cartId)
     return
   }
 
@@ -96,9 +88,9 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
   await db
     .update(carts)
     .set({ status: 'COMPLETED', updatedAt: new Date() })
-    .where(eq(carts.id, dbPaymentIntent.cartId))
+    .where(eq(carts.id, cartId))
 
-  // Criar tickets e gerar barcodes
+  // Criar tickets e gerar barcodes (mesma logica do Stripe)
   const items = await db
     .select({
       cartItem: cartItems,
@@ -106,13 +98,12 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
     })
     .from(cartItems)
     .innerJoin(seats, eq(seats.id, cartItems.seatId))
-    .where(eq(cartItems.cartId, dbPaymentIntent.cartId))
+    .where(eq(cartItems.cartId, cartId))
 
   const createdTickets = []
-  let sessionData: Session | null = null
+  let sessionData: any = null
 
   for (const item of items) {
-    // Buscar sessão se ainda não tiver
     if (!sessionData) {
       const [session] = await db
         .select()
@@ -122,7 +113,6 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
       sessionData = session
     }
 
-    // Criar ticket
     const [ticket] = await db.insert(tickets).values({
       sessionId: item.seat.sessionId,
       userId: dbPaymentIntent.userId!,
@@ -134,11 +124,9 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
       purchaseDate: new Date(),
     }).returning()
 
-    // Gerar barcode
     const barcodeData = barcodeService.generateBarcodeData(ticket.id, dbPaymentIntent.cartId)
     const { realPath, blurredPath } = await barcodeService.saveBarcode(ticket.id, barcodeData)
 
-    // Atualizar ticket com paths do barcode
     await db.update(tickets).set({
       barcodePath: realPath,
       barcodeBlurredPath: blurredPath,
@@ -149,7 +137,6 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
     createdTickets.push(ticket)
   }
 
-  // Enviar email de confirmação
   if (dbPaymentIntent.userId && sessionData) {
     const [user] = await db.select().from(users).where(eq(users.id, dbPaymentIntent.userId)).limit(1)
     if (user) {
@@ -166,11 +153,13 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
   }
 }
 
-async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
+async function handleAdyenPaymentFailure(event: any) {
+  const cartId = event.merchantReference
+
   const [dbPaymentIntent] = await db
     .select()
     .from(paymentIntents)
-    .where(eq(paymentIntents.stripePaymentIntentId, paymentIntent.id))
+    .where(eq(paymentIntents.cartId, cartId))
     .limit(1)
 
   if (dbPaymentIntent) {
@@ -180,4 +169,3 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
       .where(eq(paymentIntents.id, dbPaymentIntent.id))
   }
 }
-

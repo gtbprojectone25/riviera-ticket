@@ -1,46 +1,40 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronUp, X } from 'lucide-react';
-
+import { X } from 'lucide-react';
 
 export function SeatLegend() {
-  const [open, setOpen] = useState(false);
   return (
-    <div className="px-4 mt-4 mb-2">
-      <button
-        className="flex items-center gap-2 text-sm font-medium text-white mb-2 focus:outline-none"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        Guia de assentos
-        {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-      </button>
-      {open && (
-        <div className="grid grid-cols-2 gap-4 border-t border-gray-700 pt-3 pb-2 animate-fade-in">
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-4 h-4 rounded bg-[#4AA7F5] border border-gray-600" />
-            <span className="text-xs text-white">Disponível Padrão</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-4 h-4 rounded bg-[#2A2A2A] border border-gray-600 flex items-center justify-center">
-              <X className="w-3 h-3 text-gray-500" />
-            </span>
-            <span className="text-xs text-white">Indisponível</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-4 h-4 rounded bg-[#7658F6] border border-gray-600" />
-            <span className="text-xs text-white">Disponível VIP</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-4 h-4 rounded bg-[#0648B9] border border-gray-600" />
-            <span className="text-xs text-white">Cadeira de Rodas</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-block w-4 h-4 rounded bg-[#FF7513] border border-gray-600" />
-            <span className="text-xs text-white">Selecionado</span>
-          </div>
+    <div className="w-full px-1 py-4">
+      <h3 className="text-white font-medium mb-4 text-sm">Guia de acentos</h3>
+      <div className="grid grid-cols-2 gap-y-3 gap-x-8">
+        {/* Disponível Padrão */}
+        <div className="flex items-center gap-3">
+          <span className="w-5 h-5 rounded-[4px] bg-[#4AA7F5]" />
+          <span className="text-sm text-gray-300">Disponível Padrão</span>
         </div>
-      )}
-      <hr className="border-gray-700 mt-3" />
+
+        {/* Indisponível */}
+        <div className="flex items-center gap-3">
+          <X className="w-5 h-5 text-gray-500 font-bold" strokeWidth={3} />
+          <span className="text-sm text-gray-300">Indisponível</span>
+        </div>
+
+        {/* Disponível VIP */}
+        <div className="flex items-center gap-3">
+          <span className="w-5 h-5 rounded-[4px] bg-[#7658F6]" />
+          <span className="text-sm text-gray-300">Disponível VIP</span>
+        </div>
+
+        {/* Cadeira de Rodas */}
+        <div className="flex items-center gap-3">
+          <span className="w-5 h-5 rounded-[4px] bg-[#2563EB]" />
+          <span className="text-sm text-gray-300">Cadeira de Rodas</span>
+        </div>
+
+        {/* Selecionado */}
+        <div className="flex items-center gap-3">
+          <span className="w-5 h-5 rounded-[4px] bg-[#FF7513]" />
+          <span className="text-sm text-gray-300">Selecionado</span>
+        </div>
+      </div>
     </div>
   );
 }

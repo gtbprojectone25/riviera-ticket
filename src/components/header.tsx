@@ -24,7 +24,8 @@ export function Header({ className }: HeaderProps) {
     if (isAuthenticated) {
       router.push('/my-tickets')
     } else {
-      router.push('/auth')
+      // Redirecionar para checkout que iniciará o fluxo de autenticação
+      router.push('/checkout')
     }
   }
 
@@ -62,7 +63,7 @@ export function Header({ className }: HeaderProps) {
               variant="ghost" 
               size="sm" 
               className="text-white hover:text-white/80"
-              onClick={() => router.push('/auth')}
+              onClick={() => router.push('/checkout')}
             >
               Sign In
             </Button>

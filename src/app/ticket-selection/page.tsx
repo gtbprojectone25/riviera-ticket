@@ -145,22 +145,36 @@ export default function TicketSelectionPage() {
              <hr className="border-gray-700 mb-4" />
           </div>
 
-          {/* Cinema Image */}
-          <div className="w-full h-48 bg-gray-800 rounded-lg overflow-hidden relative">
+          {/* Cinema Image / Pre-order visual padronizado com o HeroSection */}
+          <div className="relative w-full aspect-[2/3] rounded-2xl overflow-hidden bg-black/50">
             <Image
-              src="/sala-cinema.png"
-              alt="Interior da Sala de Cinema"
+              src="/theodyssey.jpg"
+              alt="Die Odyssee Pre-order"
               fill
               className="object-cover"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement
-                target.style.display = 'none'
-                target.parentElement!.style.background = 'linear-gradient(135deg, #1e3a8a 0%, #000000 100%)'
-              }}
+              priority
             />
-             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4">
-                <p className="text-white font-bold">{selectedCinema.name}</p>
-             </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+
+            <div className="absolute bottom-4 left-0 right-0 flex flex-wrap gap-2 justify-center px-4 z-10">
+              <Badge variant="secondary" className="bg-white text-black text-xs px-3 py-1 rounded-full font-medium">
+                Pre-order
+              </Badge>
+              <Badge variant="secondary" className="bg-gray-900/80 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full">
+                2026
+              </Badge>
+              <Badge variant="secondary" className="bg-gray-900/80 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full">
+                Action | Fantasy
+              </Badge>
+              <Badge variant="secondary" className="bg-gray-900/80 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full">
+                +18
+              </Badge>
+            </div>
+
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4 z-10">
+              <p className="text-white font-bold">{selectedCinema.name}</p>
+              <p className="text-xs text-gray-300">{selectedCinema.address || `${selectedCinema.city}, ${selectedCinema.state}`}</p>
+            </div>
           </div>
 
           {/* Info */}

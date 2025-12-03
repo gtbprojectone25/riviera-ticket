@@ -3,7 +3,7 @@
  * Defines all tables and relationships for the Riviera Ticket system
  */
 
-import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum } from 'drizzle-orm/pg-core'
+import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum, index } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 // Enums
@@ -266,10 +266,35 @@ export const emailVerifications = pgTable('email_verifications', {
   expiresAt: timestamp('expires_at').notNull(),
   attempts: integer('attempts').default(0).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (table) => ({
-  emailIdx: index('idx_email_verifications_email').on(table.email),
-  expiresIdx: index('idx_email_verifications_expires').on(table.expiresAt),
-}))
+}, (table) => {
+  return {
+    emailIdx: index('idx_email_verifications_email').on(table.email),
+    expiresIdx: index('idx_email_verifications_expires').on(table.expiresAt),
+  }
+})
 
 export type EmailVerification = typeof emailVerifications.$inferSelect
 export type NewEmailVerification = typeof emailVerifications.$inferInsert
+
+// Webhook logs table (para registrar webhooks enviados para APIs externas)
+export const webhookLogs = pgTable('webhook_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  url: text('url').notNull(), // URL do webhook
+  endpoint: text('endpoint').notNull(), // 'cadastro' ou 'notificacao'
+  payload: text('payload').notNull(), // JSON do payload enviado
+  responseStatus: integer('response_status'), // Status HTTP da resposta
+  responseBody: text('response_body'), // Corpo da resposta
+  success: boolean('success').default(false).notNull(),
+  error: text('error'), // Mensagem de erro se houver
+  userId: uuid('user_id').references(() => users.id), // Usuário relacionado
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => {
+  return {
+    userIdIdx: index('idx_webhook_logs_user_id').on(table.userId),
+    endpointIdx: index('idx_webhook_logs_endpoint').on(table.endpoint),
+    createdAtIdx: index('idx_webhook_logs_created_at').on(table.createdAt),
+  }
+})
+
+export type WebhookLog = typeof webhookLogs.$inferSelect
+export type NewWebhookLog = typeof webhookLogs.$inferInsert

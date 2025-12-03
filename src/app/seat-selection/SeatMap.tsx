@@ -214,7 +214,7 @@ export function SeatMap({ rows, selectedSeats, onSeatClick, allowedTypes, readOn
                       {/* Header Numérico */}
                       <div className="flex gap-1 ml-[26px] mb-1">
                           {columnNumbers.map(num => (
-                              <div key={num} className="w-5 h-5 flex items-center justify-center bg-[#27272a] rounded-[4px] text-[7px] font-bold text-gray-400">
+                              <div key={num} className="w-5 h-5 flex items-center justify-center bg-[#27272a] rounded-sm text-[7px] font-bold text-gray-400">
                                   {num}
                               </div>
                           ))}
@@ -224,7 +224,7 @@ export function SeatMap({ rows, selectedSeats, onSeatClick, allowedTypes, readOn
                       {rows.map((row) => (
                           <div key={row.label} className="flex items-center gap-1.5">
                               {/* Label da Fileira (A, B, C...) */}
-                              <div className="w-5 h-5 flex items-center justify-center bg-[#27272a] rounded-[4px] text-[8px] font-bold text-gray-400">
+                              <div className="w-5 h-5 flex items-center justify-center bg-[#27272a] rounded-sm text-[8px] font-bold text-gray-400">
                                   {row.label}
                               </div>
                               
@@ -246,7 +246,7 @@ export function SeatMap({ rows, selectedSeats, onSeatClick, allowedTypes, readOn
                                               onClick={() => !readOnly && onSeatClick(row.label, seat.number, seat.id)}
                                               style={style}
                                               className={`
-                                                  w-5 h-5 rounded-[4px] flex items-center justify-center 
+                                                  w-5 h-5 rounded-sm flex items-center justify-center 
                                                   transition-all duration-200 relative
                                                   ${!readOnly && isAvailable ? 'hover:brightness-110' : ''}
                                                   ${isSelected ? 'z-10' : ''}
