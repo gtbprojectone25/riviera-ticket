@@ -3,13 +3,10 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useState } from 'react'
-import { LocationModal } from './location-modal'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { AnimatedBackground } from '@/components/animated-background'
 
 export function HeroSection() {
-  const [showLocationModal, setShowLocationModal] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
@@ -21,16 +18,12 @@ export function HeroSection() {
   }
 
   return (
-    <div className="min-h-screen text-white relative overflow-y-auto flex gap-4">
-      {/* Animated Background */}
-      <AnimatedBackground />
-
+    <div className="min-h-screen text-white relative overflow-y-auto flex gap-4 ">
       {/* Loading Overlay */}
       {isLoading && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <AnimatedBackground />
           <div className="relative z-10 text-center space-y-6">
-            <div className="w-20 h-20 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto shadow-lg shadow-blue-500/50" />
+            <div className="w-20 h-20 border-4 border-red-500 border-t-transparent rounded-full animate-spin mx-auto shadow-lg shadow-red-500/50" />
             <p className="text-white text-2xl font-bold animate-pulse">Carregando...</p>
           </div>
         </div>
@@ -105,12 +98,6 @@ export function HeroSection() {
           </div>          
         </div>
       </div>
-
-      {/* Location Modal */}
-      <LocationModal
-        isOpen={showLocationModal}
-        onClose={() => setShowLocationModal(false)}
-      />
     </div>
   )
 }

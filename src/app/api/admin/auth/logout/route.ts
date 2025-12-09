@@ -1,0 +1,20 @@
+/**
+ * API: POST /api/admin/auth/logout
+ * Logout de administradores
+ */
+
+import { NextResponse } from 'next/server'
+import { logoutAdmin } from '@/lib/admin-auth'
+
+export async function POST() {
+  try {
+    await logoutAdmin()
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Admin logout error:', error)
+    return NextResponse.json(
+      { error: 'Erro ao fazer logout' },
+      { status: 500 }
+    )
+  }
+}

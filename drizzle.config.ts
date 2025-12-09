@@ -45,7 +45,7 @@ if (!databaseUrl || databaseUrl.includes('YOUR_PASSWORD') || databaseUrl.include
 }
 
 export default {
-  schema: './src/db/schema.ts',
+  schema: ['./src/db/schema.ts', './src/db/admin-schema.ts'],
   out: './src/db/migrations',
   dialect: 'postgresql',
   dbCredentials: {

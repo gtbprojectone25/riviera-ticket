@@ -13,7 +13,7 @@ const ApplyButton = ({ onClick, disabled }: ApplyButtonProps) => {
         <Button
             onClick={onClick}
             disabled={disabled}
-            className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold py-3 rounded-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50"
+            className="w-full bg-linear-to-r from-blue-500 to-purple-600 text-white font-bold py-3 rounded-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50"
         >
             Apply
         </Button>

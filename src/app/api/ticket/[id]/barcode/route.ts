@@ -6,15 +6,13 @@ import { db } from '@/db'
 import { tickets, sessions } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { barcodeService } from '@/lib/barcode-service'
-import { readFile } from 'fs/promises'
-import { join } from 'path'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const ticketId = params.id
+    const { id: ticketId } = await params
 
     // Buscar ticket
     const [ticket] = await db
@@ -50,7 +48,10 @@ export async function GET(
       shouldReveal ? new Date(revealDate) : null
     )
 
-    return new NextResponse(barcodeBuffer, {
+    // Converter o Buffer para Uint8Array para compatibilidade com o tipo BodyInit
+    const pngBytes = new Uint8Array(barcodeBuffer)
+
+    return new NextResponse(pngBytes, {
       headers: {
         'Content-Type': 'image/png',
         'Cache-Control': 'public, max-age=3600',

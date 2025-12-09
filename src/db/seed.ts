@@ -6,21 +6,64 @@
 import { db } from './index'
 import { sessions, movies, users } from './schema'
 import { createSeatsForSession } from './queries'
+import { hashPassword } from '@/lib/password'
 
 async function seedDatabase() {
   console.log('🌱 Starting database seed...')
 
   try {
+    // Hash passwords first
+    const testUserPassword = await hashPassword('test123')
+    const adminPassword = await hashPassword('admin123')
+
     // Create a test user
     const [testUser] = await db.insert(users).values({
       email: 'test@riviera.com',
       name: 'Test',
       surname: 'User',
-      hashedPassword: '$2a$10$test.hash.placeholder', // In real app, use proper hashing
+      hashedPassword: testUserPassword,
       emailVerified: true,
-    }).returning()
+      role: 'USER',
+    }).onConflictDoNothing().returning()
 
-    console.log('✅ Created test user:', testUser.email)
+    if (testUser) {
+      console.log('✅ Created test user:', testUser.email)
+    } else {
+      console.log('ℹ️  Test user already exists')
+    }
+
+    // Create an admin user
+    const [adminUser] = await db.insert(users).values({
+      email: 'admin@riviera.com',
+      name: 'Admin',
+      surname: 'Riviera',
+      hashedPassword: adminPassword,
+      emailVerified: true,
+      role: 'ADMIN',
+    }).onConflictDoNothing().returning()
+
+    if (adminUser) {
+      console.log('✅ Created admin user:', adminUser.email, '(role: ADMIN)')
+    } else {
+      console.log('ℹ️  Admin user already exists')
+    }
+
+    // Create a super admin user
+    const superAdminPassword = await hashPassword('superadmin123')
+    const [superAdmin] = await db.insert(users).values({
+      email: 'superadmin@riviera.com',
+      name: 'Super',
+      surname: 'Admin',
+      hashedPassword: superAdminPassword,
+      emailVerified: true,
+      role: 'SUPER_ADMIN',
+    }).onConflictDoNothing().returning()
+
+    if (superAdmin) {
+      console.log('✅ Created super admin user:', superAdmin.email, '(role: SUPER_ADMIN)')
+    } else {
+      console.log('ℹ️  Super admin user already exists')
+    }
 
     // Create movie information
     const [movie] = await db.insert(movies).values({
@@ -41,11 +84,15 @@ async function seedDatabase() {
         'Powerful, precise sound that places you inside the action',
         'Immersive experience like no other'
       ],
-    }).returning()
+    }).onConflictDoNothing().returning()
 
-    console.log('✅ Created movie:', movie.title)
+    if (movie) {
+      console.log('✅ Created movie:', movie.title)
+    } else {
+      console.log('ℹ️  Movie already exists')
+    }
 
-    // Create movie sessions
+    // Create movie sessions (skip if already exist)
     const sessionsData = [
       {
         movieTitle: 'Die Odyssee',
@@ -85,24 +132,33 @@ async function seedDatabase() {
       },
     ]
 
-    const createdSessions = await db.insert(sessions).values(sessionsData).returning()
-    console.log(`✅ Created ${createdSessions.length} movie sessions`)
+    const createdSessions = await db.insert(sessions).values(sessionsData).onConflictDoNothing().returning()
+    
+    if (createdSessions.length > 0) {
+      console.log(`✅ Created ${createdSessions.length} movie sessions`)
 
-    // Create seats for each session
-    for (const session of createdSessions) {
-      const seats = await createSeatsForSession(session.id)
-      console.log(`✅ Created ${seats.length} seats for session ${session.id}`)
+      // Create seats for each session
+      for (const session of createdSessions) {
+        const seats = await createSeatsForSession(session.id)
+        console.log(`✅ Created ${seats.length} seats for session ${session.id}`)
+      }
+    } else {
+      console.log('ℹ️  Sessions already exist')
     }
 
     console.log('🎉 Database seed completed successfully!')
     
     // Print summary
     console.log('\n📊 Seed Summary:')
-    console.log(`- Users: 1`)
+    console.log(`- Users: 3 (test, admin, superadmin)`)
     console.log(`- Movies: 1`)
     console.log(`- Sessions: ${createdSessions.length}`)
     console.log(`- Seats per session: 200`)
     console.log(`- Total seats: ${createdSessions.length * 200}`)
+    console.log('\n🔐 Login credentials:')
+    console.log('  - test@riviera.com / test123 (USER)')
+    console.log('  - admin@riviera.com / admin123 (ADMIN)')
+    console.log('  - superadmin@riviera.com / superadmin123 (SUPER_ADMIN)')
 
   } catch (error) {
     console.error('❌ Error seeding database:', error)

@@ -1,38 +1,20 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ArrowRight } from 'lucide-react'
-import { AnimatedBackground } from '@/components/animated-background'
 import { useBookingStore } from '@/stores/booking'
 
 export default function ReservationsPage() {
   const router = useRouter()
   const finalizedTickets = useBookingStore((s) => s.finalizedTickets)
   const selectedCinema = useBookingStore((s) => s.selectedCinema)
-  const [user, setUser] = useState<any>(null)
 
-  useEffect(() => {
-    // Carregar dados do usuário do localStorage
-    const storedUser = localStorage.getItem('user')
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser))
-      } catch (error) {
-        console.error('Error parsing user data:', error)
-      }
-    }
-  }, [])
-
-  // Calcular total
   const totalAmount = finalizedTickets.reduce((acc, t) => acc + t.price, 0)
   const ticketCount = finalizedTickets.length
 
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-x-hidden">
-      <AnimatedBackground />
-
+    <div className="min-h-screen text-white relative overflow-x-hidden bg-black/60">
       {/* Top Alert */}
       <div className="bg-[#0066FF] text-white text-center py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium tracking-wide relative z-20">
         To guarantee your place, finish within 10:00 minutes (only 4 per session).
@@ -51,9 +33,7 @@ export default function ReservationsPage() {
               <ChevronLeft className="w-4 h-4" />
               <span className="ml-1">To go out</span>
             </Button>
-            <div className="text-white font-bold text-lg">
-              {user?.name ? `${user.name} ${user.surname || ''}`.trim() : 'User'}
-            </div>
+            <div className="text-white font-bold text-lg">My Reservations</div>
           </div>
         </div>
 
@@ -62,13 +42,13 @@ export default function ReservationsPage() {
           <button className="flex-1 py-4 px-4 text-center border-b-2 border-[#0066FF] text-[#0066FF] font-medium">
             Pendants
           </button>
-          <button 
+          <button
             onClick={() => router.push('/my-tickets')}
             className="flex-1 py-4 px-4 text-center text-gray-400 hover:text-white transition-colors"
           >
             My events
           </button>
-          <button 
+          <button
             onClick={() => router.push('/my-tickets')}
             className="flex-1 py-4 px-4 text-center text-gray-400 hover:text-white transition-colors"
           >
@@ -79,9 +59,9 @@ export default function ReservationsPage() {
         {/* Content */}
         <div className="container mx-auto px-4 py-6 max-w-md relative z-10">
           {/* Movie Poster Card */}
-          <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl overflow-hidden border border-gray-700 shadow-2xl mb-6">
+          <div className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl overflow-hidden border border-gray-700 shadow-2xl mb-6">
             {/* Movie Poster Section */}
-            <div className="relative h-64 bg-gradient-to-b from-gray-800 to-gray-900 flex items-center justify-center">
+            <div className="relative h-64 bg-linear-to-b from-gray-800 to-gray-900 flex items-center justify-center">
               <div className="w-40 h-56 bg-gray-700 rounded-lg shadow-xl flex items-center justify-center">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-white mb-2">THE ODYSSEY</div>

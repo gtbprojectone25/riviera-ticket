@@ -7,7 +7,7 @@ import { z } from 'zod'
 
 
 
-type SelectedSeat = {
+export type SelectedSeat = {
   id: string
   price: number
   type: 'STANDARD' | 'VIP' | 'PREMIUM'
@@ -117,14 +117,57 @@ export async function createCart(userId: string | null, sessionId: string, selec
       expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutos
     }).returning()
 
-    // Adicionar itens ao carrinho
-    const cartItemsData = selectedSeats.map(seat => ({
-      cartId: cart[0].id,
-      seatId: seat.id,
-      price: seat.price
-    }))
+    const cartId = cart[0].id
 
-    await db.insert(cartItems).values(cartItemsData)
+    // Adicionar itens ao carrinho
+    // selectedSeats.id pode ser tanto o UUID do assento (se vindo direto do banco)
+    // quanto um identificador tipo "A1" usado no front. Neste caso, fazemos o mapeamento
+    // para o assento real no banco usando sessionId + seatId (ex: "A01").
+    const uuidRegex = /^[0-9a-fA-F-]{8}-[0-9a-fA-F-4]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/
+
+    const cartItemsData = []
+
+    for (const seat of selectedSeats) {
+      let dbSeatId = seat.id
+
+      if (!uuidRegex.test(dbSeatId)) {
+        const match = seat.id.match(/^([A-Za-z]+)(\d+)$/)
+        if (!match) {
+          throw new Error(`Formato de assento inválido: ${seat.id}`)
+        }
+
+        const [, row, numStr] = match
+        const seatNumber = Number(numStr)
+        const paddedSeatId = `${row.toUpperCase()}${seatNumber.toString().padStart(2, '0')}`
+
+        const [dbSeat] = await db
+          .select()
+          .from(seats)
+          .where(
+            and(
+              eq(seats.sessionId, sessionId),
+              eq(seats.seatId, paddedSeatId)
+            )
+          )
+          .limit(1)
+
+        if (!dbSeat) {
+          throw new Error(`Assento não encontrado no banco: ${paddedSeatId}`)
+        }
+
+        dbSeatId = dbSeat.id
+      }
+
+      cartItemsData.push({
+        cartId,
+        seatId: dbSeatId,
+        price: seat.price
+      })
+    }
+
+    if (cartItemsData.length > 0) {
+      await db.insert(cartItems).values(cartItemsData)
+    }
 
     return {
       success: true,

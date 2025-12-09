@@ -1,84 +1,151 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { CheckCircle, Download, Share2, Calendar, Clock, MapPin, Armchair, QrCode } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { CheckCircle, Download, Share2, Calendar, Clock, Armchair, QrCode, MapPin } from 'lucide-react'
+import { useBookingStore } from '@/stores/booking'
+import { qrcodeService } from '@/lib/qrcode-service'
 
 export default function ConfirmationPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const [orderData, setOrderData] = useState<any>(null)
+  
+  // Dados da store
+  const selectedCinema = useBookingStore((s) => s.selectedCinema)
+  const sessionData = useBookingStore((s) => s.sessionData)
+  const finalizedTickets = useBookingStore((s) => s.finalizedTickets)
+  const paymentData = useBookingStore((s) => s.paymentData)
+  const cartId = useBookingStore((s) => s.cartId)
+  const resetBooking = useBookingStore((s) => s.resetBooking)
+
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Mock order data - in real app this would come from API
-  const mockOrderData = {
-    id: 'ORD-2026-001234',
-    movieTitle: 'Die Odyssee',
-    cinemaName: 'Roxy Cinema',
-    location: '291 W 4th St, New York, NY 10014',
-    date: '16/04/2026',
-    time: '18h at 11pm',
-    screenType: 'IMAX 70MM',
-    selectedSeats: ['H8', 'H9'],
-    ticketType: 'VIP',
-    totalPrice: 898,
-    purchaseDate: new Date().toISOString(),
-    status: 'confirmed',
-    qrCode: 'QR-CODE-H8H9-041626',
-    email: 'customer@example.com'
-  }
+  // Dados derivados
+  const totalAmount = useMemo(() => 
+    finalizedTickets.reduce((acc, t) => acc + t.price, 0), 
+    [finalizedTickets]
+  )
 
+  const selectedSeats = useMemo(() => 
+    finalizedTickets
+      .map((t) => t.assignedSeatId)
+      .filter(Boolean) as string[],
+    [finalizedTickets]
+  )
+
+  const orderId = useMemo(() => 
+    paymentData?.orderId || cartId || `ORD-${Date.now()}`,
+    [paymentData, cartId]
+  )
+
+  // Gerar QR Code
   useEffect(() => {
-    // Simulate loading order data
-    const timer = setTimeout(() => {
-      setOrderData(mockOrderData)
-      setIsLoading(false)
-    }, 1000)
+    const generateQR = async () => {
+      if (selectedSeats.length === 0) {
+        setIsLoading(false)
+        return
+      }
 
-    return () => clearTimeout(timer)
-  }, [])
+      try {
+        const qrData = qrcodeService.generateTicketQRData({
+          orderId,
+          ticketId: finalizedTickets[0]?.id || 'ticket-1',
+          seatId: selectedSeats.join('-'),
+          sessionId: sessionData?.id || 'session-1',
+        })
 
-  const handleDownloadTicket = () => {
-    // Simulate ticket download
-    const ticketData = {
-      ...orderData,
-      downloadDate: new Date().toISOString()
+        const dataUrl = await qrcodeService.generateDataURL(qrData, {
+          width: 200,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF',
+          },
+        })
+
+        setQrCodeUrl(dataUrl)
+      } catch (error) {
+        console.error('Erro ao gerar QR Code:', error)
+      } finally {
+        setIsLoading(false)
+      }
     }
-    
-    // In real app, this would generate a PDF or image
-    console.log('Downloading ticket:', ticketData)
-    alert('Ticket downloaded successfully!')
-  }
 
-  const handleShareTicket = () => {
+    // Pequeno delay para simular carregamento
+    const timer = setTimeout(generateQR, 1000)
+    return () => clearTimeout(timer)
+  }, [orderId, finalizedTickets, selectedSeats, sessionData?.id])
+
+  // Proteção de rota
+  useEffect(() => {
+    if (!finalizedTickets || finalizedTickets.length === 0) {
+      // Se não há tickets, pode ser um refresh - tentar usar dados do localStorage
+      const timer = setTimeout(() => {
+        if (!finalizedTickets || finalizedTickets.length === 0) {
+          router.push('/')
+        }
+      }, 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [finalizedTickets, router])
+
+  const handleDownloadTicket = useCallback(() => {
+    if (!qrCodeUrl) return
+
+    // Criar link de download
+    const link = document.createElement('a')
+    link.href = qrCodeUrl
+    link.download = `ticket-${orderId}.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }, [qrCodeUrl, orderId])
+
+  const handleShareTicket = useCallback(async () => {
+    const shareData = {
+      title: `${sessionData?.movieTitle || 'Die Odyssee'} - Ticket Confirmation`,
+      text: `My ticket for ${sessionData?.movieTitle || 'Die Odyssee'} at ${selectedCinema?.name || 'IMAX Cinema'}`,
+      url: window.location.href,
+    }
+
     if (navigator.share) {
-      navigator.share({
-        title: `${orderData.movieTitle} - Ticket Confirmation`,
-        text: `My ticket for ${orderData.movieTitle} at ${orderData.cinemaName}`,
-        url: window.location.href
-      })
+      try {
+        await navigator.share(shareData)
+      } catch {
+        // User cancelled or error
+      }
     } else {
-      // Fallback for browsers that don't support Web Share API
-      navigator.clipboard.writeText(window.location.href)
+      await navigator.clipboard.writeText(window.location.href)
       alert('Ticket link copied to clipboard!')
     }
-  }
+  }, [sessionData?.movieTitle, selectedCinema?.name])
 
-  const formatDate = (dateString: string) => {
+  const handleNewBooking = useCallback(() => {
+    resetBooking()
+    router.push('/')
+  }, [resetBooking, router])
+
+  const formatDate = useCallback((dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric'
     })
-  }
+  }, [])
+
+  const formatTime = useCallback((dateString: string) => {
+    return new Date(dateString).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }, [])
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen text-white flex items-center justify-center bg-black/70">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
           <p className="text-gray-400">Processing your order...</p>
@@ -88,17 +155,17 @@ export default function ConfirmationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen text-white bg-black/60">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-800">
-        <div className="text-white font-bold">LOGO</div>
+        <div className="text-white font-bold">RIVIERA</div>
         <div className="text-blue-400 font-bold text-xl">IMAX</div>
       </div>
 
       <div className="container mx-auto px-4 py-8 max-w-md">
         {/* Success Icon */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-20 h-20 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
             <CheckCircle className="w-12 h-12 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-white mb-2">Payment Successful!</h1>
@@ -113,39 +180,60 @@ export default function ConfirmationPage() {
           <CardContent className="space-y-4">
             <div className="flex justify-between items-start">
               <div>
-                <h3 className="text-white font-medium text-lg">{orderData.movieTitle}</h3>
-                <p className="text-gray-400 text-sm">{orderData.cinemaName}</p>
-                <p className="text-gray-400 text-sm">{orderData.location}</p>
+                <h3 className="text-white font-medium text-lg">
+                  {sessionData?.movieTitle || 'Die Odyssee'}
+                </h3>
+                <p className="text-gray-400 text-sm">{selectedCinema?.name || 'IMAX Cinema'}</p>
+                {selectedCinema && (
+                  <p className="text-gray-500 text-xs flex items-center gap-1 mt-1">
+                    <MapPin className="w-3 h-3" />
+                    {selectedCinema.city}, {selectedCinema.state}
+                  </p>
+                )}
               </div>
               <Badge variant="secondary" className="bg-blue-600 text-white">
-                {orderData.screenType}
+                {selectedCinema?.format || 'IMAX'}
               </Badge>
             </div>
             
             <div className="grid grid-cols-1 gap-3 text-sm">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-gray-400" />
-                <span className="text-gray-400">{formatDate(orderData.date)}</span>
+                <span className="text-gray-400">
+                  {sessionData?.startTime 
+                    ? formatDate(sessionData.startTime)
+                    : 'April 16, 2026'}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-gray-400" />
-                <span className="text-gray-400">{orderData.time}</span>
+                <span className="text-gray-400">
+                  {sessionData?.startTime && sessionData?.endTime
+                    ? `${formatTime(sessionData.startTime)} - ${formatTime(sessionData.endTime)}`
+                    : '18:00 - 21:00'}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <Armchair className="w-4 h-4 text-gray-400" />
-                <span className="text-gray-400">Seats: {orderData.selectedSeats.join(', ')}</span>
-                <Badge variant="outline" className="text-xs">{orderData.ticketType}</Badge>
+                <span className="text-gray-400">
+                  Seats: {selectedSeats.length > 0 ? selectedSeats.join(', ') : 'H8, H9'}
+                </span>
+                <Badge variant="outline" className="text-xs ml-auto">
+                  {finalizedTickets[0]?.type || 'VIP'}
+                </Badge>
               </div>
             </div>
             
             <div className="border-t border-gray-700 pt-3">
               <div className="flex justify-between items-center">
                 <span className="text-gray-400">Order ID</span>
-                <span className="text-white font-mono text-sm">{orderData.id}</span>
+                <span className="text-white font-mono text-sm">{orderId}</span>
               </div>
               <div className="flex justify-between items-center mt-2">
                 <span className="text-gray-400">Total Paid</span>
-                <span className="text-green-400 text-xl font-bold">${orderData.totalPrice}</span>
+                <span className="text-green-400 text-xl font-bold">
+                  ${totalAmount.toLocaleString()}
+                </span>
               </div>
             </div>
           </CardContent>
@@ -161,11 +249,18 @@ export default function ConfirmationPage() {
           </CardHeader>
           <CardContent className="text-center">
             <div className="bg-white p-6 rounded-lg inline-block mb-4">
-              <div className="w-32 h-32 bg-gray-900 flex items-center justify-center text-white font-mono text-xs">
-                QR CODE
-                <br />
-                {orderData.qrCode}
-              </div>
+              {qrCodeUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img 
+                  src={qrCodeUrl} 
+                  alt="Ticket QR Code" 
+                  className="w-40 h-40"
+                />
+              ) : (
+                <div className="w-40 h-40 bg-gray-200 flex items-center justify-center text-gray-500 font-mono text-xs">
+                  QR CODE
+                </div>
+              )}
             </div>
             <p className="text-gray-400 text-sm mb-4">
               Show this QR code at the cinema entrance
@@ -175,6 +270,7 @@ export default function ConfirmationPage() {
                 variant="outline"
                 onClick={handleDownloadTicket}
                 className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
+                disabled={!qrCodeUrl}
               >
                 <Download className="w-4 h-4 mr-2" />
                 Download
@@ -209,8 +305,7 @@ export default function ConfirmationPage() {
           <CardContent className="p-4 text-center">
             <h4 className="text-white font-medium mb-2">Email Confirmation Sent</h4>
             <p className="text-gray-400 text-sm">
-              A confirmation email has been sent to<br />
-              <span className="text-blue-400">{orderData.email}</span>
+              A confirmation email has been sent to your registered email address.
             </p>
           </CardContent>
         </Card>
@@ -218,7 +313,7 @@ export default function ConfirmationPage() {
         {/* Action Buttons */}
         <div className="space-y-3">
           <Button 
-            onClick={() => router.push('/')}
+            onClick={handleNewBooking}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg"
           >
             Book Another Movie
@@ -234,7 +329,7 @@ export default function ConfirmationPage() {
         </div>
 
         <p className="text-gray-500 text-xs text-center mt-6">
-          Thank you for choosing our cinema experience!
+          Thank you for choosing Riviera Cinema!
         </p>
       </div>
     </div>

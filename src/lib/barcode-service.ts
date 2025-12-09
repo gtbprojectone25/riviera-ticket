@@ -27,13 +27,16 @@ class BarcodeService {
     } = {}
   ): Promise<Buffer> {
     const {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       width = 300,
       height = 100,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       format = 'png',
     } = options
 
     try {
       // bwip-js no Node.js - usar toBuffer diretamente
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const barcodeBuffer = await bwipjs.toBuffer({
         bcid: 'code128', // Barcode type
         text: data,

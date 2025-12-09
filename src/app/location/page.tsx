@@ -12,7 +12,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { AnimatedBackground } from '@/components/animated-background'
 import { Clock } from 'lucide-react'
 
 import { cinemas as cinemasData } from "@/data/cinemas"
@@ -97,7 +96,7 @@ export default function LocationPage() {
                 setShowMapModal(true)
                 setLoading(false)
                 // Simula encontrar cinemas
-                setShowLoadingModal(true) 
+                setShowLoadingModal(true)
             },
             () => {
                 setLoading(false)
@@ -115,11 +114,11 @@ export default function LocationPage() {
             const filtered = cinemasData.filter(
                 (c) => c.state === selectedState && c.city === selectedCity
             )
-            
+
             // Se não encontrar nada exato, mostra todos (para demo não ficar vazia)
             // Pode remover o "|| cinemasData" se quiser filtro estrito
             setCinemas(filtered.length > 0 ? filtered : cinemasData)
-            
+
             setLoading(false)
         }, 600)
     }
@@ -134,24 +133,23 @@ export default function LocationPage() {
     }
 
     return (
-        <div className="min-h-screen bg-black text-white relative overflow-hidden">
-            <AnimatedBackground />
-
+        <div className="min-h-screen text-white relative overflow-hidden bg-black/60">
             <div className="relative z-10 flex flex-col min-h-screen">
                 <div className="flex-1 flex items-start justify-center p-4 pt-8">
-                    
+
                     {/* Container Principal com o Gradiente do Code A */}
                     <div className="w-full max-w-sm space-y-6 relative rounded-2xl p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
 
-                        <div className="w-full bg-[#0266FC] p-1 flex items-center justify-center">
-                            <Clock className="h-4 w-4 mr-2 text-white shrink-0" />
-                            <p className="text-white text-xs font-light text-center">
-                                To guarantee your place, finish within 10:00 minutes (only 4 per session).
+                        {/* Urgency Banner */}
+                        <div className="w-full bg-[#0266FC] p-3 flex items-center justify-center rounded-lg">
+                            <Clock className="h-4 w-4 text-white shrink-0 mr-2" />
+                            <p className="text-white text-xs font-medium text-center">
+                                To guarantee your place, finish within 10:00 minutes.
                             </p>
                         </div>
 
                         <div className="flex items-center justify-between mb-6">
-                            <h1 className="text-2xl font-bold text-white drop-shadow-lg">Die Odyssee</h1>
+                            <h1 className="text-2xl font-bold text-white drop-shadow-lg">The Odyssey</h1>
                             <Badge variant="secondary" className="bg-gray-700/80 text-white px-3 py-1 rounded-full border border-gray-600">
                                 Pre-order
                             </Badge>

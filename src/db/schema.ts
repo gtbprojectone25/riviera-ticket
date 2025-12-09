@@ -3,15 +3,16 @@
  * Defines all tables and relationships for the Riviera Ticket system
  */
 
-import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum, index } from 'drizzle-orm/pg-core'
+import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum, index, doublePrecision, jsonb } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 // Enums
-export const seatTypeEnum = pgEnum('seat_type', ['STANDARD', 'VIP', 'PREMIUM'])
+export const seatTypeEnum = pgEnum('seat_type', ['STANDARD', 'VIP', 'PREMIUM', 'WHEELCHAIR', 'GAP'])
 export const ticketStatusEnum = pgEnum('ticket_status', ['RESERVED', 'CONFIRMED', 'CANCELLED'])
 export const cartStatusEnum = pgEnum('cart_status', ['ACTIVE', 'EXPIRED', 'COMPLETED'])
 export const paymentStatusEnum = pgEnum('payment_status', ['PENDING', 'SUCCEEDED', 'FAILED', 'CANCELLED'])
 export const screenTypeEnum = pgEnum('screen_type', ['IMAX_70MM', 'STANDARD'])
+export const userRoleEnum = pgEnum('user_role', ['USER', 'ADMIN', 'SUPER_ADMIN'])
 
 // Users table
 export const users = pgTable('users', {
@@ -23,9 +24,13 @@ export const users = pgTable('users', {
   encryptedSsn: text('encrypted_ssn'),
   ssnHash: text('ssn_hash'),
   emailVerified: boolean('email_verified').default(false),
+  role: text('role').notNull().default('USER'), // USER, ADMIN, SUPER_ADMIN
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-})
+}, (table) => ({
+  emailIdx: index('idx_users_email').on(table.email),
+  roleIdx: index('idx_users_role').on(table.role),
+}))
 
 // Sessions table (for movie sessions)
 export const sessions = pgTable('sessions', {
@@ -35,6 +40,8 @@ export const sessions = pgTable('sessions', {
   startTime: timestamp('start_time').notNull(),
   endTime: timestamp('end_time').notNull(),
   cinemaName: text('cinema_name').notNull(),
+  cinemaId: text('cinema_id').references(() => cinemas.id),
+  auditoriumId: uuid('auditorium_id').references(() => auditoriums.id),
   screenType: screenTypeEnum('screen_type').notNull().default('IMAX_70MM'),
   totalSeats: integer('total_seats').notNull(),
   availableSeats: integer('available_seats').notNull(),
@@ -57,9 +64,15 @@ export const seats = pgTable('seats', {
   reservedUntil: timestamp('reserved_until'),
   type: seatTypeEnum('type').notNull().default('STANDARD'),
   price: integer('price').notNull(), // in cents
+  version: integer('version').default(1).notNull(), // Para lock otimista
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-})
+}, (table) => ({
+  sessionIdIdx: index('idx_seats_session_id').on(table.sessionId),
+  sessionSeatIdx: index('idx_seats_session_seat').on(table.sessionId, table.seatId),
+  reservedUntilIdx: index('idx_seats_reserved_until').on(table.reservedUntil),
+  availableIdx: index('idx_seats_available').on(table.sessionId, table.isAvailable, table.isReserved),
+}))
 
 // Carts table
 export const carts = pgTable('carts', {
@@ -71,7 +84,12 @@ export const carts = pgTable('carts', {
   expiresAt: timestamp('expires_at').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-})
+}, (table) => ({
+  userIdIdx: index('idx_carts_user_id').on(table.userId),
+  sessionIdIdx: index('idx_carts_session_id').on(table.sessionId),
+  statusIdx: index('idx_carts_status').on(table.status),
+  expiresAtIdx: index('idx_carts_expires_at').on(table.expiresAt),
+}))
 
 // Cart items table (seats in cart)
 export const cartItems = pgTable('cart_items', {
@@ -82,6 +100,45 @@ export const cartItems = pgTable('cart_items', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
+// Cinemas table
+export const cinemas = pgTable('cinemas', {
+  id: text('id').primaryKey(), // ex: "amc-lincoln-square"
+  name: text('name').notNull(),
+  city: text('city').notNull(),
+  state: text('state').notNull(),
+  country: text('country').notNull(),
+  isIMAX: boolean('is_imax').notNull(),
+  format: text('format'),
+  lat: doublePrecision('lat').notNull(),
+  lng: doublePrecision('lng').notNull(),
+  address: text('address'),
+  zipCode: text('zip_code'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
+// Auditorium layout type for JSONB column
+export type AuditoriumLayout = {
+  rowsConfig: { row: string; seatCount: number }[]
+  accessible?: { row: string; seats: number[] }[]
+  vipZones?: { rows: string[]; fromPercent: number; toPercent: number }[]
+}
+
+// Auditoriums table (salas dentro de cada cinema)
+export const auditoriums = pgTable('auditoriums', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cinemaId: text('cinema_id')
+    .notNull()
+    .references(() => cinemas.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  format: text('format'), // ex: "IMAX 70mm", "IMAX Digital"
+  layout: jsonb('layout').$type<AuditoriumLayout>().notNull(),
+  totalSeats: integer('total_seats').notNull(),
+  approxCapacity: integer('approx_capacity'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
 // Tickets table
 export const tickets = pgTable('tickets', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -89,6 +146,7 @@ export const tickets = pgTable('tickets', {
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
   seatId: uuid('seat_id').references(() => seats.id, { onDelete: 'cascade' }).notNull(),
   cartId: uuid('cart_id').references(() => carts.id),
+  orderId: uuid('order_id'), // Referência para a tabela orders
   ticketType: seatTypeEnum('ticket_type').notNull(),
   price: integer('price').notNull(), // in cents
   status: ticketStatusEnum('status').notNull().default('RESERVED'),
@@ -101,7 +159,13 @@ export const tickets = pgTable('tickets', {
   expiresAt: timestamp('expires_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-})
+}, (table) => ({
+  sessionIdIdx: index('idx_tickets_session_id').on(table.sessionId),
+  userIdIdx: index('idx_tickets_user_id').on(table.userId),
+  seatIdIdx: index('idx_tickets_seat_id').on(table.seatId),
+  statusIdx: index('idx_tickets_status').on(table.status),
+  orderIdIdx: index('idx_tickets_order_id').on(table.orderId),
+}))
 
 // Payment intents table (Stripe integration)
 export const paymentIntents = pgTable('payment_intents', {

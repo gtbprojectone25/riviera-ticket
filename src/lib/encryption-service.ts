@@ -8,7 +8,6 @@ import crypto from 'crypto'
 const ALGORITHM = 'aes-256-gcm'
 const KEY_LENGTH = 32 // 256 bits
 const IV_LENGTH = 16
-const AUTH_TAG_LENGTH = 16
 
 class EncryptionService {
   private encryptionKey: Buffer

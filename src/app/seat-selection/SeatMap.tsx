@@ -234,21 +234,29 @@ export function SeatMap({ rows, selectedSeats, onSeatClick, allowedTypes, readOn
                                       if (seat.type === 'GAP') return <div key={seat.id} className="w-5 h-5" />;
 
                                       const isSelected = selectedSeats.includes(seat.id);
-                                      const isTypeAllowed = readOnly || allowedTypes.includes(seat.type) || (seat.type === 'WHEELCHAIR' && allowedTypes.includes('STANDARD'));
-                                      const isAvailable = seat.status === 'available' && (readOnly || isTypeAllowed);
-                                      const style = getSeatStyle(seat.type, seat.status, isSelected, isAvailable);
+                                      const allTypesAllowed = allowedTypes.length === 0;
+                                      const isTypeAllowed =
+                                        readOnly ||
+                                        allTypesAllowed ||
+                                        allowedTypes.includes(seat.type) ||
+                                        (seat.type === 'WHEELCHAIR' && allowedTypes.includes('STANDARD'));
+
+                                      const isAvailable = seat.status === 'available';
+                                      const style = getSeatStyle(seat.type, seat.status, isSelected, isTypeAllowed);
+
+                                      const canClick = !readOnly && isAvailable && isTypeAllowed;
 
                                       return (
                                           <button
                                               key={seat.id}
                                               type="button"
-                                              disabled={readOnly || !isAvailable}
-                                              onClick={() => !readOnly && onSeatClick(row.label, seat.number, seat.id)}
+                                              disabled={!canClick}
+                                              onClick={() => canClick && onSeatClick(row.label, seat.number, seat.id)}
                                               style={style}
                                               className={`
                                                   w-5 h-5 rounded-sm flex items-center justify-center 
                                                   transition-all duration-200 relative
-                                                  ${!readOnly && isAvailable ? 'hover:brightness-110' : ''}
+                                                  ${canClick ? 'hover:brightness-110 cursor-pointer' : 'cursor-not-allowed'}
                                                   ${isSelected ? 'z-10' : ''}
                                                   ${readOnly ? 'cursor-default' : ''}
                                               `}

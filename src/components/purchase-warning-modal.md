@@ -15,7 +15,7 @@ Componente modal de aviso que aparece antes do usuário entrar no fluxo de compr
 
 ```tsx
 import { useState } from 'react'
-import { PurchaseWarningModal } from '@/components/purchase-warning-modal'
+import { PurchaseWarningModal } from '@/components/PurchaseWarningModal'
 
 export function MyComponent() {
   const [showWarning, setShowWarning] = useState(false)

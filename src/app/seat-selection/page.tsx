@@ -2,10 +2,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Clock } from 'lucide-react'
 
 // Componentes Visuais / UI
-import { AnimatedBackground } from '@/components/animated-background';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -16,14 +15,10 @@ import { SelectedSeatsPanel } from './SelectedSeatsPanel';
 import { ApplyButton } from './ApplyButton';
 
 // Store e Tipos
-import { useBookingStore } from '@/stores/booking';
-import type { Ticket, Seat, Row, SeatType } from './types';
+import { useBookingStore, type FinalizedTicket } from '@/stores/booking';
+import type { Ticket } from './types';
+import { useSessionSeats } from './useSessionSeats';
    
-
-// --- GERADOR DE LAYOUT DO MAPA (Removido - usa utils) ---
-
-
-import { INITIAL_SEATS } from './utils';
 
 export default function SeatSelectionPage() {
   const router = useRouter();
@@ -31,6 +26,12 @@ export default function SeatSelectionPage() {
   // 1. Consumir dados da Store
   const selectedCinema = useBookingStore((s) => s.selectedCinema);
   const selectedTicketsFromStore = useBookingStore((s) => s.selectedTickets); 
+  const selectedSessionId = useBookingStore((s) => s.selectedSessionId);
+  const {
+    rows: seatRows,
+    loading: seatsLoading,
+    error: seatsError,
+  } = useSessionSeats({ sessionId: selectedSessionId });
   
   // 2. Inicialização Lazy
   const [ticketsToAssign, setTicketsToAssign] = useState<Ticket[]>(() => {
@@ -85,7 +86,8 @@ export default function SeatSelectionPage() {
 
   // Lógica do Mapa
   const handleSeatClick = (row: string, number: string | number, id: string) => {
-    const seat = INITIAL_SEATS.find(s => s.id === id);
+    const allSeats = seatRows.flatMap(r => r.seats);
+    const seat = allSeats.find(s => s.id === id);
     if (!seat || seat.status !== 'available') return;
 
     let requiredType = seat.type === 'VIP' ? 'VIP' : 'STANDARD';
@@ -112,21 +114,17 @@ export default function SeatSelectionPage() {
   };
 
   const handleApply = () => {
-    useBookingStore.getState().setFinalizedTickets(ticketsToAssign as any);
+    const finalizedTickets: FinalizedTicket[] = ticketsToAssign.map((ticket) => ({
+      id: ticket.id,
+      name: ticket.name,
+      type: ticket.type,
+      price: ticket.price,
+      assignedSeatId: ticket.assignedSeatId,
+    }));
+
+    useBookingStore.getState().setFinalizedTickets(finalizedTickets);
     router.push('/checkout');
   };
-
-  const seatRows = useMemo(() => {
-      const rows: Row[] = [];
-      const rowLabels = Array.from(new Set(INITIAL_SEATS.map(s => s.row)));
-      for (const rowLabel of rowLabels) {
-        rows.push({ 
-            label: rowLabel, 
-            seats: INITIAL_SEATS.filter(s => s.row === rowLabel) 
-        });
-      }
-      return rows;
-  }, []);
 
   const selectedSeatIds = ticketsToAssign.filter(t => t.assignedSeatId).map(t => t.assignedSeatId!);
   const allowedTypes = Array.from(new Set(ticketsToAssign.map(t => t.type)));
@@ -135,17 +133,20 @@ export default function SeatSelectionPage() {
   if (!selectedCinema) return null;
 
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-x-hidden">
-      <AnimatedBackground />
-
+    <div className="min-h-screen text-white relative overflow-x-hidden bg-black/60">
       <div className="relative z-10 flex flex-col items-center min-h-screen pt-6">
-        
         <div className="w-full max-w-md space-y-6 relative rounded-2xl p-10 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
-            
+             {/* Urgency Banner */}
+                      <div className="w-full bg-[#0266FC] p-3 flex items-center justify-center rounded-lg">
+                        <Clock className="h-4 w-4 text-white shrink-0 mr-2" />
+                        <p className="text-white text-xs font-medium text-center">
+                          To guarantee your place, finish within 10:00 minutes.
+                        </p>
+                      </div>
             {/* Header */}
             <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold text-white">Die Odyssee</h1>
+                    <h1 className="text-2xl font-bold text-white">The Odyssey</h1>
                     <Badge variant="secondary" className="bg-[#2A2A2A] hover:bg-[#333] text-gray-300 px-4 py-1.5 rounded-full border-0 font-medium">
                         Pre-order
                     </Badge>
@@ -167,7 +168,9 @@ export default function SeatSelectionPage() {
             {/* Cinema Info */}
             <div className="flex justify-between items-start">
                 <div>
-                    <h2 className="text-xl font-bold text-white">Roxy Cinema</h2>
+                    <h2 className="text-xl font-bold text-white">
+                      {selectedCinema.name}
+                    </h2>
                     <p className="text-xs text-gray-400 mt-1 max-w-[200px]">
                         {selectedCinema.address || `${selectedCinema.city}, ${selectedCinema.state}`}
                     </p>
@@ -207,15 +210,29 @@ export default function SeatSelectionPage() {
             <div className="space-y-2 pl-2 pr-2">
                 <SeatLegend />
 
-                <div className="w-full mask-content-auto">
-                     <SeatMap
-                        rows={seatRows}
-                        selectedSeats={selectedSeatIds}
-                        onSeatClick={handleSeatClick}
-                        allowedTypes={allowedTypes}
-                        maxSelectable={ticketsToAssign.length}
+                {seatsLoading && (
+                  <p className="text-xs text-gray-400 px-2">
+                    Carregando assentos...
+                  </p>
+                )}
+
+                {seatsError && !seatsLoading && (
+                  <p className="text-xs text-red-400 px-2">
+                    {seatsError}
+                  </p>
+                )}
+
+                {!seatsLoading && !seatsError && seatRows.length > 0 && (
+                  <div className="w-full mask-content-auto">
+                    <SeatMap
+                      rows={seatRows}
+                      selectedSeats={selectedSeatIds}
+                      onSeatClick={handleSeatClick}
+                      allowedTypes={allowedTypes}
+                      maxSelectable={ticketsToAssign.length}
                     />
-                </div>
+                  </div>
+                )}
             </div>
 
             {/* Painel de Seleção Inferior */}

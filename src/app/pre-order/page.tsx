@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
-import { AnimatedBackground } from '@/components/animated-background'
 import { PurchaseWarningModal } from '@/components/PurchaseWarningModal'
 
 export default function PreOrderPage() {
@@ -26,9 +25,7 @@ export default function PreOrderPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0c0708] text-white relative overflow-hidden flex flex-col">
-      <AnimatedBackground />
-
+    <div className="min-h-screen text-white relative overflow-hidden flex flex-col bg-black/60">
       <div className="relative z-10 flex-1 flex flex-col">
         <div className="mx-auto w-full max-w-sm px-2 py-6 flex flex-col">
           {/* CARD ÚNICO COM POSTER + CARDS + BOTÃO */}

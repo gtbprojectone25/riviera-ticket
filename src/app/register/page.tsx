@@ -1,16 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import Link from "next/link";
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ChevronLeft, Eye, EyeOff, Check, Lock } from 'lucide-react'
-import { AnimatedBackground } from '@/components/animated-background'
 
 type AuthStep = 'email' | 'info' | 'password' | 'verify' | 'encrypting' | 'success'
 
-export default function RegisterPage() {
+function RegisterContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [currentStep, setCurrentStep] = useState<AuthStep>('email')
@@ -57,7 +57,7 @@ export default function RegisterPage() {
       setError('Por favor, insira um email válido')
       return
     }
-    
+
     setIsLoading(true)
     setError(null)
     try {
@@ -98,7 +98,7 @@ export default function RegisterPage() {
       setError('Todos os campos são obrigatórios')
       return
     }
-    
+
     const ssnDigits = formData.ssn.replace(/\D/g, '')
     if (ssnDigits.length !== 9) {
       setError('SSN deve ter 9 dígitos')
@@ -277,12 +277,12 @@ export default function RegisterPage() {
             placeholder="enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="bg-[#1c1c1c] border-white/10 text-white mt-2"
+            className="bg-[#1F2933] border-white/10 text-white placeholder:text-gray-500 mt-2"
             onKeyPress={(e) => e.key === 'Enter' && handleEmailSubmit()}
           />
         </div>
 
-        <Button 
+        <Button
           onClick={handleEmailSubmit}
           disabled={isLoading || !email}
           className="w-full bg-[#0066FF] hover:bg-[#0052cc] text-white py-6 rounded-xl text-base font-bold"
@@ -291,7 +291,13 @@ export default function RegisterPage() {
         </Button>
 
         <p className="text-xs text-gray-400 text-center">
-          Already have an account? <span className="text-blue-400 cursor-pointer">Tap to log in</span>
+          Already have an account?{" "}
+          <Link
+            href="/login"
+            className="text-blue-400 hover:text-blue-300 transition-colors underline-offset-2 hover:underline"
+          >
+            Tap to log in
+          </Link>
         </p>
       </div>
 
@@ -334,8 +340,8 @@ export default function RegisterPage() {
             id="name"
             placeholder="enter your name"
             value={formData.name}
-            onChange={(e) => setFormData({...formData, name: e.target.value})}
-            className="bg-[#1c1c1c] border-white/10 text-white mt-2"
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className="bg-[#1F2933] border-white/10 text-white placeholder:text-gray-500 mt-2"
           />
         </div>
 
@@ -345,8 +351,8 @@ export default function RegisterPage() {
             id="surname"
             placeholder="enter your last name"
             value={formData.surname}
-            onChange={(e) => setFormData({...formData, surname: e.target.value})}
-            className="bg-[#1c1c1c] border-white/10 text-white mt-2"
+            onChange={(e) => setFormData({ ...formData, surname: e.target.value })}
+            className="bg-[#1F2933] border-white/10 text-white placeholder:text-gray-500 mt-2"
           />
         </div>
 
@@ -358,17 +364,17 @@ export default function RegisterPage() {
             value={formData.ssn}
             onChange={(e) => {
               const digits = e.target.value.replace(/\D/g, '').slice(0, 9)
-              setFormData({...formData, ssn: digits})
+              setFormData({ ...formData, ssn: digits })
             }}
             className="bg-[#1c1c1c] border-white/10 text-white mt-2"
           />
           <p className="text-xs text-gray-500 mt-1">9 digits required</p>
         </div>
 
-        <Button 
+        <Button
           onClick={handleInfoSubmit}
           disabled={isLoading || !formData.name || !formData.surname || formData.ssn.length !== 9}
-          className="w-full bg-[#0066FF] hover:bg-[#0052cc] text-white py-6 rounded-xl text-base font-bold"
+          className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white py-6 rounded-xl text-base font-bold"
         >
           {isLoading ? 'Validating...' : 'Continue'}
         </Button>
@@ -450,8 +456,8 @@ export default function RegisterPage() {
             type={showPassword ? "text" : "password"}
             placeholder="enter a secure password"
             value={formData.password}
-            onChange={(e) => setFormData({...formData, password: e.target.value})}
-            className="bg-[#1c1c1c] border-white/10 text-white"
+            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            className="bg-[#1F2933] border-white/10 text-white placeholder:text-gray-500"
           />
         </div>
 
@@ -462,15 +468,15 @@ export default function RegisterPage() {
             type="password"
             placeholder="type it again"
             value={formData.confirmPassword}
-            onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-            className="bg-[#1c1c1c] border-white/10 text-white mt-2"
+            onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+            className="bg-[#1F2933] border-white/10 text-white placeholder:text-gray-500 mt-2"
           />
         </div>
 
-        <Button 
+        <Button
           onClick={handlePasswordSubmit}
           disabled={!allRequirementsMet || formData.password !== formData.confirmPassword || isLoading}
-          className="w-full bg-[#0066FF] hover:bg-[#0052cc] text-white py-6 rounded-xl text-base font-bold"
+          className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white py-6 rounded-xl text-base font-bold"
         >
           {isLoading ? 'Creating...' : 'Create account'}
         </Button>
@@ -512,7 +518,7 @@ export default function RegisterPage() {
             {error}
           </div>
         )}
-        
+
         {/* Mostrar código em desenvolvimento */}
         {verificationCodeFromApi && (
           <div className="bg-blue-500/20 border border-blue-500 text-blue-200 px-4 py-3 rounded text-center">
@@ -530,22 +536,22 @@ export default function RegisterPage() {
               maxLength={1}
               value={digit}
               onChange={(e) => handleCodeChange(index, e.target.value)}
-              className="w-14 h-14 text-center bg-[#1c1c1c] border-white/10 text-white text-xl font-bold rounded-lg"
+            className="w-14 h-14 text-center bg-[#1F2933] border-white/10 text-white text-xl font-bold rounded-lg"
             />
           ))}
         </div>
 
-        <Button 
+        <Button
           onClick={handleVerifySubmit}
           disabled={isLoading || verificationCode.join('').length !== 5}
-          className="w-full bg-[#0066FF] hover:bg-[#0052cc] text-white py-6 rounded-xl text-base font-bold"
+          className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white py-6 rounded-xl text-base font-bold"
         >
           {isLoading ? 'Verifying...' : 'Confirm'}
         </Button>
 
         <p className="text-xs text-gray-400 text-center">
           if you haven&apos;t received it,{' '}
-          <span 
+          <span
             className={`${resendTimer > 0 ? 'text-gray-500' : 'text-blue-400 underline cursor-pointer'}`}
             onClick={handleResendCode}
           >
@@ -582,11 +588,11 @@ export default function RegisterPage() {
           <Lock className="w-10 h-10 text-blue-400" />
         </div>
         <h2 className="text-2xl font-bold text-white">Criptografando dados...</h2>
-        
+
         {/* Progress Bar */}
         <div className="w-full max-w-xs">
           <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-            <div 
+            <div
               className="h-full bg-blue-600 transition-all duration-300 ease-out"
               style={{ width: `${encryptionProgress}%` }}
             />
@@ -631,12 +637,10 @@ export default function RegisterPage() {
   )
 
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-x-hidden">
-      <AnimatedBackground />
-
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-800 relative z-20">
-        <div className="flex items-center gap-4">
+    <div className="min-h-screen  text-white flex flex-col items-center justify-start py-10 px-4">
+      <div className="w-full max-w-md">
+        <div className="bg-[#111827] rounded-3xl p-8 border border-white/5 shadow-xl">
+        <div className="flex items-center justify-start mb-4">
           <Button
             variant="ghost"
             size="sm"
@@ -655,13 +659,7 @@ export default function RegisterPage() {
           >
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <div className="text-white font-bold">LOGO</div>
         </div>
-        <div className="text-blue-400 font-bold text-xl">IMAX</div>
-      </div>
-
-      <div className="container mx-auto px-4 py-8 max-w-md relative z-10">
-        <div className="bg-[#1c1c1c] rounded-2xl p-6 border border-white/5">
           {currentStep === 'email' && renderEmailStep()}
           {currentStep === 'info' && renderInfoStep()}
           {currentStep === 'password' && renderPasswordStep()}
@@ -674,3 +672,14 @@ export default function RegisterPage() {
   )
 }
 
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <RegisterContent />
+    </Suspense>
+  )
+}

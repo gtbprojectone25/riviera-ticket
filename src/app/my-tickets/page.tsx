@@ -29,7 +29,7 @@ export default function MyTicketsPage() {
   // Mostrar loading enquanto verifica autenticação
   if (isLoading || !isChecked) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen text-white flex items-center justify-center bg-black/70">
         <div className="text-center">
           <Ticket className="w-12 h-12 text-blue-400 mx-auto mb-4 animate-pulse" />
           <p className="text-gray-400">Carregando...</p>
@@ -44,7 +44,7 @@ export default function MyTicketsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20">
+    <div className="min-h-screen text-white pb-20 bg-black/60">
       {/* Header */}
       <div className="flex items-center gap-4 p-4 border-b border-gray-800">
         <Button variant="ghost" size="sm" onClick={() => router.push('/')}>

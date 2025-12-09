@@ -1,9 +1,9 @@
 'use client'
 
 import { Button } from '@/components/ui/button'
+import Link from "next/link";
 import { cn } from '@/lib/utils'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/context/auth'
+import { useRouter, usePathname } from 'next/navigation'
 import Image from 'next/image'
 
 interface HeaderProps {
@@ -18,16 +18,14 @@ interface HeaderProps {
  */
 export function Header({ className }: HeaderProps) {
   const router = useRouter()
-  const { isAuthenticated, user, logout } = useAuth()
+  const pathname = usePathname()
 
-  const handleGetTickets = () => {
-    if (isAuthenticated) {
-      router.push('/my-tickets')
-    } else {
-      // Redirecionar para checkout que iniciará o fluxo de autenticação
-      router.push('/checkout')
-    }
+  // Esconde o header em p�ginas de auth ou conta
+  const hiddenPrefixes = ['/account']
+  if (pathname && hiddenPrefixes.some((prefix) => pathname.startsWith(prefix))) {
+    return null
   }
+
 
   return (
     <header className={cn(
@@ -37,57 +35,47 @@ export function Header({ className }: HeaderProps) {
       <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo Section */}
         <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <span className="text-xl font-bold text-white">LOGO</span>
-          </div>
+          <Link href="/" className="flex items-center space-x-2 cursor-pointer">
+            <Image
+              src="/riviera-logo.ico"
+              alt="Riviera Logo"
+              width={100}
+              height={100}
+              className="object-contain"
+              priority
+            />
+          </Link>
         </div>
 
         {/* User Actions */}
-        <div className="flex items-center space-x-2 mr-24">
-          {isAuthenticated ? (
-            <>
-              <div className="text-sm text-gray-300">
-                Olá, {user?.name}
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-white hover:text-white/80"
-                onClick={logout}
-              >
-                Sign Out
-              </Button>
-            </>
-          ) : (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="text-white hover:text-white/80"
-              onClick={() => router.push('/checkout')}
+        <div className="flex items-center space-x-2 mr-24 ">
+          {/** Esconde o botão SIGN IN nessas rotas */}
+          {!['/account', '/register', '/login'].some((p) => pathname.startsWith(p)) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-white hover:text-white/80 font-extrabold cursor-pointer"
+              onClick={() => router.push('/login')}
             >
               Sign In
             </Button>
           )}
-          <Button 
-            size="sm" 
-            className="bg-blue-600 hover:bg-blue-700"
-            onClick={handleGetTickets}
-          >
-            Get Tickets
-          </Button>
         </div>
 
         {/* IMAX Logo - absolute right corner */}
         <div className="absolute right-4 top-1/2 -translate-y-1/2">
-          <Image 
-            src="/logo-imax.png" 
-            alt="IMAX Logo" 
-            width={70}
-            height={70}
-            className="object-contain"
-          />
+            <Image
+              src="/logo-imax.png"
+              alt="IMAX Logo"
+              width={70}
+              height={70}
+              className="object-contain "
+            />
         </div>
       </div>
     </header>
   )
 }
+
+
+

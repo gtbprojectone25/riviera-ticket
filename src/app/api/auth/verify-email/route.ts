@@ -6,6 +6,7 @@ import { db } from '@/db'
 import { users, emailVerifications } from '@/db/schema'
 import { eq, and, desc, gt } from 'drizzle-orm'
 import jwt from 'jsonwebtoken'
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { encryptionService } from '@/lib/encryption-service'
 import { webhookService } from '@/lib/webhook-service'
 

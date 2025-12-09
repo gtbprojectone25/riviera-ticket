@@ -59,12 +59,14 @@ export async function POST(request: NextRequest) {
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : 'Erro ao criar payment intent'
+
     console.error('Error creating Stripe payment intent:', error)
     return NextResponse.json(
-      { error: error.message || 'Erro ao criar payment intent' },
+      { error: message },
       { status: 500 }
     )
   }
 }
-

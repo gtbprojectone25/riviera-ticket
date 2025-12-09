@@ -129,6 +129,7 @@ class EmailService {
     `
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getTicketConfirmationTemplate(details: any): string {
     return `
       <!DOCTYPE html>

@@ -5,6 +5,10 @@ import { users, userSessions } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { cookies } from 'next/headers'
 import { z } from 'zod'
+import { 
+  hashPassword, 
+  verifyPasswordWithMigration 
+} from '@/lib/password'
 
 type ActionState = {
   success: boolean
@@ -15,17 +19,6 @@ type ActionState = {
     name: string
     email: string
   }
-}
-
-// Função auxiliar para hash de senha (simplificada)
-function hashPassword(password: string): string {
-  // Em produção, usar bcryptjs
-  return Buffer.from(password).toString('base64')
-}
-
-function verifyPassword(password: string, hash: string): boolean {
-  // Em produção, usar bcryptjs
-  return Buffer.from(password).toString('base64') === hash
 }
 
 function generateSessionToken(): string {
@@ -80,14 +73,27 @@ export async function loginUser(prevState: ActionState | null, formData: FormDat
 
     const user = existingUser[0]
 
-    // Verificar senha
-    const isValidPassword = verifyPassword(password, user.hashedPassword || '')
+    // Verificar senha com suporte a migração de hash legado
+    const { valid: isValidPassword, needsRehash } = await verifyPasswordWithMigration(
+      password, 
+      user.hashedPassword || ''
+    )
 
     if (!isValidPassword) {
       return {
         success: false,
         message: 'Email ou senha incorretos'
       }
+    }
+
+    // Se a senha estava em hash legado, atualizar para bcrypt
+    if (needsRehash) {
+      const newHash = await hashPassword(password)
+      await db
+        .update(users)
+        .set({ hashedPassword: newHash, updatedAt: new Date() })
+        .where(eq(users.id, user.id))
+      console.log(`[Auth] Senha do usuário ${user.email} migrada para bcrypt`)
     }
 
     // Criar sessão
@@ -164,15 +170,15 @@ export async function registerUser(prevState: ActionState | null, formData: Form
       }
     }
 
-    // Hash da senha
-    const hashedPassword = hashPassword(password)
+    // Hash da senha (agora usando bcrypt assíncrono)
+    const hashedPasswordValue = await hashPassword(password)
 
     // Criar usuário
     const newUser = await db.insert(users).values({
       name,
       surname, 
       email,
-      hashedPassword,
+      hashedPassword: hashedPasswordValue,
       emailVerified: false
     }).returning()
 
