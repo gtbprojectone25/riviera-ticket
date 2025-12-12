@@ -20,18 +20,23 @@ class EmailService {
 
   constructor() {
     // Initialize transporter from environment variables
-    if (
-      process.env.SMTP_HOST &&
-      process.env.SMTP_USER &&
-      process.env.SMTP_PASS
-    ) {
+    const host =
+      process.env.SMTP_HOST || process.env.EMAIL_SERVER_HOST || process.env.SMTP_SERVER
+    const user =
+      process.env.SMTP_USER || process.env.EMAIL_SERVER_USER
+    const pass =
+      process.env.SMTP_PASS || process.env.EMAIL_SERVER_PASSWORD
+    const port =
+      parseInt(process.env.SMTP_PORT || process.env.EMAIL_SERVER_PORT || '587')
+
+    if (host && user && pass) {
       this.transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || '587'),
-        secure: process.env.SMTP_PORT === '465',
+        host,
+        port,
+        secure: port === 465,
         auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
+          user,
+          pass,
         },
       } as EmailConfig)
     }
@@ -50,7 +55,11 @@ class EmailService {
       const html = this.getVerificationEmailTemplate(code)
       
       await this.transporter.sendMail({
-        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        from:
+          process.env.SMTP_FROM ||
+          process.env.EMAIL_FROM ||
+          process.env.EMAIL_SERVER_USER ||
+          process.env.SMTP_USER,
         to: email,
         subject: 'Your Riviera Tickets Verification Code',
         html,
@@ -168,4 +177,3 @@ class EmailService {
 }
 
 export const emailService = new EmailService()
-

@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
@@ -36,6 +36,7 @@ type SessionApi = {
 
 export default function TicketSelectionPage() {
   const router = useRouter()
+  const bootstrapAttempted = useRef(false)
 
   const selectedCinema = useBookingStore((state) => state.selectedCinema)
   const setSelectedTickets = useBookingStore((state) => state.setSelectedTickets)
@@ -45,7 +46,6 @@ export default function TicketSelectionPage() {
   const [sessionTimes, setSessionTimes] = useState<SessionTime[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [sessionsError, setSessionsError] = useState<string | null>(null)
-  const [bootstrapping, setBootstrapping] = useState(false)
 
   const [tickets, setTickets] = useState<SelectedTicket[]>([
     {
@@ -94,18 +94,20 @@ export default function TicketSelectionPage() {
 
         const data = (await res.json()) as SessionApi[]
 
-        let filtered = data.filter(
-          (s) => s.movieTitle === 'The Odyssey' || s.movieTitle === 'Die Odyssee',
-        )
+        // Usar todas as sessões retornadas (a API já filtra por cinema)
+        let filtered = data
 
-        // Se não houver sessões, tentar criar automaticamente (bootstrap)
-        if (filtered.length === 0 && !bootstrapping) {
-          setBootstrapping(true)
+        // Se não houver sessões, tentar criar automaticamente (bootstrap) - apenas uma vez
+        if (filtered.length === 0 && !bootstrapAttempted.current) {
+          bootstrapAttempted.current = true
           try {
             const createRes = await fetch('/api/sessions/bootstrap', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ cinemaId: selectedCinema.id }),
+              body: JSON.stringify({ 
+                cinemaId: selectedCinema.id,
+                cinemaName: selectedCinema.name 
+              }),
               signal: controller.signal,
             })
             if (createRes.ok) {
@@ -114,17 +116,11 @@ export default function TicketSelectionPage() {
               })
               if (refresh.ok) {
                 const refreshed = (await refresh.json()) as SessionApi[]
-                filtered = refreshed.filter(
-                  (s) =>
-                    s.movieTitle === 'The Odyssey' ||
-                    s.movieTitle === 'Die Odyssee',
-                )
+                filtered = refreshed
               }
             }
           } catch {
             // ignora bootstrap failure
-          } finally {
-            setBootstrapping(false)
           }
         }
 
@@ -177,7 +173,7 @@ export default function TicketSelectionPage() {
     void load()
 
     return () => controller.abort()
-  }, [selectedCinema, router, setSelectedSessionId, setSessionData, bootstrapping])
+  }, [selectedCinema, router, setSelectedSessionId, setSessionData])
 
   const handleSessionSelect = (sessionId: string) => {
     setSessionTimes((prev) =>

@@ -11,6 +11,7 @@ import { generateSeatsForSession } from '@/server/seats/generateSeatsForSession'
 
 type BootstrapPayload = {
   cinemaId: string
+  cinemaName?: string
   movieTitle?: string
   movieDuration?: number
   startTime?: string
@@ -79,8 +80,27 @@ export async function POST(request: NextRequest) {
       .where(eq(cinemas.id, cinemaId))
       .limit(1)
 
+    // Se o cinema não existir, criar um novo baseado no ID
+    let cinemaData = cinema
     if (!cinema) {
-      return NextResponse.json({ error: 'Cinema não encontrado' }, { status: 404 })
+      // Criar cinema automaticamente com base no ID e nome fornecido
+      const cinemaName = body.cinemaName || cinemaId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+      const [newCinema] = await db
+        .insert(cinemas)
+        .values({
+          id: cinemaId,
+          name: cinemaName,
+          city: 'New York',
+          state: 'NY',
+          country: 'USA',
+          isIMAX: true,
+          format: 'IMAX 70MM',
+          lat: 40.7128,
+          lng: -74.0060,
+          address: cinemaName,
+        })
+        .returning()
+      cinemaData = newCinema
     }
 
     const movieTitle = body.movieTitle ?? 'The Odyssey'
@@ -89,10 +109,13 @@ export async function POST(request: NextRequest) {
     const vipPrice = body.vipPrice ?? 44900
 
     let start = body.startTime ? new Date(body.startTime) : new Date()
-    // Se a data for inválida, cai para hoje 19h
+    // Se a data for inválida, cria para amanhã
     if (isNaN(start.getTime())) {
       start = new Date()
     }
+    
+    // Criar sessão para amanhã às 19h para garantir que seja no futuro
+    start.setDate(start.getDate() + 1)
     start.setHours(19, 0, 0, 0)
     const end = new Date(start.getTime() + movieDuration * 60 * 1000)
 
@@ -114,8 +137,8 @@ export async function POST(request: NextRequest) {
         .insert(auditoriums)
         .values({
           cinemaId,
-          name: `${cinema.name} IMAX`,
-          format: cinema.format ?? 'IMAX',
+          name: `${cinemaData.name} IMAX`,
+          format: cinemaData.format ?? 'IMAX',
           layout: newLayout,
           totalSeats: total,
           approxCapacity: total,
@@ -147,8 +170,8 @@ export async function POST(request: NextRequest) {
         movieDuration,
         startTime: start,
         endTime: end,
-        cinemaName: cinema.name,
-        cinemaId: cinema.id,
+        cinemaName: cinemaData.name,
+        cinemaId: cinemaData.id,
         auditoriumId: auditoriumId!,
         screenType: 'IMAX_70MM',
         totalSeats,

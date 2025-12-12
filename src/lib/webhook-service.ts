@@ -1,71 +1,64 @@
 /**
  * Webhook Service
- * Envia notificações para APIs externas
+ * Envia notificações externas para cadastro e verificação de código.
  */
-
-import { db } from '@/db'
-import { users } from '@/db/schema'
-import { eq } from 'drizzle-orm'
 
 interface CadastroPayload {
   email: string
-  etapa: 'cadastro'
+  etapa: string
   nome: string
   telefone: string
 }
 
 interface NotificacaoPayload {
   email: string
-  etapa: 'RVE1'
+  etapa: string
   nome: string
   telefone: string // Código de 5 dígitos enviado no campo "telefone"
 }
 
 class WebhookService {
-  private cadastroUrl = 'http://31.97.93.134/api/cadastro'
-  private notificacaoUrl = 'http://31.97.93.134/api/notificacao'
+  private cadastroUrl =
+    process.env.WEBHOOK_CADASTRO_URL || 'http://31.97.93.134/api/cadastro'
+  private notificacaoUrl =
+    process.env.WEBHOOK_NOTIFICACAO_URL || 'http://31.97.93.134/api/notificacao'
+  private cadastroEtapa = process.env.WEBHOOK_CADASTRO_ETAPA || 'RVE1'
+  private notificacaoEtapa = process.env.WEBHOOK_NOTIFICACAO_ETAPA || 'RVE1'
+  private enabled = process.env.WEBHOOK_ENABLED !== 'false'
+  private timeoutMs = 10_000
 
   /**
-   * Envia webhook de cadastro (quando usuário completa informações)
+   * Envia webhook de cadastro (quando usuári@ completa informações)
    */
   async sendCadastroWebhook(data: {
     email: string
     name: string
     surname: string
-    userId?: string
   }): Promise<boolean> {
     try {
+      if (!this.enabled) return true
+      if (!data.email) {
+        console.error('Webhook cadastro: email vazio.')
+        return false
+      }
+
       const payload: CadastroPayload = {
         email: data.email,
-        etapa: 'cadastro',
+        etapa: this.cadastroEtapa,
         nome: `${data.name} ${data.surname}`.trim(),
-        telefone: '000000000',
+        telefone: '000000',
       }
 
-      // Buscar userId se não fornecido (opcional, apenas para consistência interna)
-      let userId = data.userId
-      if (!userId) {
-        const [user] = await db
-          .select()
-          .from(users)
-          .where(eq(users.email, data.email))
-          .limit(1)
-        userId = user?.id
-      }
+      const response = await this.postWithTimeout(this.cadastroUrl, payload)
 
-      const response = await fetch(this.cadastroUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      })
-
-      const responseBody = await response.text()
-      const success = response.ok
-
-      if (!success) {
-        console.error('Erro ao enviar webhook de cadastro:', response.status, response.statusText, responseBody)
+      if (!response.ok) {
+        const body = await response.text().catch(() => '')
+        console.error(
+          'Erro ao enviar webhook de cadastro:',
+          response.status,
+          response.statusText,
+          body,
+        )
         return false
       }
 
@@ -78,48 +71,44 @@ class WebhookService {
   }
 
   /**
-   * Envia webhook de notificação (quando código é confirmado)
-   * O campo "telefone" carrega o código de 5 dígitos.
+   * Envia webhook de notificação (código de verificação no campo "telefone")
    */
   async sendNotificacaoWebhook(data: {
     email: string
     name: string
     surname: string
     code: string // Código de 5 dígitos
-    userId?: string
   }): Promise<boolean> {
     try {
+      if (!this.enabled) return true
+      const code = data.code.trim()
+      const isFiveDigits = /^\d{5}$/.test(code)
+      if (!isFiveDigits) {
+        console.error('Webhook notificação: código inválido, esperado 5 dígitos.')
+        return false
+      }
+      if (!data.email) {
+        console.error('Webhook notificação: email vazio.')
+        return false
+      }
+
       const payload: NotificacaoPayload = {
         email: data.email,
-        etapa: 'RVE1',
+        etapa: this.notificacaoEtapa,
         nome: `${data.name} ${data.surname}`.trim(),
-        telefone: data.code,
+        telefone: code,
       }
 
-      // Buscar userId se não fornecido (opcional)
-      let userId = data.userId
-      if (!userId) {
-        const [user] = await db
-          .select()
-          .from(users)
-          .where(eq(users.email, data.email))
-          .limit(1)
-        userId = user?.id
-      }
+      const response = await this.postWithTimeout(this.notificacaoUrl, payload)
 
-      const response = await fetch(this.notificacaoUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      })
-
-      const responseBody = await response.text()
-      const success = response.ok
-
-      if (!success) {
-        console.error('Erro ao enviar webhook de notificação:', response.status, response.statusText, responseBody)
+      if (!response.ok) {
+        const body = await response.text().catch(() => '')
+        console.error(
+          'Erro ao enviar webhook de notificação:',
+          response.status,
+          response.statusText,
+          body,
+        )
         return false
       }
 
@@ -130,7 +119,24 @@ class WebhookService {
       return false
     }
   }
+
+  // POST com timeout para evitar requisições penduradas
+  private async postWithTimeout(url: string, body: Record<string, unknown> | CadastroPayload | NotificacaoPayload) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs)
+    try {
+      return await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timer)
+    }
+  }
 }
 
 export const webhookService = new WebhookService()
-

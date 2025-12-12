@@ -28,7 +28,8 @@ function RegisterContent() {
   const [encryptionProgress, setEncryptionProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [resendTimer, setResendTimer] = useState(0)
-  const [verificationCodeFromApi, setVerificationCodeFromApi] = useState<string | null>(null)
+  // Apenas para debug em dev; não exibimos em UI
+  const [, setVerificationCodeFromApi] = useState<string | null>(null)
 
   // Password requirements
   const passwordRequirements = {
@@ -77,9 +78,6 @@ function RegisterContent() {
       // Salvar código se retornado (modo desenvolvimento)
       if (data.code) {
         setVerificationCodeFromApi(data.code)
-        // Preencher automaticamente os campos de código
-        const codeArray = data.code.split('')
-        setVerificationCode(codeArray)
       }
 
       setResendTimer(60)
@@ -519,13 +517,7 @@ function RegisterContent() {
           </div>
         )}
 
-        {/* Mostrar código em desenvolvimento */}
-        {verificationCodeFromApi && (
-          <div className="bg-blue-500/20 border border-blue-500 text-blue-200 px-4 py-3 rounded text-center">
-            <p className="text-xs mb-1">Código de verificação (modo desenvolvimento):</p>
-            <p className="text-2xl font-bold tracking-widest">{verificationCodeFromApi}</p>
-          </div>
-        )}
+        {/* Código não é exibido na UI */}
 
         <div className="flex gap-3 justify-center">
           {verificationCode.map((digit, index) => (
