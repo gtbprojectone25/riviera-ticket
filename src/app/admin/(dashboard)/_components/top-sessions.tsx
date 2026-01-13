@@ -5,12 +5,18 @@ import { Badge } from '@/components/ui/badge'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
+type SessionRow = typeof sessions.$inferSelect
+type SessionWithSales = SessionRow & {
+  soldSeats: number
+  occupancy: number
+}
+
 async function getTopSessions() {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
   // Buscar sessões ativas com contagem de tickets vendidos
-  const sessionsWithSales = await db
+  const sessionsWithSales = (await db
     .select({
       id: sessions.id,
       movieTitle: sessions.movieTitle,
@@ -23,10 +29,10 @@ async function getTopSessions() {
     .from(sessions)
     .where(gte(sessions.startTime, today))
     .orderBy(desc(sessions.startTime))
-    .limit(5)
+    .limit(5)) as SessionRow[]
 
   // Calcular ocupação
-  return sessionsWithSales.map((session) => {
+  return sessionsWithSales.map((session: SessionRow): SessionWithSales => {
     const soldSeats = session.totalSeats - session.availableSeats
     const occupancy = Math.round((soldSeats / session.totalSeats) * 100)
 
@@ -92,3 +98,4 @@ export async function TopSessions() {
     </div>
   )
 }
+
