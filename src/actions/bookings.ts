@@ -2,9 +2,10 @@
 
 import { db } from '@/db'
 import { sessions, seats, carts, cartItems } from '@/db/schema'
-type SeatRow = typeof seats.$inferSelect
 import { eq, and, lte, inArray } from 'drizzle-orm'
-import { z } from 'zod'\n\n
+import { z } from 'zod'
+
+type SeatRow = typeof seats.$inferSelect
 export type SelectedSeat = {
   id: string
   price: number
