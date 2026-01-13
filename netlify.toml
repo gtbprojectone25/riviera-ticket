@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+  # Netlify instala o plugin do Next para lidar com App Router/SSR
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  NODE_VERSION = "20"
