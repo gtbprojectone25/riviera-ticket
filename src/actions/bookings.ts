@@ -2,11 +2,9 @@
 
 import { db } from '@/db'
 import { sessions, seats, carts, cartItems } from '@/db/schema'
+type SeatRow = typeof seats.$inferSelect
 import { eq, and, lte, inArray } from 'drizzle-orm'
-import { z } from 'zod'
-
-
-
+import { z } from 'zod'\n\n
 export type SelectedSeat = {
   id: string
   price: number
@@ -22,10 +20,13 @@ const reserveSeatSchema = z.object({
 export async function getAvailableSeats(sessionId: string) {
   try {
     // Buscar todos os assentos da sessão
-    const allSeats = await db.select().from(seats).where(eq(seats.sessionId, sessionId))
+    const allSeats = (await db
+      .select()
+      .from(seats)
+      .where(eq(seats.sessionId, sessionId))) as SeatRow[]
 
     // Mapear assentos com status de disponibilidade
-    const availableSeats = allSeats.map(seat => ({
+    const availableSeats = allSeats.map((seat: SeatRow) => ({
       id: seat.id,
       sessionId,
       row: seat.row,
@@ -257,3 +258,4 @@ export async function getSessionById(sessionId: string) {
     }
   }
 }
+
