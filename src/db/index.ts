@@ -5,7 +5,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { drizzle } from 'drizzle-orm/neon-http'
+import { drizzle, type NeonHTTPDatabase } from 'drizzle-orm/neon-http'
 import { neon } from '@neondatabase/serverless'
 import * as schema from './schema'
 
@@ -34,19 +34,45 @@ function ensureDatabaseUrl() {
   }
 }
 
-// Ensure DATABASE_URL is available both in Next runtime and standalone scripts
-ensureDatabaseUrl()
+// Lazy initialization to avoid throwing during build-time (e.g., Netlify) when env is missing.
+// At runtime, the first DB access will validate DATABASE_URL and connect.
+type DbInstance = NeonHTTPDatabase<typeof schema>
 
-// Environment variables check
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL environment variable is required')
+let dbInstance: DbInstance | null = null
+
+function initDb(): DbInstance {
+  ensureDatabaseUrl()
+
+  if (!process.env.DATABASE_URL) {
+    const message = 'DATABASE_URL environment variable is required at runtime'
+    if (process.env.NETLIFY === 'true') {
+      throw new Error(`${message}. Configure it in Netlify env vars.`)
+    }
+    throw new Error(message)
+  }
+
+  const sql = neon(process.env.DATABASE_URL)
+  return drizzle(sql, { schema })
 }
 
-// Create the connection
-const sql = neon(process.env.DATABASE_URL)
+export function getDb(): DbInstance {
+  if (!dbInstance) {
+    dbInstance = initDb()
+  }
+  return dbInstance
+}
 
-// Create the database instance with schema
-export const db = drizzle(sql, { schema })
+// Proxy delays the real initialization until a property is accessed
+export const db = new Proxy(
+  {},
+  {
+    get(_target, prop) {
+      const instance = getDb()
+      // @ts-expect-error passthrough proxy
+      return instance[prop]
+    },
+  },
+) as DbInstance
 
 // Export all schema for easy importing
 export * from './schema'
