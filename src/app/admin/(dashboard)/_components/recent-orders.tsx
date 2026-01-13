@@ -6,6 +6,10 @@ import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 type PaymentRow = typeof paymentIntents.$inferSelect
+type OrderWithDetails = PaymentRow & {
+  userName: string
+  userEmail: string
+}
 
 async function getRecentOrders() {
   // Buscar últimos pagamentos com sucesso
@@ -23,7 +27,7 @@ async function getRecentOrders() {
     .limit(5)
 
   // Buscar dados dos usuários
-  const ordersWithDetails = await Promise.all(
+  const ordersWithDetails: OrderWithDetails[] = await Promise.all(
     recentPayments.map(async (payment: PaymentRow) => {
       let userName = 'Convidado'
       let userEmail = '-'
@@ -82,7 +86,7 @@ export async function RecentOrders() {
         <p className="text-gray-500 text-center py-8">Nenhum pedido encontrado</p>
       ) : (
         <div className="space-y-3">
-          {orders.map((order) => (
+          {orders.map((order: OrderWithDetails) => (
             <div
               key={order.id}
               className="flex items-center justify-between p-3 bg-gray-900/50 rounded-lg hover:bg-gray-900 transition-colors"
