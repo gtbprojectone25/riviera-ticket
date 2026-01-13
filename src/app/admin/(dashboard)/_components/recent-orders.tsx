@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
+type PaymentRow = typeof paymentIntents.$inferSelect
+
 async function getRecentOrders() {
   // Buscar últimos pagamentos com sucesso
   const recentPayments = await db
@@ -22,7 +24,7 @@ async function getRecentOrders() {
 
   // Buscar dados dos usuários
   const ordersWithDetails = await Promise.all(
-    recentPayments.map(async (payment) => {
+    recentPayments.map(async (payment: PaymentRow) => {
       let userName = 'Convidado'
       let userEmail = '-'
 
