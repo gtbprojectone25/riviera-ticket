@@ -4,7 +4,7 @@
 
 import { db } from '../src/db'
 import { sessions, cinemas, auditoriums, type AuditoriumLayout } from '../src/db/schema'
-import { lt, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
 async function main() {
   const now = new Date()

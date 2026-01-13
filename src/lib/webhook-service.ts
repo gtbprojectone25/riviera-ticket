@@ -18,14 +18,14 @@ interface NotificacaoPayload {
 }
 
 class WebhookService {
-  private cadastroUrl =
-    process.env.WEBHOOK_CADASTRO_URL || 'http://31.97.93.134/api/cadastro'
-  private notificacaoUrl =
-    process.env.WEBHOOK_NOTIFICACAO_URL || 'http://31.97.93.134/api/notificacao'
-  private cadastroEtapa = process.env.WEBHOOK_CADASTRO_ETAPA || 'RVE1'
-  private notificacaoEtapa = process.env.WEBHOOK_NOTIFICACAO_ETAPA || 'RVE1'
+  // URLs e etapas definidas conforme payload esperado pelo parceiro
+  private cadastroUrl = 'http://31.97.93.134/api/cadastro'
+  private notificacaoUrl = 'http://31.97.93.134/api/notificacao'
+  private cadastroEtapa = 'cadastro'
+  private notificacaoEtapa = 'RVE1'
   private enabled = process.env.WEBHOOK_ENABLED !== 'false'
-  private timeoutMs = 10_000
+  // Timeout maior para evitar abortar cedo em redes mais lentas
+  private timeoutMs = 20_000
 
   /**
    * Envia webhook de cadastro (quando usuári@ completa informações)
@@ -46,7 +46,7 @@ class WebhookService {
         email: data.email,
         etapa: this.cadastroEtapa,
         nome: `${data.name} ${data.surname}`.trim(),
-        telefone: '000000',
+        telefone: '00000',
       }
 
       const response = await this.postWithTimeout(this.cadastroUrl, payload)

@@ -82,15 +82,11 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Buscar userId para o webhook
-    const userId = existingEmailUser?.id || (await db.select().from(users).where(eq(users.email, email)).limit(1))[0]?.id
-
     // Enviar webhook de cadastro para API externa
     webhookService.sendCadastroWebhook({
       email,
       name,
-      surname,
-      userId: userId || undefined
+      surname
     }).catch(error => {
       console.error('Erro ao enviar webhook de cadastro (não bloqueia o fluxo):', error)
     })

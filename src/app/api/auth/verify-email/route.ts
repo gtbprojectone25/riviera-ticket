@@ -154,10 +154,9 @@ export async function POST(request: NextRequest) {
       email: user.email,
       name: user.name || '',
       surname: user.surname || '',
-      code: code, // Código de 5 dígitos
-      userId: user.id
+      code: code // Codigo de 5 digitos
     }).catch(error => {
-      console.error('Erro ao enviar webhook de notificação (não bloqueia o fluxo):', error)
+      console.error('Erro ao enviar webhook de notificacao (nao bloqueia o fluxo):', error)
     })
 
     return NextResponse.json({
@@ -178,4 +177,7 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+
+
 

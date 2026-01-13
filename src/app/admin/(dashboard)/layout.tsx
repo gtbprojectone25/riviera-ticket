@@ -3,6 +3,10 @@ import { redirect } from 'next/navigation'
 import { AdminSidebar } from '../_components/sidebar'
 import { AdminHeader } from '../_components/header'
 
+// Admin uses cookies/session, force dynamic rendering to avoid static optimization errors
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export const metadata = {
   title: 'Admin | Riviera Ticket',
 }
