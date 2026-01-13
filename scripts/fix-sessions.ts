@@ -2,19 +2,20 @@
  * Script para limpar sessões antigas e criar novas para amanhã
  */
 
+import { eq } from 'drizzle-orm'
 import { db } from '../src/db'
 import { sessions, cinemas, auditoriums, type AuditoriumLayout } from '../src/db/schema'
-import { eq } from 'drizzle-orm'
+type Session = typeof sessions.$inferSelect
 
 async function main() {
   const now = new Date()
   console.log('Agora:', now.toISOString())
 
   // Listar sessões
-  const allSessions = await db.select().from(sessions)
+  const allSessions = (await db.select().from(sessions)) as Session[]
   console.log('Total de sessões:', allSessions.length)
   
-  allSessions.forEach(s => {
+  allSessions.forEach((s: Session) => {
     const isFuture = s.startTime > now
     console.log(`- ${s.cinemaId || s.cinemaName} | ${s.startTime.toISOString()} | Futuro: ${isFuture}`)
   })
@@ -97,3 +98,5 @@ async function main() {
 }
 
 main().catch(console.error)
+
+
