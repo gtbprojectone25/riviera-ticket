@@ -159,7 +159,7 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
         cinemaName: sessionData.cinemaName,
         date: new Date(sessionData.startTime).toLocaleDateString('pt-BR'),
         time: new Date(sessionData.startTime).toLocaleTimeString('pt-BR'),
-        seats: items.map(item => item.seat.seatId),
+        seats: items.map((item: { seat: typeof seats.$inferSelect; cartItem: typeof cartItems.$inferSelect }) => item.seat.seatId),
         totalAmount: dbPaymentIntent.amount / 100,
       })
     }

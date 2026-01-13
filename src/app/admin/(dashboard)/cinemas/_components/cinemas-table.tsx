@@ -1,4 +1,4 @@
-import { db } from '@/db'
+﻿import { db } from '@/db'
 import { cinemas, auditoriums, sessions } from '@/db/schema'
 import { desc, eq, count } from 'drizzle-orm'
 import { Badge } from '@/components/ui/badge'
@@ -6,15 +6,22 @@ import { Button } from '@/components/ui/button'
 import { Edit, Trash2, MapPin, Monitor } from 'lucide-react'
 import Link from 'next/link'
 
+type CinemaRow = typeof cinemas.$inferSelect
+
+type CinemaWithCounts = CinemaRow & {
+  auditoriumsCount: number
+  sessionsCount: number
+}
+
 async function getCinemas() {
-  const allCinemas = await db
+  const allCinemas = (await db
     .select()
     .from(cinemas)
-    .orderBy(desc(cinemas.createdAt))
+    .orderBy(desc(cinemas.createdAt))) as CinemaRow[]
 
-  // Enriquecer com contagem de auditoriums e sessões
-  const enrichedCinemas = await Promise.all(
-    allCinemas.map(async (cinema) => {
+  // Enriquecer com contagem de auditoriums e sessoes
+  const enrichedCinemas: CinemaWithCounts[] = await Promise.all(
+    allCinemas.map(async (cinema: CinemaRow) => {
       const [audsCount] = await db
         .select({ count: count() })
         .from(auditoriums)
@@ -49,7 +56,7 @@ export async function CinemasTable() {
                 Cinema
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Localização
+                Localizacao
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Formato
@@ -58,10 +65,10 @@ export async function CinemasTable() {
                 Salas
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Sessões
+                Sessoes
               </th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Ações
+                Acoes
               </th>
             </tr>
           </thead>
@@ -73,7 +80,7 @@ export async function CinemasTable() {
                 </td>
               </tr>
             ) : (
-              allCinemas.map((cinema) => (
+              allCinemas.map((cinema: CinemaWithCounts) => (
                 <tr key={cinema.id} className="hover:bg-gray-700/20 transition-colors">
                   <td className="px-4 py-4">
                     <div className="flex items-center gap-3">
@@ -96,10 +103,13 @@ export async function CinemasTable() {
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <Badge className={cinema.isIMAX 
-                      ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' 
-                      : 'bg-gray-500/10 text-gray-400 border-gray-500/20'
-                    }>
+                    <Badge
+                      className={
+                        cinema.isIMAX
+                          ? 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+                          : 'bg-gray-500/10 text-gray-400 border-gray-500/20'
+                      }
+                    >
                       {cinema.isIMAX ? 'IMAX' : 'Standard'}
                     </Badge>
                     {cinema.format && (

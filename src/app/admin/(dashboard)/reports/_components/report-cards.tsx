@@ -3,6 +3,8 @@ import { paymentIntents, sessions, tickets } from '@/db/schema'
 import { sql, gte, and, eq, count } from 'drizzle-orm'
 import { DollarSign, Ticket, Film, Percent } from 'lucide-react'
 
+type SessionRow = typeof sessions.$inferSelect
+
 async function getReportStats() {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -35,18 +37,18 @@ async function getReportStats() {
     .where(gte(sessions.startTime, monthAgo))
 
   // Média de ocupação
-  const sessionsData = await db
+  const sessionsData = (await db
     .select({
       totalSeats: sessions.totalSeats,
       availableSeats: sessions.availableSeats,
     })
     .from(sessions)
     .where(gte(sessions.startTime, monthAgo))
-    .limit(100)
+    .limit(100)) as SessionRow[]
 
   let avgOccupancy = 0
   if (sessionsData.length > 0) {
-    const totalOccupancy = sessionsData.reduce((acc, s) => {
+    const totalOccupancy = sessionsData.reduce((acc: number, s: SessionRow) => {
       const sold = s.totalSeats - s.availableSeats
       return acc + (sold / s.totalSeats) * 100
     }, 0)

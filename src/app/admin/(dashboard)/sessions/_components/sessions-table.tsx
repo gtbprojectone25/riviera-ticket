@@ -9,17 +9,23 @@ import { Edit, Trash2, Eye, Film, Calendar } from 'lucide-react'
 import Link from 'next/link'
 
 type SearchParams = Promise<{ [key: string]: string | undefined }>
+type SessionRow = typeof sessions.$inferSelect
+type SessionWithStats = SessionRow & {
+  ticketsSold: number
+  soldSeats: number
+  occupancy: number
+}
 
 async function getSessions() {
-  const allSessions = await db
+  const allSessions = (await db
     .select()
     .from(sessions)
     .orderBy(desc(sessions.startTime))
-    .limit(50)
+    .limit(50)) as SessionRow[]
 
   // Enriquecer com contagem de tickets vendidos
-  const enrichedSessions = await Promise.all(
-    allSessions.map(async (session) => {
+  const enrichedSessions: SessionWithStats[] = await Promise.all(
+    allSessions.map(async (session: SessionRow) => {
       const [ticketsCount] = await db
         .select({ count: count() })
         .from(tickets)

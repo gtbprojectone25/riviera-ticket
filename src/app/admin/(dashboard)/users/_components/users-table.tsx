@@ -8,16 +8,22 @@ import { ptBR } from 'date-fns/locale'
 import { Eye, Ban, User } from 'lucide-react'
 import Link from 'next/link'
 
+type UserRow = typeof users.$inferSelect
+
+type UserWithTickets = UserRow & {
+  ticketsCount: number
+}
+
 async function getUsers() {
-  const allUsers = await db
+  const allUsers = (await db
     .select()
     .from(users)
     .orderBy(desc(users.createdAt))
-    .limit(50)
+    .limit(50)) as UserRow[]
 
   // Enriquecer com contagem de tickets
-  const enrichedUsers = await Promise.all(
-    allUsers.map(async (user) => {
+  const enrichedUsers: UserWithTickets[] = await Promise.all(
+    allUsers.map(async (user: UserRow) => {
       const [ticketsCount] = await db
         .select({ count: count() })
         .from(tickets)

@@ -10,6 +10,23 @@ import { desc, eq, and, gte, lte } from 'drizzle-orm'
 import { requireAdmin } from '@/lib/admin-auth'
 import ExcelJS from 'exceljs'
 
+type OrderRow = {
+  id: string
+  stripeId: string | null
+  amount: number
+  status: string | null
+  createdAt: Date
+  userId: string | null
+  cartId: string | null
+}
+
+type OrderWithDetails = OrderRow & {
+  userName: string
+  userEmail: string
+  sessionTitle: string
+  cinemaName: string
+}
+
 export async function GET(request: NextRequest) {
   try {
     await requireAdmin()
@@ -37,7 +54,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Buscar dados
-    const orders = await db
+    const orders = (await db
       .select({
         id: paymentIntents.id,
         stripeId: paymentIntents.stripePaymentIntentId,
@@ -50,11 +67,11 @@ export async function GET(request: NextRequest) {
       .from(paymentIntents)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(paymentIntents.createdAt))
-      .limit(1000)
+      .limit(1000)) as OrderRow[]
 
     // Enriquecer com dados do usuário e sessão
-    const enrichedOrders = await Promise.all(
-      orders.map(async (order) => {
+    const enrichedOrders: OrderWithDetails[] = await Promise.all(
+      orders.map(async (order: OrderRow) => {
         let userName = 'Convidado'
         let userEmail = '-'
         let sessionTitle = '-'
@@ -166,3 +183,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Erro ao gerar relatório' }, { status: 500 })
   }
 }
+

@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
       .where(eq(tickets.userId, userId))
 
     // Agrupar por sessão/evento
-    const events = userTickets.reduce((acc, item) => {
+    const events = userTickets.reduce((acc: Record<string, { session: typeof sessions.$inferSelect; tickets: typeof tickets.$inferSelect[] }>, item: { session: typeof sessions.$inferSelect; ticket: typeof tickets.$inferSelect }) => {
       const sessionId = item.session.id
       if (!acc[sessionId]) {
         acc[sessionId] = {

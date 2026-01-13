@@ -10,6 +10,18 @@ import { desc, eq, and, gte, lte, sql } from 'drizzle-orm'
 import { requireAdmin } from '@/lib/admin-auth'
 import PDFDocument from 'pdfkit'
 
+type OrderRow = {
+  id: string
+  amount: number
+  status: string | null
+  createdAt: Date
+  userId: string | null
+}
+
+type OrderWithUser = OrderRow & {
+  userName: string
+}
+
 export async function GET(request: NextRequest) {
   try {
     await requireAdmin()
@@ -48,7 +60,7 @@ export async function GET(request: NextRequest) {
       .where(conditions.length > 0 ? and(...conditions) : undefined)
 
     // Buscar últimos pedidos
-    const orders = await db
+    const orders = (await db
       .select({
         id: paymentIntents.id,
         amount: paymentIntents.amount,
@@ -59,11 +71,11 @@ export async function GET(request: NextRequest) {
       .from(paymentIntents)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(paymentIntents.createdAt))
-      .limit(50)
+      .limit(50)) as OrderRow[]
 
     // Enriquecer com dados do usuário
-    const enrichedOrders = await Promise.all(
-      orders.map(async (order) => {
+    const enrichedOrders: OrderWithUser[] = await Promise.all(
+      orders.map(async (order: OrderRow) => {
         let userName = 'Convidado'
 
         if (order.userId) {
@@ -190,3 +202,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Erro ao gerar relatório' }, { status: 500 })
   }
 }
+
+

@@ -5,7 +5,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { drizzle, type NeonHTTPDatabase } from 'drizzle-orm/neon-http'
+import { drizzle, type NeonHttpDatabase } from 'drizzle-orm/neon-http'
 import { neon } from '@neondatabase/serverless'
 import * as schema from './schema'
 
@@ -36,7 +36,7 @@ function ensureDatabaseUrl() {
 
 // Lazy initialization to avoid throwing during build-time (e.g., Netlify) when env is missing.
 // At runtime, the first DB access will validate DATABASE_URL and connect.
-type DbInstance = NeonHTTPDatabase<typeof schema>
+type DbInstance = NeonHttpDatabase<typeof schema>
 
 let dbInstance: DbInstance | null = null
 

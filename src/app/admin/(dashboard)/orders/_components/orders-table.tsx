@@ -1,4 +1,4 @@
-import { db } from '@/db'
+﻿import { db } from '@/db'
 import { paymentIntents, carts, users, sessions } from '@/db/schema'
 import { desc, eq, and, gte, lte } from 'drizzle-orm'
 import { Badge } from '@/components/ui/badge'
@@ -10,13 +10,29 @@ import Link from 'next/link'
 
 type SearchParams = Promise<{ [key: string]: string | undefined }>
 
+type OrderRow = {
+  id: string
+  stripeId: string | null
+  amount: number
+  status: string | null
+  createdAt: Date
+  cartId: string | null
+  userId: string | null
+}
+
+type OrderWithDetails = OrderRow & {
+  userName: string
+  userEmail: string
+  sessionTitle: string
+}
+
 async function getOrders(params: { [key: string]: string | undefined }) {
   const { search, status, dateFrom, dateTo, page = '1' } = params
   const limit = 20
   const offset = (parseInt(page) - 1) * limit
 
-  // Construir condições de filtro
-  const conditions = []
+  // Construir filtros
+  const conditions = [] as ReturnType<typeof and>[] | Parameters<typeof and>
 
   if (status) {
     conditions.push(eq(paymentIntents.status, status as 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'))
@@ -32,7 +48,7 @@ async function getOrders(params: { [key: string]: string | undefined }) {
     conditions.push(lte(paymentIntents.createdAt, endDate))
   }
 
-  const orders = await db
+  const orders = (await db
     .select({
       id: paymentIntents.id,
       stripeId: paymentIntents.stripePaymentIntentId,
@@ -46,11 +62,11 @@ async function getOrders(params: { [key: string]: string | undefined }) {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(paymentIntents.createdAt))
     .limit(limit)
-    .offset(offset)
+    .offset(offset)) as OrderRow[]
 
-  // Enriquecer com dados do usuário e sessão
-  const enrichedOrders = await Promise.all(
-    orders.map(async (order) => {
+  // Enriquecer com dados do usuario e sessao
+  const enrichedOrders: OrderWithDetails[] = await Promise.all(
+    orders.map(async (order: OrderRow) => {
       let userName = 'Convidado'
       let userEmail = '-'
       let sessionTitle = '-'
@@ -97,7 +113,7 @@ async function getOrders(params: { [key: string]: string | undefined }) {
     })
   )
 
-  // Filtrar por search se necessário (em memória, para simplificar)
+  // Filtro em memoria por search
   let filtered = enrichedOrders
   if (search) {
     const searchLower = search.toLowerCase()
@@ -143,7 +159,7 @@ export async function OrdersTable({ searchParams }: { searchParams: SearchParams
                 Cliente
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Sessão
+                Sessao
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Valor
@@ -155,7 +171,7 @@ export async function OrdersTable({ searchParams }: { searchParams: SearchParams
                 Data
               </th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Ações
+                Acoes
               </th>
             </tr>
           </thead>
@@ -167,13 +183,11 @@ export async function OrdersTable({ searchParams }: { searchParams: SearchParams
                 </td>
               </tr>
             ) : (
-              orders.map((order) => (
+              orders.map((order: OrderWithDetails) => (
                 <tr key={order.id} className="hover:bg-gray-700/20 transition-colors">
                   <td className="px-4 py-4">
                     <div>
-                      <p className="text-sm font-medium text-white">
-                        #{order.id.slice(0, 8)}
-                      </p>
+                      <p className="text-sm font-medium text-white">#{order.id.slice(0, 8)}</p>
                       <p className="text-xs text-gray-500 truncate max-w-[120px]">
                         {order.stripeId || '-'}
                       </p>
@@ -186,16 +200,11 @@ export async function OrdersTable({ searchParams }: { searchParams: SearchParams
                     </div>
                   </td>
                   <td className="px-4 py-4">
-                    <p className="text-sm text-gray-300 truncate max-w-[150px]">
-                      {order.sessionTitle}
-                    </p>
+                    <p className="text-sm text-gray-300 truncate max-w-[150px]">{order.sessionTitle}</p>
                   </td>
                   <td className="px-4 py-4">
                     <p className="text-sm font-medium text-white">
-                      {new Intl.NumberFormat('pt-BR', {
-                        style: 'currency',
-                        currency: 'BRL',
-                      }).format(order.amount / 100)}
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.amount / 100)}
                     </p>
                   </td>
                   <td className="px-4 py-4">

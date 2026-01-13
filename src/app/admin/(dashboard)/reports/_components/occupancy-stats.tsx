@@ -2,11 +2,17 @@ import { db } from '@/db'
 import { sessions } from '@/db/schema'
 import { desc, gte } from 'drizzle-orm'
 
+type SessionRow = typeof sessions.$inferSelect
+type SessionWithOccupancy = SessionRow & {
+  sold: number
+  occupancy: number
+}
+
 async function getOccupancyData() {
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
 
-  const recentSessions = await db
+  const recentSessions = (await db
     .select({
       id: sessions.id,
       movieTitle: sessions.movieTitle,
@@ -17,9 +23,9 @@ async function getOccupancyData() {
     .from(sessions)
     .where(gte(sessions.startTime, weekAgo))
     .orderBy(desc(sessions.startTime))
-    .limit(10)
+    .limit(10)) as SessionRow[]
 
-  return recentSessions.map((s) => {
+  return recentSessions.map((s: SessionRow): SessionWithOccupancy => {
     const sold = s.totalSeats - s.availableSeats
     const occupancy = Math.round((sold / s.totalSeats) * 100)
     return {
