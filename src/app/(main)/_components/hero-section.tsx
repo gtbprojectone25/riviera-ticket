@@ -2,6 +2,7 @@
 
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { OdysseyLoading } from '@/components/ui/OdysseyLoading'
 import { useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -11,23 +12,16 @@ export function HeroSection() {
   const router = useRouter()
 
   const handleNavigateToPreOrder = () => {
+    if (isLoading) return
     setIsLoading(true)
     setTimeout(() => {
       router.push('/pre-order')
-    }, 2000) 
+    }, 14000) 
   }
 
   return (
     <div className="min-h-screen text-white relative overflow-y-auto flex gap-4 ">
-      {/* Loading Overlay */}
-      {isLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="relative z-10 text-center space-y-6">
-            <div className="w-20 h-20 border-4 border-red-500 border-t-transparent rounded-full animate-spin mx-auto shadow-lg shadow-red-500/50" />
-            <p className="text-white text-2xl font-bold animate-pulse">Carregando...</p>
-          </div>
-        </div>
-      )}
+      <OdysseyLoading isLoading={isLoading} />
 
       <div className="container mx-auto px-4 py-4 relative z-10">
         <div className="max-w-md mx-auto space-y-4">

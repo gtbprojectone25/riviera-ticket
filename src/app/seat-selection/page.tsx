@@ -7,6 +7,7 @@ import { ChevronLeft, Clock } from 'lucide-react'
 // Componentes Visuais / UI
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { OdysseyLoading } from '@/components/ui/OdysseyLoading';
 
 // Componentes do Mapa
 import { SeatLegend } from './SeatLegend';
@@ -135,6 +136,7 @@ export default function SeatSelectionPage() {
 
   return (
     <div className="min-h-screen text-white relative overflow-x-hidden bg-black/60">
+      <OdysseyLoading isLoading={seatsLoading} />
       <div className="relative z-10 flex flex-col items-center min-h-screen pt-6">
         <div className="w-full max-w-md space-y-6 relative rounded-2xl p-10 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
              {/* Urgency Banner */}
