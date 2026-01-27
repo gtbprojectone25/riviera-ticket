@@ -68,6 +68,14 @@ export function OdysseyLoading({ isLoading, progress }: OdysseyLoadingProps) {
   }, [isLoading, isVisible, shouldReduceMotion]);
 
   React.useEffect(() => {
+    if (isVisible) return undefined;
+    const timeout = setTimeout(() => {
+      setShouldRender(false);
+    }, shouldReduceMotion ? 80 : 450);
+    return () => clearTimeout(timeout);
+  }, [isVisible, shouldReduceMotion]);
+
+  React.useEffect(() => {
     if (!isLoading || typeof progress === "number") return undefined;
     const interval = setInterval(() => {
       setDisplayProgress((prev) => {
@@ -86,7 +94,7 @@ export function OdysseyLoading({ isLoading, progress }: OdysseyLoadingProps) {
       className={`fixed inset-0 z-9999 flex items-center justify-center transition-opacity ${
         isVisible ? "opacity-100" : "opacity-0"
       }`}
-      style={{ transitionDuration: shouldReduceMotion ? "100ms" : "450ms" }}
+      style={{ pointerEvents: isVisible ? "auto" : "none", transitionDuration: shouldReduceMotion ? "100ms" : "450ms" }}
       aria-live="polite"
       role="status"
     >

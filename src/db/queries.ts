@@ -446,7 +446,7 @@ export async function createSeatsForSession(sessionId: string) {
         number,
         seatId,
         type: isVIP ? 'VIP' : 'STANDARD',
-        price: isVIP ? 4999 : 2999, // $49.99 for VIP, $29.99 for Standard
+        price: isVIP ? 44900 : 34900, // in cents ($449.00 VIP, $349.00 Standard)
         isAvailable: true,
         isReserved: false,
       })

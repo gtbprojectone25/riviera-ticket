@@ -51,14 +51,14 @@ export default function TicketSelectionPage() {
     {
       id: 'standard',
       name: 'Standard Ticket',
-      price: 349,
+      price: 34900,
       description: ['Valid only for the chosen session', 'Online ticket'],
       amount: 0,
     },
     {
       id: 'vip',
       name: 'VIP Experience',
-      price: 449,
+      price: 44900,
       description: ['Valid only for the chosen session', 'Priority access'],
       amount: 0,
     },
@@ -369,4 +369,3 @@ export default function TicketSelectionPage() {
     </div>
   )
 }
-

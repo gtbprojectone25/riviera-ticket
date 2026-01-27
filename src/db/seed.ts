@@ -103,8 +103,8 @@ async function seedDatabase() {
         screenType: 'IMAX_70MM' as const,
         totalSeats: 200,
         availableSeats: 200,
-        basePrice: 2999, // $29.99
-        vipPrice: 4999,  // $49.99
+        basePrice: 34900, // in cents ($349.00)
+        vipPrice: 44900,  // in cents ($449.00)
       },
       {
         movieTitle: 'Die Odyssee',
@@ -115,8 +115,8 @@ async function seedDatabase() {
         screenType: 'IMAX_70MM' as const,
         totalSeats: 200,
         availableSeats: 200,
-        basePrice: 2999, // $29.99
-        vipPrice: 4999,  // $49.99
+        basePrice: 34900, // in cents ($349.00)
+        vipPrice: 44900,  // in cents ($449.00)
       },
       {
         movieTitle: 'Die Odyssee',
@@ -127,8 +127,8 @@ async function seedDatabase() {
         screenType: 'IMAX_70MM' as const,
         totalSeats: 200,
         availableSeats: 200,
-        basePrice: 2999, // $29.99
-        vipPrice: 4999,  // $49.99
+        basePrice: 34900, // in cents ($349.00)
+        vipPrice: 44900,  // in cents ($449.00)
       },
     ]
 

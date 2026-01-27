@@ -44,7 +44,7 @@ export function SeatSelection({
           seatId,
           available: seatData ? seatData.isAvailable : false,
           type: isVIP ? 'VIP' : 'STANDARD',
-          price: isVIP ? 4999 : 2999 // $49.99 for VIP, $29.99 for Standard
+          price: isVIP ? 44900 : 34900 // $449.00 for VIP, $349.00 for Standard
         })
       }
       
