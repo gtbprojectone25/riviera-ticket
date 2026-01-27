@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
+  Image as ImageIcon,
   Film,
   Building2,
   Calendar,
@@ -12,6 +13,7 @@ import {
   ShoppingCart,
   Users,
   Tag,
+  DollarSign,
   BarChart3,
   Settings,
   UserCog,
@@ -27,8 +29,10 @@ type AdminInfo = {
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+  { name: 'Imagens', href: '/admin/images', icon: ImageIcon },
   { name: 'Pedidos', href: '/admin/orders', icon: ShoppingCart },
   { name: 'Sessões', href: '/admin/sessions', icon: Calendar },
+  { name: 'Preços', href: '/admin/prices', icon: DollarSign },
   { name: 'Cinemas', href: '/admin/cinemas', icon: Building2 },
   { name: 'Salas', href: '/admin/auditoriums', icon: Armchair },
   { name: 'Filmes', href: '/admin/movies', icon: Film },

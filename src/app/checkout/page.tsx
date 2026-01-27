@@ -12,6 +12,7 @@ import {
   FeatureCards,
   BuyerGuarantee,
 } from './_components/premium-summary'
+import { formatCurrency } from '@/lib/utils'
 
 type SessionApi = {
   id: string
@@ -63,7 +64,7 @@ export default function CheckoutPage() {
   }, [selectedSessionId])
 
   // Dados derivados
-  const totalAmount = finalizedTickets.reduce((acc, t) => acc + t.price, 0)
+  const totalAmountCents = finalizedTickets.reduce((acc, t) => acc + t.price, 0)
   const selectedSeatIds = finalizedTickets
     .map((t) => t.assignedSeatId)
     .filter(Boolean) as string[]
@@ -253,7 +254,7 @@ export default function CheckoutPage() {
                 router.push('/register?returnUrl=/payment')
               }}
             >
-              Go to payment ${totalAmount.toLocaleString()}
+              Go to payment {formatCurrency(totalAmountCents)}
             </Button>
           </div>
         </div>
@@ -261,4 +262,3 @@ export default function CheckoutPage() {
     </div>
   )
 }
-

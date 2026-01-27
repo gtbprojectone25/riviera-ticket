@@ -1,7 +1,23 @@
-CREATE TYPE "public"."admin_role" AS ENUM('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SUPPORT');--> statement-breakpoint
-CREATE TYPE "public"."order_status" AS ENUM('PENDING', 'WAITING_PAYMENT', 'PAID', 'CONFIRMED', 'CANCELLED', 'REFUNDED', 'EXPIRED');--> statement-breakpoint
-CREATE TYPE "public"."promotion_type" AS ENUM('PERCENTAGE', 'FIXED_AMOUNT', 'BUY_X_GET_Y');--> statement-breakpoint
-CREATE TYPE "public"."queue_status" AS ENUM('WAITING', 'NOTIFIED', 'EXPIRED', 'COMPLETED');--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."admin_role" AS ENUM('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'SUPPORT');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."order_status" AS ENUM('PENDING', 'WAITING_PAYMENT', 'PAID', 'CONFIRMED', 'CANCELLED', 'REFUNDED', 'EXPIRED');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."promotion_type" AS ENUM('PERCENTAGE', 'FIXED_AMOUNT', 'BUY_X_GET_Y');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  CREATE TYPE "public"."queue_status" AS ENUM('WAITING', 'NOTIFIED', 'EXPIRED', 'COMPLETED');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
 CREATE TABLE "admin_sessions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"admin_id" uuid NOT NULL,

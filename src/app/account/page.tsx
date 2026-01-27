@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Image from 'next/image'
+import { formatCurrency } from '@/lib/utils'
 
 
 type ActiveTab = 'pendants' | 'events' | 'account'
@@ -199,7 +200,7 @@ export default function AccountPage() {
             <div className="text-right">
               <p className="text-gray-400 text-sm mb-1">Total</p>
               <p className="text-white font-bold text-xl">
-                ${totalAmount.toLocaleString()}
+                {formatCurrency(totalAmount)}
               </p>
             </div>
           </div>

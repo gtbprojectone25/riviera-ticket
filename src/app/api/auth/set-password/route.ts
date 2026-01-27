@@ -1,11 +1,11 @@
-// API Route: POST /api/auth/set-password
-// Define senha do usuário com hash (argon2)
+﻿// API Route: POST /api/auth/set-password
+// Define senha do usuário com hash bcrypt
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
-import argon2 from 'argon2'
+import { hashPassword } from '@/lib/password'
 
 export async function POST(request: NextRequest) {
   try {
@@ -71,8 +71,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Hash da senha com argon2
-    const hashedPassword = await argon2.hash(password)
+    // Hash da senha com bcrypt
+    const hashedPassword = await hashPassword(password)
 
     // Atualizar usuário com senha hashada
     await db
@@ -95,4 +95,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

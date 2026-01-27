@@ -6,35 +6,45 @@ import Stripe from 'stripe'
 import { db } from '@/db'
 import { paymentIntents, carts } from '@/db/schema'
 import { eq } from 'drizzle-orm'
+import { z } from 'zod'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2025-10-29.clover',
 })
 
+const createIntentSchema = z.object({
+  cartId: z.string().min(1),
+  amountCents: z.number().int().nonnegative(),
+  currency: z.string().min(1).default('usd'),
+})
+
 export async function POST(request: NextRequest) {
   try {
-    const { cartId, amount, currency = 'usd' } = await request.json()
+    const body = await request.json()
+    const validation = createIntentSchema.safeParse(body)
 
-    if (!cartId || !amount) {
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'cartId e amount são obrigatórios' },
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
         { status: 400 }
       )
     }
 
+    const { cartId, amountCents, currency } = validation.data
+
     // Verificar cart
     const [cart] = await db.select().from(carts).where(eq(carts.id, cartId)).limit(1)
-    
+
     if (!cart) {
       return NextResponse.json(
-        { error: 'Carrinho não encontrado' },
+        { error: 'Carrinho nao encontrado' },
         { status: 404 }
       )
     }
 
     // Criar payment intent no Stripe
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Convert to cents
+      amount: amountCents,
       currency,
       metadata: {
         cartId,
@@ -50,7 +60,7 @@ export async function POST(request: NextRequest) {
       cartId,
       userId: cart.userId,
       stripePaymentIntentId: paymentIntent.id,
-      amount: Math.round(amount * 100),
+      amountCents,
       currency,
       status: 'PENDING',
     })

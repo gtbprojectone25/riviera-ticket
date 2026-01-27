@@ -46,6 +46,7 @@ export async function GET(
       .where(eq(seats.sessionId, sessionId))
 
     const seatMap = new Map<string, SeatResponse[]>()
+    const now = new Date()
 
     for (const seat of dbSeats) {
       const rowLabel = seat.row
@@ -53,8 +54,9 @@ export async function GET(
         seatMap.set(rowLabel, [])
       }
 
-      const status: SeatStatus =
-        seat.isAvailable && !seat.isReserved ? 'available' : 'occupied'
+      const isHeld = seat.status === 'HELD' && seat.heldUntil && seat.heldUntil > now
+      const isAvailable = seat.status === 'AVAILABLE' || (seat.status === 'HELD' && !isHeld)
+      const status: SeatStatus = isAvailable ? 'available' : 'occupied'
 
       seatMap.get(rowLabel)!.push({
         id: seat.seatId,

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ArrowRight } from 'lucide-react'
 import { useBookingStore } from '@/stores/booking'
+import { formatCurrency } from '@/lib/utils'
 
 export default function ReservationsPage() {
   const router = useRouter()
@@ -86,7 +87,7 @@ export default function ReservationsPage() {
                 <div className="text-right">
                   <p className="text-gray-400 text-sm mb-1">Total</p>
                   <p className="text-white font-bold text-xl">
-                    ${totalAmount.toLocaleString()}
+                    {formatCurrency(totalAmount)}
                   </p>
                 </div>
               </div>
@@ -114,4 +115,3 @@ export default function ReservationsPage() {
     </div>
   )
 }
-

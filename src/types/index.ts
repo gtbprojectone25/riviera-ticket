@@ -76,7 +76,7 @@ export interface PaymentIntent {
   id: string
   cartId: string
   stripePaymentIntentId: string
-  amount: number
+  amountCents: number
   currency: string
   status: 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
   createdAt: Date

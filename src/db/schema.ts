@@ -3,16 +3,20 @@
  * Defines all tables and relationships for the Riviera Ticket system
  */
 
-import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum, index, doublePrecision, jsonb } from 'drizzle-orm/pg-core'
+import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum, index, uniqueIndex, doublePrecision, jsonb } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 
 // Enums
 export const seatTypeEnum = pgEnum('seat_type', ['STANDARD', 'VIP', 'PREMIUM', 'WHEELCHAIR', 'GAP'])
+export const seatStatusEnum = pgEnum('seat_status', ['AVAILABLE', 'HELD', 'SOLD'])
 export const ticketStatusEnum = pgEnum('ticket_status', ['RESERVED', 'CONFIRMED', 'CANCELLED'])
 export const cartStatusEnum = pgEnum('cart_status', ['ACTIVE', 'EXPIRED', 'COMPLETED'])
 export const paymentStatusEnum = pgEnum('payment_status', ['PENDING', 'SUCCEEDED', 'FAILED', 'CANCELLED'])
 export const screenTypeEnum = pgEnum('screen_type', ['IMAX_70MM', 'STANDARD'])
+export const sessionSalesStatusEnum = pgEnum('session_sales_status', ['ACTIVE', 'PAUSED', 'CLOSED'])
+export const auditoriumTypeEnum = pgEnum('auditorium_type', ['IMAX', 'NORMAL'])
 export const userRoleEnum = pgEnum('user_role', ['USER', 'ADMIN', 'SUPER_ADMIN'])
+export const assetSlotEnum = pgEnum('asset_slot', ['HOME_HERO', 'POSTER', 'CINEMA_COVER', 'AUDITORIUM_IMAGE'])
 
 // Users table
 export const users = pgTable('users', {
@@ -47,9 +51,37 @@ export const sessions = pgTable('sessions', {
   availableSeats: integer('available_seats').notNull(),
   basePrice: integer('base_price').notNull(), // in cents
   vipPrice: integer('vip_price').notNull(), // in cents
+  salesStatus: sessionSalesStatusEnum('sales_status').notNull().default('ACTIVE'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-})
+}, (table) => ({
+  auditoriumIdIdx: index('idx_sessions_auditorium_id').on(table.auditoriumId),
+  startTimeIdx: index('idx_sessions_start_time').on(table.startTime),
+  salesStatusIdx: index('idx_sessions_sales_status').on(table.salesStatus),
+}))
+
+// Price rules table
+export const priceRules = pgTable('price_rules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  priority: integer('priority').notNull().default(0),
+  isActive: boolean('is_active').notNull().default(true),
+  cinemaId: text('cinema_id').references(() => cinemas.id),
+  auditoriumId: uuid('auditorium_id').references(() => auditoriums.id),
+  sessionId: uuid('session_id').references(() => sessions.id),
+  daysOfWeek: integer('days_of_week').array(),
+  startMinute: integer('start_minute'),
+  endMinute: integer('end_minute'),
+  priceCents: integer('price_cents').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  priorityIdx: index('idx_price_rules_priority').on(table.priority),
+  cinemaIdx: index('idx_price_rules_cinema_id').on(table.cinemaId),
+  auditoriumIdx: index('idx_price_rules_auditorium_id').on(table.auditoriumId),
+  sessionIdx: index('idx_price_rules_session_id').on(table.sessionId),
+  activeIdx: index('idx_price_rules_active').on(table.isActive),
+}))
 
 // Seats table
 export const seats = pgTable('seats', {
@@ -58,6 +90,12 @@ export const seats = pgTable('seats', {
   row: text('row').notNull(),
   number: integer('number').notNull(),
   seatId: text('seat_id').notNull(), // e.g., "A1", "B12"
+  status: seatStatusEnum('status').notNull().default('AVAILABLE'),
+  heldUntil: timestamp('held_until'),
+  heldBy: uuid('held_by').references(() => users.id),
+  heldByCartId: uuid('held_by_cart_id'),
+  soldAt: timestamp('sold_at'),
+  soldCartId: uuid('sold_cart_id'),
   isAvailable: boolean('is_available').default(true).notNull(),
   isReserved: boolean('is_reserved').default(false).notNull(),
   reservedBy: uuid('reserved_by').references(() => users.id),
@@ -70,6 +108,12 @@ export const seats = pgTable('seats', {
 }, (table) => ({
   sessionIdIdx: index('idx_seats_session_id').on(table.sessionId),
   sessionSeatIdx: index('idx_seats_session_seat').on(table.sessionId, table.seatId),
+  sessionStatusHeldIdx: index('idx_seats_session_status_held_until').on(table.sessionId, table.status, table.heldUntil),
+  statusIdx: index('idx_seats_status').on(table.status),
+  heldUntilIdx: index('idx_seats_held_until').on(table.heldUntil),
+  heldByCartIdx: index('idx_seats_held_by_cart').on(table.heldByCartId),
+  soldCartIdx: index('idx_seats_sold_cart').on(table.soldCartId),
+  soldAtIdx: index('idx_seats_sold_at').on(table.soldAt),
   reservedUntilIdx: index('idx_seats_reserved_until').on(table.reservedUntil),
   availableIdx: index('idx_seats_available').on(table.sessionId, table.isAvailable, table.isReserved),
 }))
@@ -131,13 +175,59 @@ export const auditoriums = pgTable('auditoriums', {
     .notNull()
     .references(() => cinemas.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
+  type: auditoriumTypeEnum('type').notNull().default('NORMAL'),
   format: text('format'), // ex: "IMAX 70mm", "IMAX Digital"
   layout: jsonb('layout').$type<AuditoriumLayout>().notNull(),
+  seatMapConfig: jsonb('seat_map_config').$type<AuditoriumLayout>(),
   totalSeats: integer('total_seats').notNull(),
+  capacity: integer('capacity').notNull().default(0),
   approxCapacity: integer('approx_capacity'),
+  imageAssetId: uuid('image_asset_id').references(() => assets.id),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-})
+}, (table) => ({
+  cinemaIdIdx: index('idx_auditoriums_cinema_id').on(table.cinemaId),
+  typeIdx: index('idx_auditoriums_type').on(table.type),
+  imageAssetIdx: index('idx_auditoriums_image_asset_id').on(table.imageAssetId),
+}))
+
+// Assets table (uploaded images)
+export const assets = pgTable('assets', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  fileName: text('file_name').notNull(),
+  originalName: text('original_name'),
+  url: text('url').notNull(),
+  mimeType: text('mime_type').notNull(),
+  size: integer('size').notNull(),
+  width: integer('width'),
+  height: integer('height'),
+  title: text('title'),
+  alt: text('alt'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  urlIdx: index('idx_assets_url').on(table.url),
+  mimeIdx: index('idx_assets_mime').on(table.mimeType),
+}))
+
+// Image slots table (mapping slots to assets)
+export const imageSlots = pgTable('image_slots', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  slot: assetSlotEnum('slot').notNull(),
+  assetId: uuid('asset_id').references(() => assets.id, { onDelete: 'cascade' }).notNull(),
+  cinemaId: text('cinema_id').references(() => cinemas.id),
+  auditoriumId: uuid('auditorium_id').references(() => auditoriums.id),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  slotIdx: index('idx_image_slots_slot').on(table.slot),
+  assetIdx: index('idx_image_slots_asset').on(table.assetId),
+  scopeIdx: uniqueIndex('uq_image_slots_scope').on(
+    table.slot,
+    table.cinemaId,
+    table.auditoriumId
+  ),
+}))
 
 // Tickets table
 export const tickets = pgTable('tickets', {
@@ -165,6 +255,7 @@ export const tickets = pgTable('tickets', {
   seatIdIdx: index('idx_tickets_seat_id').on(table.seatId),
   statusIdx: index('idx_tickets_status').on(table.status),
   orderIdIdx: index('idx_tickets_order_id').on(table.orderId),
+  sessionSeatIdx: uniqueIndex('uq_tickets_session_seat').on(table.sessionId, table.seatId),
 }))
 
 // Payment intents table (Stripe integration)
@@ -174,7 +265,7 @@ export const paymentIntents = pgTable('payment_intents', {
   userId: uuid('user_id').references(() => users.id),
   stripePaymentIntentId: text('stripe_payment_intent_id').unique(),
   adyenPaymentId: text('adyen_payment_id'), // Adyen payment reference
-  amount: integer('amount').notNull(), // in cents
+  amountCents: integer('amount').notNull(), // in cents
   currency: text('currency').notNull().default('usd'),
   status: paymentStatusEnum('status').notNull().default('PENDING'),
   metadata: text('metadata'), // JSON string for additional data
@@ -302,11 +393,32 @@ export const userSessionsRelations = relations(userSessions, ({ one }) => ({
   }),
 }))
 
+export const assetsRelations = relations(assets, ({ many }) => ({
+  imageSlots: many(imageSlots),
+}))
+
+export const imageSlotsRelations = relations(imageSlots, ({ one }) => ({
+  asset: one(assets, {
+    fields: [imageSlots.assetId],
+    references: [assets.id],
+  }),
+  cinema: one(cinemas, {
+    fields: [imageSlots.cinemaId],
+    references: [cinemas.id],
+  }),
+  auditorium: one(auditoriums, {
+    fields: [imageSlots.auditoriumId],
+    references: [auditoriums.id],
+  }),
+}))
+
 // Types for easier usage
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
 export type Session = typeof sessions.$inferSelect
 export type NewSession = typeof sessions.$inferInsert
+export type PriceRule = typeof priceRules.$inferSelect
+export type NewPriceRule = typeof priceRules.$inferInsert
 export type Seat = typeof seats.$inferSelect
 export type NewSeat = typeof seats.$inferInsert
 export type Cart = typeof carts.$inferSelect
@@ -321,6 +433,12 @@ export type UserSession = typeof userSessions.$inferSelect
 export type NewUserSession = typeof userSessions.$inferInsert
 export type Movie = typeof movies.$inferSelect
 export type NewMovie = typeof movies.$inferInsert
+export type Auditorium = typeof auditoriums.$inferSelect
+export type NewAuditorium = typeof auditoriums.$inferInsert
+export type Asset = typeof assets.$inferSelect
+export type NewAsset = typeof assets.$inferInsert
+export type ImageSlot = typeof imageSlots.$inferSelect
+export type NewImageSlot = typeof imageSlots.$inferInsert
 
 // Email verifications table
 export const emailVerifications = pgTable('email_verifications', {

@@ -2,6 +2,7 @@
 
 import { ShoppingCart } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { formatCurrency } from '@/lib/utils'
 
 interface TicketType {
   id: string
@@ -46,11 +47,11 @@ export function TicketSummary({ tickets }: TicketSummaryProps) {
                 </span>
                 
                 <div className="text-sm text-gray-400">
-                  {ticket.amount}x ${ticket.price}
+                  {ticket.amount}x {formatCurrency(ticket.price)}
                 </div>
               </div>
               <span className="text-white font-semibold">
-                ${(ticket.price * ticket.amount).toLocaleString()}
+                {formatCurrency(ticket.price * ticket.amount)}
               </span>
             </div>
           ))}
@@ -61,7 +62,7 @@ export function TicketSummary({ tickets }: TicketSummaryProps) {
                 Total ({getTotalTickets()} tickets)
               </span>
               <span className="text-2xl font-bold text-green-400">
-                ${getTotalPrice().toLocaleString()}
+                {formatCurrency(getTotalPrice())}
               </span>
             </div>
           </div>

@@ -1,29 +1,29 @@
 /**
  * Admin Authentication Library
- * Funções de autenticação segura para o painel admin
+ * Secure auth for admin panel
  */
 
 import { db } from '@/db'
 import { adminUsers, adminSessions } from '@/db/admin-schema'
 import { eq, and, gt } from 'drizzle-orm'
 import { cookies } from 'next/headers'
-import bcrypt from 'bcryptjs'
 import { randomBytes } from 'crypto'
+import { hashPassword as hashUserPassword, verifyPasswordWithMigration } from '@/lib/password'
 
-const SALT_ROUNDS = 12
 const SESSION_DURATION_DAYS = 7
 const ADMIN_COOKIE_NAME = 'admin_session'
 
 // ============================================
-// PASSWORD HASHING (SEGURO)
+// PASSWORD HASHING
 // ============================================
 
 export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, SALT_ROUNDS)
+  return hashUserPassword(password)
 }
 
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(password, hash)
+  const { valid } = await verifyPasswordWithMigration(password, hash)
+  return valid
 }
 
 // ============================================
@@ -50,33 +50,48 @@ export type AdminAuthResult = {
 }
 
 export async function loginAdmin(
-  email: string, 
+  email: string,
   password: string,
   ipAddress?: string,
   userAgent?: string
 ): Promise<AdminAuthResult> {
   try {
-    // Buscar admin por email
+    const normalizedEmail = email.trim().toLowerCase()
+
     const [admin] = await db
       .select()
       .from(adminUsers)
       .where(and(
-        eq(adminUsers.email, email.toLowerCase()),
+        eq(adminUsers.email, normalizedEmail),
         eq(adminUsers.isActive, true)
       ))
       .limit(1)
 
     if (!admin) {
-      return { success: false, message: 'Credenciais inválidas' }
+      return { success: false, message: 'ADMIN_NOT_FOUND' }
     }
 
-    // Verificar senha
-    const isValidPassword = await verifyPassword(password, admin.hashedPassword)
+    if (!admin.hashedPassword) {
+      return { success: false, message: 'ADMIN_PASSWORD_NOT_SET' }
+    }
+
+    const { valid: isValidPassword, needsRehash } = await verifyPasswordWithMigration(
+      password,
+      admin.hashedPassword
+    )
+
     if (!isValidPassword) {
-      return { success: false, message: 'Credenciais inválidas' }
+      return { success: false, message: 'INVALID_CREDENTIALS' }
     }
 
-    // Criar sessão
+    if (needsRehash) {
+      const newHash = await hashUserPassword(password)
+      await db
+        .update(adminUsers)
+        .set({ hashedPassword: newHash, updatedAt: new Date() })
+        .where(eq(adminUsers.id, admin.id))
+    }
+
     const token = generateSessionToken()
     const expiresAt = new Date(Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000)
 
@@ -88,13 +103,11 @@ export async function loginAdmin(
       userAgent,
     })
 
-    // Atualizar último login
     await db
       .update(adminUsers)
       .set({ lastLoginAt: new Date(), updatedAt: new Date() })
       .where(eq(adminUsers.id, admin.id))
 
-    // Definir cookie
     const cookieStore = await cookies()
     cookieStore.set(ADMIN_COOKIE_NAME, token, {
       httpOnly: true,
@@ -124,13 +137,11 @@ export async function logoutAdmin(): Promise<void> {
   const token = cookieStore.get(ADMIN_COOKIE_NAME)?.value
 
   if (token) {
-    // Invalidar sessão no banco
     await db
       .update(adminSessions)
       .set({ expiresAt: new Date() })
       .where(eq(adminSessions.token, token))
 
-    // Remover cookie
     cookieStore.delete(ADMIN_COOKIE_NAME)
   }
 }
@@ -142,7 +153,6 @@ export async function getAdminFromSession(): Promise<AdminAuthResult['admin'] | 
 
     if (!token) return null
 
-    // Buscar sessão válida
     const [session] = await db
       .select()
       .from(adminSessions)
@@ -154,7 +164,6 @@ export async function getAdminFromSession(): Promise<AdminAuthResult['admin'] | 
 
     if (!session) return null
 
-    // Buscar admin
     const [admin] = await db
       .select()
       .from(adminUsers)
@@ -205,23 +214,24 @@ export async function createAdminUser(data: {
   role?: 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'SUPPORT'
 }): Promise<{ success: boolean; adminId?: string; error?: string }> {
   try {
-    // Verificar se email já existe
+    const normalizedEmail = data.email.trim().toLowerCase()
+
     const existing = await db
       .select({ id: adminUsers.id })
       .from(adminUsers)
-      .where(eq(adminUsers.email, data.email.toLowerCase()))
+      .where(eq(adminUsers.email, normalizedEmail))
       .limit(1)
 
     if (existing.length > 0) {
-      return { success: false, error: 'Email já cadastrado' }
+      return { success: false, error: 'Email ja cadastrado' }
     }
 
-    const hashedPassword = await hashPassword(data.password)
+    const hashedPassword = await hashUserPassword(data.password)
 
     const [admin] = await db
       .insert(adminUsers)
       .values({
-        email: data.email.toLowerCase(),
+        email: normalizedEmail,
         name: data.name,
         hashedPassword,
         role: data.role || 'SUPPORT',
@@ -231,7 +241,7 @@ export async function createAdminUser(data: {
     return { success: true, adminId: admin.id }
   } catch (error) {
     console.error('Create admin user error:', error)
-    return { success: false, error: 'Erro ao criar usuário' }
+    return { success: false, error: 'Erro ao criar usuario' }
   }
 }
 
@@ -241,8 +251,7 @@ export async function createAdminUser(data: {
 
 export async function seedInitialAdmin(): Promise<void> {
   const email = 'growthhub85@gmail.com'
-  
-  // Verificar se já existe
+
   const existing = await db
     .select({ id: adminUsers.id })
     .from(adminUsers)
@@ -250,7 +259,7 @@ export async function seedInitialAdmin(): Promise<void> {
     .limit(1)
 
   if (existing.length > 0) {
-    console.log('Admin já existe:', email)
+    console.log('Admin ja existe:', email)
     return
   }
 
@@ -262,8 +271,8 @@ export async function seedInitialAdmin(): Promise<void> {
   })
 
   if (result.success) {
-    console.log('✅ Admin criado:', email)
+    console.log('Admin criado:', email)
   } else {
-    console.error('❌ Erro ao criar admin:', result.error)
+    console.error('Erro ao criar admin:', result.error)
   }
 }

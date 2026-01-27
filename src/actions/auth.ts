@@ -5,6 +5,7 @@ import { users, userSessions } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { cookies } from 'next/headers'
 import { z } from 'zod'
+import { randomBytes } from 'node:crypto'
 import { 
   hashPassword, 
   verifyPasswordWithMigration 
@@ -22,7 +23,7 @@ type ActionState = {
 }
 
 function generateSessionToken(): string {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36)
+  return randomBytes(32).toString('hex')
 }
 
 const loginSchema = z.object({
@@ -56,12 +57,13 @@ export async function loginUser(prevState: ActionState | null, formData: FormDat
     }
 
     const { email, password } = validatedFields.data
+    const normalizedEmail = email.trim().toLowerCase()
 
     // Buscar usuário por email
     const existingUser = await db
       .select()
       .from(users)
-      .where(eq(users.email, email))
+      .where(eq(users.email, normalizedEmail))
       .limit(1)
 
     if (existingUser.length === 0) {
@@ -72,6 +74,12 @@ export async function loginUser(prevState: ActionState | null, formData: FormDat
     }
 
     const user = existingUser[0]
+    if (!user.hashedPassword) {
+      return {
+        success: false,
+        message: 'PASSWORD_NOT_SET'
+      }
+    }
 
     // Verificar senha com suporte a migração de hash legado
     const { valid: isValidPassword, needsRehash } = await verifyPasswordWithMigration(

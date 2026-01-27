@@ -1,8 +1,9 @@
 'use server'
 
 import { db } from '@/db'
+import { holdSeats, releaseExpiredReservations } from '@/db/queries'
 import { sessions, seats, carts, cartItems } from '@/db/schema'
-import { eq, and, lte, inArray } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { z } from 'zod'
 
 type SeatRow = typeof seats.$inferSelect
@@ -11,6 +12,8 @@ export type SelectedSeat = {
   price: number
   type: 'STANDARD' | 'VIP' | 'PREMIUM'
 }
+
+const HOLD_MINUTES = 10
 
 const reserveSeatSchema = z.object({
   sessionId: z.string(),
@@ -27,17 +30,25 @@ export async function getAvailableSeats(sessionId: string) {
       .where(eq(seats.sessionId, sessionId))) as SeatRow[]
 
     // Mapear assentos com status de disponibilidade
-    const availableSeats = allSeats.map((seat: SeatRow) => ({
-      id: seat.id,
-      sessionId,
-      row: seat.row,
-      number: seat.number,
-      seatId: seat.seatId,
-      isAvailable: seat.isAvailable && !seat.isReserved,
-      isReserved: seat.isReserved,
-      price: seat.price,
-      type: seat.type
-    }))
+    const now = new Date()
+    const availableSeats = allSeats.map((seat: SeatRow) => {
+      const status = seat.status
+      const isHeld = status === 'HELD' && seat.heldUntil && seat.heldUntil > now
+      const isSold = status === 'SOLD'
+      const isAvailable = !isHeld && !isSold
+
+      return ({
+        id: seat.id,
+        sessionId,
+        row: seat.row,
+        number: seat.number,
+        seatId: seat.seatId,
+        isAvailable,
+        isReserved: isHeld,
+        price: seat.price,
+        type: seat.type
+      })
+    })
 
     return {
       success: true,
@@ -58,130 +69,184 @@ export async function reserveSeats(data: z.infer<typeof reserveSeatSchema>) {
     const validatedData = reserveSeatSchema.parse(data)
     const { sessionId, seatIds, userId } = validatedData
 
-    // Verificar se assentos ainda estão disponíveis
-    const seatsToReserve = await db
-      .select()
-      .from(seats)
-      .where(
-        and(
-          eq(seats.sessionId, sessionId),
-          inArray(seats.id, seatIds),
-          eq(seats.isAvailable, true),
-          eq(seats.isReserved, false)
-        )
-      )
-
-    if (seatsToReserve.length !== seatIds.length) {
+    const uniqueSeatIds = Array.from(new Set(seatIds))
+    if (uniqueSeatIds.length === 0) {
       return {
         success: false,
-        message: 'Alguns assentos já foram reservados'
+        message: 'Nenhum assento selecionado'
       }
     }
 
-    // Reservar assentos temporariamente (10 minutos)
-    const reservedUntil = new Date(Date.now() + 10 * 60 * 1000)
-    
-    await db
-      .update(seats)
-      .set({
-        isReserved: true,
-        reservedBy: userId || null,
-        reservedUntil,
-        updatedAt: new Date()
+    const resolvedSeats: SelectedSeat[] = []
+    const uuidRegex = /^[0-9a-fA-F-]{8}-[0-9a-fA-F-4]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/
+
+    for (const seatId of uniqueSeatIds) {
+      if (uuidRegex.test(seatId)) {
+        const [dbSeat] = await db
+          .select()
+          .from(seats)
+          .where(and(eq(seats.id, seatId), eq(seats.sessionId, sessionId)))
+          .limit(1)
+
+        if (!dbSeat) {
+          throw new Error(`Assento nao encontrado no banco: ${seatId}`)
+        }
+
+        resolvedSeats.push({
+          id: dbSeat.id,
+          price: dbSeat.price,
+          type: dbSeat.type,
+        })
+        continue
+      }
+
+      const [dbSeat] = await db
+        .select()
+        .from(seats)
+        .where(
+          and(
+            eq(seats.sessionId, sessionId),
+            eq(seats.seatId, seatId)
+          )
+        )
+        .limit(1)
+
+      if (!dbSeat) {
+        throw new Error(`Assento nao encontrado no banco: ${seatId}`)
+      }
+
+      resolvedSeats.push({
+        id: dbSeat.id,
+        price: dbSeat.price,
+        type: dbSeat.type,
       })
-      .where(inArray(seats.id, seatIds))
+    }
+
+    const result = await createCart(userId ?? null, sessionId, resolvedSeats)
+
+    if (!result.success) {
+      return result
+    }
 
     return {
       success: true,
-      message: 'Assentos reservados com sucesso'
+      message: 'Assentos reservados com sucesso',
+      cartId: result.cartId,
+      heldUntil: result.heldUntil,
     }
 
   } catch (error) {
     console.error('Erro ao reservar assentos:', error)
     return {
       success: false,
-      message: 'Erro interno do servidor'
+      message: error instanceof Error && error.message === 'SEAT_OCCUPIED'
+        ? 'Alguns assentos ja estao ocupados'
+        : 'Erro interno do servidor'
     }
   }
 }
 
 export async function createCart(userId: string | null, sessionId: string, selectedSeats: SelectedSeat[]) {
   try {
-    // Calcular total
+    if (selectedSeats.length === 0) {
+      return {
+        success: false,
+        message: 'Nenhum assento selecionado'
+      }
+    }
+
     const totalAmount = selectedSeats.reduce((sum, seat) => sum + seat.price, 0)
-
-    // Criar carrinho
-    const cart = await db.insert(carts).values({
-      userId,
-      sessionId,
-      totalAmount,
-      status: 'ACTIVE',
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutos
-    }).returning()
-
-    const cartId = cart[0].id
-
-    // Adicionar itens ao carrinho
-    // selectedSeats.id pode ser tanto o UUID do assento (se vindo direto do banco)
-    // quanto um identificador tipo "A1" usado no front. Neste caso, fazemos o mapeamento
-    // para o assento real no banco usando sessionId + seatId (ex: "A01").
     const uuidRegex = /^[0-9a-fA-F-]{8}-[0-9a-fA-F-4]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/
 
-    const cartItemsData = []
+    const result = await db.transaction(async (tx) => {
+      const now = new Date()
+      const heldUntil = new Date(now.getTime() + HOLD_MINUTES * 60 * 1000)
 
-    for (const seat of selectedSeats) {
-      let dbSeatId = seat.id
+      const resolvedSeats: Array<{ seatId: string; price: number }> = []
 
-      if (!uuidRegex.test(dbSeatId)) {
-        const match = seat.id.match(/^([A-Za-z]+)(\d+)$/)
-        if (!match) {
-          throw new Error(`Formato de assento inválido: ${seat.id}`)
-        }
+      for (const seat of selectedSeats) {
+        let dbSeatId = seat.id
 
-        const [, row, numStr] = match
-        const seatNumber = Number(numStr)
-        const paddedSeatId = `${row.toUpperCase()}${seatNumber.toString().padStart(2, '0')}`
+        if (!uuidRegex.test(dbSeatId)) {
+          const match = seat.id.match(/^([A-Za-z]+)(\d+)$/)
+          if (!match) {
+            throw new Error(`Formato de assento invalido: ${seat.id}`)
+          }
 
-        const [dbSeat] = await db
-          .select()
-          .from(seats)
-          .where(
-            and(
-              eq(seats.sessionId, sessionId),
-              eq(seats.seatId, paddedSeatId)
+          const [, row, numStr] = match
+          const seatNumber = Number(numStr)
+          const paddedSeatId = `${row.toUpperCase()}${seatNumber.toString().padStart(2, '0')}`
+
+          const [dbSeat] = await tx
+            .select()
+            .from(seats)
+            .where(
+              and(
+                eq(seats.sessionId, sessionId),
+                eq(seats.seatId, paddedSeatId)
+              )
             )
-          )
-          .limit(1)
+            .limit(1)
 
-        if (!dbSeat) {
-          throw new Error(`Assento não encontrado no banco: ${paddedSeatId}`)
+          if (!dbSeat) {
+            throw new Error(`Assento nao encontrado no banco: ${paddedSeatId}`)
+          }
+
+          dbSeatId = dbSeat.id
         }
 
-        dbSeatId = dbSeat.id
+        resolvedSeats.push({
+          seatId: dbSeatId,
+          price: seat.price
+        })
       }
 
-      cartItemsData.push({
-        cartId,
-        seatId: dbSeatId,
-        price: seat.price
-      })
-    }
+      const seatIds = resolvedSeats.map((seat) => seat.seatId)
+      const uniqueSeatIds = Array.from(new Set(seatIds))
+      if (uniqueSeatIds.length !== seatIds.length) {
+        throw new Error('Assentos duplicados no carrinho')
+      }
 
-    if (cartItemsData.length > 0) {
-      await db.insert(cartItems).values(cartItemsData)
-    }
+      const [cart] = await tx.insert(carts).values({
+        userId,
+        sessionId,
+        totalAmount,
+        status: 'ACTIVE',
+        expiresAt: heldUntil
+      }).returning()
+
+      const cartItemsData = resolvedSeats.map((seat) => ({
+        cartId: cart.id,
+        seatId: seat.seatId,
+        price: seat.price
+      }))
+
+      if (cartItemsData.length > 0) {
+        await tx.insert(cartItems).values(cartItemsData)
+      }
+
+      const holdResult = await holdSeats(cart.id, uniqueSeatIds, HOLD_MINUTES, tx)
+
+      return {
+        cartId: cart.id,
+        heldUntil: holdResult.heldUntil
+      }
+    })
 
     return {
       success: true,
-      cartId: cart[0].id,
-      message: 'Carrinho criado com sucesso'
+      cartId: result.cartId,
+      message: 'Carrinho criado com sucesso',
+      heldUntil: result.heldUntil
     }
 
   } catch (error) {
     console.error('Erro ao criar carrinho:', error)
     return {
       success: false,
-      message: 'Erro interno do servidor'
+      message: error instanceof Error && error.message === 'SEAT_OCCUPIED'
+        ? 'Alguns assentos ja estao ocupados'
+        : 'Erro interno do servidor'
     }
   }
 }
@@ -211,17 +276,7 @@ export async function getShowtimes(cinemaName?: string) {
 
 export async function clearExpiredReservations() {
   try {
-    const now = new Date()
-    
-    await db
-      .update(seats)
-      .set({
-        isReserved: false,
-        reservedBy: null,
-        reservedUntil: null,
-        updatedAt: now
-      })
-      .where(lte(seats.reservedUntil, now))
+    await releaseExpiredReservations()
 
     return { success: true }
 
@@ -259,4 +314,5 @@ export async function getSessionById(sessionId: string) {
     }
   }
 }
+
 

@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { Minus, Plus } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils'
 
 interface TicketCounterProps {
   label: string
@@ -35,7 +36,7 @@ export function TicketCounter({
       <div className="flex justify-between items-center mb-4">
         <h4 className="text-xl font-semibold text-white">{label}</h4>
         <div className="bg-gray-600 text-white px-4 py-2 rounded-full font-semibold">
-          ${price}
+          {formatCurrency(price)}
         </div>
       </div>
       

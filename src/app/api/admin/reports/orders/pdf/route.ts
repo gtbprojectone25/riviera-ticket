@@ -12,7 +12,7 @@ import PDFDocument from 'pdfkit'
 
 type OrderRow = {
   id: string
-  amount: number
+  amountCents: number
   status: string | null
   createdAt: Date
   userId: string | null
@@ -52,9 +52,9 @@ export async function GET(request: NextRequest) {
     const [totals] = await db
       .select({
         count: sql<number>`COUNT(*)`,
-        totalAmount: sql<number>`COALESCE(SUM(${paymentIntents.amount}), 0)`,
+        totalAmount: sql<number>`COALESCE(SUM(${paymentIntents.amountCents}), 0)`,
         paidCount: sql<number>`SUM(CASE WHEN ${paymentIntents.status} = 'SUCCEEDED' THEN 1 ELSE 0 END)`,
-        paidAmount: sql<number>`COALESCE(SUM(CASE WHEN ${paymentIntents.status} = 'SUCCEEDED' THEN ${paymentIntents.amount} ELSE 0 END), 0)`,
+        paidAmount: sql<number>`COALESCE(SUM(CASE WHEN ${paymentIntents.status} = 'SUCCEEDED' THEN ${paymentIntents.amountCents} ELSE 0 END), 0)`,
       })
       .from(paymentIntents)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     const orders = (await db
       .select({
         id: paymentIntents.id,
-        amount: paymentIntents.amount,
+        amountCents: paymentIntents.amountCents,
         status: paymentIntents.status,
         createdAt: paymentIntents.createdAt,
         userId: paymentIntents.userId,
@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
       const rowData = [
         order.id.slice(0, 8) + '...',
         order.userName.slice(0, 20),
-        `R$ ${(order.amount / 100).toFixed(2)}`,
+        `R$ ${(order.amountCents / 100).toFixed(2)}`,
         order.status || 'PENDING',
         new Date(order.createdAt).toLocaleDateString('pt-BR'),
       ]

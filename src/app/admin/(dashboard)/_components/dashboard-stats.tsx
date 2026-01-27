@@ -15,7 +15,7 @@ async function getStats() {
 
   // Faturamento hoje
   const [todayRevenue] = await db
-    .select({ total: sql<number>`COALESCE(SUM(${paymentIntents.amount}), 0)` })
+    .select({ total: sql<number>`COALESCE(SUM(${paymentIntents.amountCents}), 0)` })
     .from(paymentIntents)
     .where(and(
       eq(paymentIntents.status, 'SUCCEEDED'),
@@ -24,7 +24,7 @@ async function getStats() {
 
   // Faturamento do mês
   const [monthRevenue] = await db
-    .select({ total: sql<number>`COALESCE(SUM(${paymentIntents.amount}), 0)` })
+    .select({ total: sql<number>`COALESCE(SUM(${paymentIntents.amountCents}), 0)` })
     .from(paymentIntents)
     .where(and(
       eq(paymentIntents.status, 'SUCCEEDED'),

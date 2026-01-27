@@ -4,13 +4,14 @@ import { useState, type FormEvent } from 'react'
 import { useStripe, useElements, PaymentElement } from '@stripe/react-stripe-js'
 import { Button } from '@/components/ui/button'
 import { Lock } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils'
 
 interface StripeCheckoutFormProps {
-  amount: number
+  amountCents: number
   onSuccess: () => void
 }
 
-export function StripeCheckoutForm({ amount, onSuccess }: StripeCheckoutFormProps) {
+export function StripeCheckoutForm({ amountCents, onSuccess }: StripeCheckoutFormProps) {
   const stripe = useStripe()
   const elements = useElements()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -68,7 +69,7 @@ export function StripeCheckoutForm({ amount, onSuccess }: StripeCheckoutFormProp
           </>
         ) : (
           <>
-            Pay ${amount.toLocaleString()}
+            Pay {formatCurrency(amountCents)}
             <Lock className="w-5 h-5" />
           </>
         )}
@@ -76,4 +77,3 @@ export function StripeCheckoutForm({ amount, onSuccess }: StripeCheckoutFormProp
     </form>
   )
 }
-

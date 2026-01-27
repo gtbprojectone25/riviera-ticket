@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { CheckCircle, Download, Share2, Calendar, Clock, Armchair, QrCode, MapPin } from 'lucide-react'
 import { useBookingStore } from '@/stores/booking'
 import { qrcodeService } from '@/lib/qrcode-service'
+import { formatCurrency } from '@/lib/utils'
 
 export default function ConfirmationPage() {
   const router = useRouter()
@@ -232,7 +233,7 @@ export default function ConfirmationPage() {
               <div className="flex justify-between items-center mt-2">
                 <span className="text-gray-400">Total Paid</span>
                 <span className="text-green-400 text-xl font-bold">
-                  ${totalAmount.toLocaleString()}
+                  {formatCurrency(totalAmount)}
                 </span>
               </div>
             </div>

@@ -4,7 +4,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { db } from '@/db'
-import { paymentIntents, carts, tickets, seats, cartItems, users, sessions, type Session } from '@/db/schema'
+import { consumeSeatsAndCreateTickets, releaseCartHolds } from '@/db/queries'
+import { paymentIntents, carts, tickets, users, sessions, type Session } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { barcodeService } from '@/lib/barcode-service'
 import { emailService } from '@/lib/email-service'
@@ -75,109 +76,153 @@ export async function POST(request: NextRequest) {
 }
 
 async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
-  // Atualizar payment intent no banco
-  const [dbPaymentIntent] = await db
-    .select()
-    .from(paymentIntents)
-    .where(eq(paymentIntents.stripePaymentIntentId, paymentIntent.id))
-    .limit(1)
+  const result = await db.transaction(async (tx) => {
+    const now = new Date()
 
-  if (!dbPaymentIntent) {
-    console.error('Payment intent not found in database:', paymentIntent.id)
-    return
-  }
+    const [dbPaymentIntent] = await tx
+      .select()
+      .from(paymentIntents)
+      .where(eq(paymentIntents.stripePaymentIntentId, paymentIntent.id))
+      .limit(1)
 
-  await db
-    .update(paymentIntents)
-    .set({ status: 'SUCCEEDED', updatedAt: new Date() })
-    .where(eq(paymentIntents.id, dbPaymentIntent.id))
+    if (!dbPaymentIntent) {
+      console.error('Payment intent not found in database:', paymentIntent.id)
+      return null
+    }
 
-  // Atualizar cart
-  await db
-    .update(carts)
-    .set({ status: 'COMPLETED', updatedAt: new Date() })
-    .where(eq(carts.id, dbPaymentIntent.cartId))
+    if (dbPaymentIntent.status !== 'SUCCEEDED') {
+      await tx
+        .update(paymentIntents)
+        .set({ status: 'SUCCEEDED', updatedAt: now })
+        .where(eq(paymentIntents.id, dbPaymentIntent.id))
+    }
 
-  // Criar tickets e gerar barcodes
-  const items = await db
-    .select({
-      cartItem: cartItems,
-      seat: seats,
+    await tx
+      .update(carts)
+      .set({ status: 'COMPLETED', updatedAt: now })
+      .where(eq(carts.id, dbPaymentIntent.cartId))
+
+    const guestEmail =
+      paymentIntent.receipt_email ||
+      paymentIntent.metadata?.email ||
+      paymentIntent.metadata?.customer_email ||
+      null
+
+    const {
+      tickets: createdTickets,
+      items,
+      alreadyProcessed,
+      userId: resolvedUserId,
+      guestEmail: resolvedGuestEmail,
+    } = await consumeSeatsAndCreateTickets(tx, {
+      cartId: dbPaymentIntent.cartId,
+      userId: dbPaymentIntent.userId,
+      guestEmail,
     })
-    .from(cartItems)
-    .innerJoin(seats, eq(seats.id, cartItems.seatId))
-    .where(eq(cartItems.cartId, dbPaymentIntent.cartId))
 
-  const createdTickets = []
-  let sessionData: Session | null = null
-
-  for (const item of items) {
-    // Buscar sessão se ainda não tiver
-    if (!sessionData) {
-      const [session] = await db
+    let sessionData: Session | null = null
+    if (items[0]) {
+      const [session] = await tx
         .select()
         .from(sessions)
-        .where(eq(sessions.id, item.seat.sessionId))
+        .where(eq(sessions.id, items[0].seat.sessionId))
         .limit(1)
       sessionData = session
     }
 
-    // Criar ticket
-    const [ticket] = await db.insert(tickets).values({
-      sessionId: item.seat.sessionId,
-      userId: dbPaymentIntent.userId!,
-      seatId: item.seat.id,
-      cartId: dbPaymentIntent.cartId,
-      ticketType: item.seat.type,
-      price: item.cartItem.price,
-      status: 'CONFIRMED',
-      purchaseDate: new Date(),
-    }).returning()
+    return {
+      dbPaymentIntent,
+      createdTickets,
+      items,
+      alreadyProcessed,
+      sessionData,
+      resolvedUserId,
+      resolvedGuestEmail,
+    }
+  })
 
-    // Gerar barcode
-    const barcodeData = barcodeService.generateBarcodeData(ticket.id, dbPaymentIntent.cartId)
+  if (!result) {
+    return
+  }
+
+  if (result.alreadyProcessed) {
+    return
+  }
+
+  for (const ticket of result.createdTickets) {
+    const barcodeData = barcodeService.generateBarcodeData(ticket.id, result.dbPaymentIntent.cartId)
     const { realPath, blurredPath } = await barcodeService.saveBarcode(ticket.id, barcodeData)
 
-    // Atualizar ticket com paths do barcode
     await db.update(tickets).set({
       barcodePath: realPath,
       barcodeBlurredPath: blurredPath,
       barcodeData,
-      barcodeRevealedAt: sessionData?.startTime || new Date(),
+      barcodeRevealedAt: result.sessionData?.startTime || new Date(),
     }).where(eq(tickets.id, ticket.id))
-
-    createdTickets.push(ticket)
   }
 
-  // Enviar email de confirmação
-  if (dbPaymentIntent.userId && sessionData) {
-    const [user] = await db.select().from(users).where(eq(users.id, dbPaymentIntent.userId)).limit(1)
-    if (user) {
-      await emailService.sendTicketConfirmation(user.email, {
-        orderId: dbPaymentIntent.cartId,
-        movieTitle: sessionData.movieTitle,
-        cinemaName: sessionData.cinemaName,
-        date: new Date(sessionData.startTime).toLocaleDateString('pt-BR'),
-        time: new Date(sessionData.startTime).toLocaleTimeString('pt-BR'),
-        seats: items.map((item: { seat: typeof seats.$inferSelect; cartItem: typeof cartItems.$inferSelect }) => item.seat.seatId),
-        totalAmount: dbPaymentIntent.amount / 100,
+  if (result.sessionData) {
+    let recipientEmail: string | null = null
+
+    if (result.resolvedUserId) {
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, result.resolvedUserId))
+        .limit(1)
+      if (user) {
+        recipientEmail = user.email
+      }
+    }
+
+    if (!recipientEmail && result.resolvedGuestEmail) {
+      recipientEmail = result.resolvedGuestEmail
+    }
+
+    if (recipientEmail) {
+      await emailService.sendTicketConfirmation(recipientEmail, {
+        orderId: result.dbPaymentIntent.cartId,
+        movieTitle: result.sessionData.movieTitle,
+        cinemaName: result.sessionData.cinemaName,
+        date: new Date(result.sessionData.startTime).toLocaleDateString('pt-BR'),
+        time: new Date(result.sessionData.startTime).toLocaleTimeString('pt-BR'),
+        seats: result.items.map((item) => item.seat.seatId),
+        totalAmount: result.dbPaymentIntent.amountCents / 100,
       })
     }
   }
 }
 
 async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
-  const [dbPaymentIntent] = await db
-    .select()
-    .from(paymentIntents)
-    .where(eq(paymentIntents.stripePaymentIntentId, paymentIntent.id))
-    .limit(1)
+  await db.transaction(async (tx) => {
+    const now = new Date()
 
-  if (dbPaymentIntent) {
-    await db
+    const [dbPaymentIntent] = await tx
+      .select()
+      .from(paymentIntents)
+      .where(eq(paymentIntents.stripePaymentIntentId, paymentIntent.id))
+      .limit(1)
+
+    if (!dbPaymentIntent) {
+      console.error('Payment intent not found in database:', paymentIntent.id)
+      return
+    }
+
+    await tx
       .update(paymentIntents)
-      .set({ status: 'FAILED', updatedAt: new Date() })
+      .set({ status: 'FAILED', updatedAt: now })
       .where(eq(paymentIntents.id, dbPaymentIntent.id))
-  }
+
+    await releaseCartHolds(tx, {
+      cartId: dbPaymentIntent.cartId,
+      userId: dbPaymentIntent.userId,
+    })
+
+    await tx
+      .update(carts)
+      .set({ status: 'EXPIRED', updatedAt: now })
+      .where(eq(carts.id, dbPaymentIntent.cartId))
+  })
 }
+
 

@@ -13,6 +13,7 @@ import { SeatLegend } from './SeatLegend';
 import { SeatMap } from './SeatMap';
 import { SelectedSeatsPanel } from './SelectedSeatsPanel';
 import { ApplyButton } from './ApplyButton';
+import { formatCurrency } from '@/lib/utils';
 
 // Store e Tipos
 import { useBookingStore, type FinalizedTicket } from '@/stores/booking';
@@ -193,10 +194,10 @@ export default function SeatSelectionPage() {
                     <div className="flex justify-between items-center">
                         <div>
                             <h3 className="text-white font-semibold text-base">{ticket.name}</h3>
-                            <p className="text-gray-500 text-xs mt-1">{ticket.amount}x ${ticket.price}</p>
+                            <p className="text-gray-500 text-xs mt-1">{ticket.amount}x {formatCurrency(ticket.price)}</p>
                         </div>
                         <div className="px-4 py-2 rounded-full bg-[#2A2A2A] border border-white/5 text-white text-xs font-bold">
-                            ${ticket.price}
+                            {formatCurrency(ticket.price)}
                         </div>
                     </div>
                     {index < summaryTickets.length - 1 && (
