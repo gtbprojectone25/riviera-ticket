@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { Button } from '@/components/ui/button'
 import { Minus, Plus } from 'lucide-react'
@@ -45,7 +45,7 @@ export function TicketCounter({
       <ul className="space-y-2">
         {description.map((desc, index) => (
           <li key={index} className="text-xs text-gray-300 flex items-start gap-2">
-            <span className="text-gray-500">�</span>
+            <span className="text-gray-500">•</span>
             <span>{desc}</span>
           </li>
         ))}
@@ -82,3 +82,4 @@ export function TicketCounter({
     </div>
   )
 }
+
