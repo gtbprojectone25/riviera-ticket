@@ -5,28 +5,39 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { paymentIntents, carts } from '@/db/schema'
 import { eq } from 'drizzle-orm'
+import { z } from 'zod'
 
 const ADYEN_API_KEY = process.env.ADYEN_API_KEY || ''
 const ADYEN_MERCHANT_ACCOUNT = process.env.ADYEN_MERCHANT_ACCOUNT || ''
 const ADYEN_BASE_URL = process.env.ADYEN_BASE_URL || 'https://checkout-test.adyen.com/v70'
 
+const createPaymentSchema = z.object({
+  cartId: z.string().min(1),
+  amountCents: z.number().int().nonnegative(),
+  currency: z.string().min(1).default('USD'),
+  paymentMethod: z.object({}).passthrough(),
+})
+
 export async function POST(request: NextRequest) {
   try {
-    const { cartId, amount, currency = 'USD', paymentMethod } = await request.json()
+    const body = await request.json()
+    const validation = createPaymentSchema.safeParse(body)
 
-    if (!cartId || !amount) {
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'cartId e amount são obrigatórios' },
+        { error: 'Dados invalidos', details: validation.error.flatten().fieldErrors },
         { status: 400 }
       )
     }
+
+    const { cartId, amountCents, currency, paymentMethod } = validation.data
 
     // Verificar cart
     const [cart] = await db.select().from(carts).where(eq(carts.id, cartId)).limit(1)
     
     if (!cart) {
       return NextResponse.json(
-        { error: 'Carrinho não encontrado' },
+        { error: 'Carrinho nao encontrado' },
         { status: 404 }
       )
     }
@@ -34,7 +45,7 @@ export async function POST(request: NextRequest) {
     // Criar payment no Adyen
     const paymentRequest = {
       amount: {
-        value: Math.round(amount * 100), // Convert to cents
+        value: amountCents,
         currency,
       },
       reference: cartId,
@@ -65,8 +76,8 @@ export async function POST(request: NextRequest) {
     await db.insert(paymentIntents).values({
       cartId,
       userId: cart.userId,
-      adyenPaymentId: paymentResponse.pspReference, // Adyen-specific field
-      amount: Math.round(amount * 100),
+      adyenPaymentId: paymentResponse.pspReference,
+      amountCents,
       currency,
       status: 'PENDING',
       metadata: JSON.stringify(paymentResponse),
@@ -75,14 +86,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       resultCode: paymentResponse.resultCode,
       pspReference: paymentResponse.pspReference,
-      action: paymentResponse.action, // For 3DS or redirect
+      action: paymentResponse.action,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : 'Erro ao criar payment'
     console.error('Error creating Adyen payment:', error)
     return NextResponse.json(
-      { error: error.message || 'Erro ao criar payment' },
+      { error: message },
       { status: 500 }
     )
   }
 }
-

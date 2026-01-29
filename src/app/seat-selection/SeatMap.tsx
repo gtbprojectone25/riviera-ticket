@@ -200,21 +200,21 @@ export function SeatMap({ rows, selectedSeats, onSeatClick, allowedTypes, readOn
                   className="flex flex-col items-center min-w-[350px]"
               >
                   {/* TELA / SCREEN */}
-                  <div className="mb-12 flex flex-col items-center opacity-80 select-none w-full max-w-[320px]">
-                      <span className="text-[8px] font-bold text-gray-400 mb-1 tracking-widest uppercase">SCREEN</span>
+                  <div className="mb-10 flex flex-col items-center opacity-80 select-none w-full max-w-[320px]">
+                      <span className="text-xs font-bold text-gray-400 mb-1 tracking-widest uppercase">SCREEN</span>
                       {/* Curva da tela estilo Figma */}
                       <div className="w-full h-8 relative overflow-hidden">
-                           <div className="absolute top-0 left-[-10%] right-[-10%] h-[200%] border-t-4 border-gray-600 rounded-[50%] opacity-50 shadow-[0_-4px_10px_rgba(255,255,255,0.1)]"></div>
+                           <div className="absolute top-0 left-[-10%] right-[-10%] h-[200%] border-t-4 border-gray-600 rounded-full opacity-50 shadow-[0_-4px_10px_rgba(255,255,255,0.1)]"></div>
                       </div>
-                      <span className="text-[6px] text-gray-500 -mt-4 tracking-[0.2em] uppercase">FRONT OF THEATER</span>
+                      <span className="text-xs text-gray-500 -mt-3 tracking-[0.2em] uppercase">FRONT OF THEATER</span>
                   </div>
 
                   {/* GRID */}
-                  <div className="flex flex-col gap-1.5 select-none">
+                  <div className="flex flex-col gap-2 select-none">
                       {/* Header Numérico */}
                       <div className="flex gap-1 ml-[26px] mb-1">
                           {columnNumbers.map(num => (
-                              <div key={num} className="w-5 h-5 flex items-center justify-center bg-[#27272a] rounded-sm text-[7px] font-bold text-gray-400">
+                              <div key={num} className="w-6 h-6 flex items-center justify-center bg-[#27272a] rounded-sm text-xs font-bold text-gray-400">
                                   {num}
                               </div>
                           ))}
@@ -222,16 +222,16 @@ export function SeatMap({ rows, selectedSeats, onSeatClick, allowedTypes, readOn
 
                       {/* Fileiras */}
                       {rows.map((row) => (
-                          <div key={row.label} className="flex items-center gap-1.5">
+                          <div key={row.label} className="flex items-center gap-2">
                               {/* Label da Fileira (A, B, C...) */}
-                              <div className="w-5 h-5 flex items-center justify-center bg-[#27272a] rounded-sm text-[8px] font-bold text-gray-400">
+                              <div className="w-6 h-6 flex items-center justify-center bg-[#27272a] rounded-sm text-xs font-bold text-gray-400">
                                   {row.label}
                               </div>
                               
                               {/* Assentos */}
                               <div className="flex gap-1">
                                   {row.seats.map((seat) => {
-                                      if (seat.type === 'GAP') return <div key={seat.id} className="w-5 h-5" />;
+                                      if (seat.type === 'GAP') return <div key={seat.id} className="w-6 h-6" />;
 
                                       const isSelected = selectedSeats.includes(seat.id);
                                       const allTypesAllowed = allowedTypes.length === 0;
@@ -254,7 +254,7 @@ export function SeatMap({ rows, selectedSeats, onSeatClick, allowedTypes, readOn
                                               onClick={() => canClick && onSeatClick(row.label, seat.number, seat.id)}
                                               style={style}
                                               className={`
-                                                  w-5 h-5 rounded-sm flex items-center justify-center 
+                                                  w-6 h-6 rounded-sm flex items-center justify-center 
                                                   transition-all duration-200 relative
                                                   ${canClick ? 'hover:brightness-110 cursor-pointer' : 'cursor-not-allowed'}
                                                   ${isSelected ? 'z-10' : ''}

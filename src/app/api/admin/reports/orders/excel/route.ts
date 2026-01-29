@@ -13,7 +13,7 @@ import ExcelJS from 'exceljs'
 type OrderRow = {
   id: string
   stripeId: string | null
-  amount: number
+  amountCents: number
   status: string | null
   createdAt: Date
   userId: string | null
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       .select({
         id: paymentIntents.id,
         stripeId: paymentIntents.stripePaymentIntentId,
-        amount: paymentIntents.amount,
+        amountCents: paymentIntents.amountCents,
         status: paymentIntents.status,
         createdAt: paymentIntents.createdAt,
         userId: paymentIntents.userId,
@@ -159,7 +159,7 @@ export async function GET(request: NextRequest) {
         userEmail: order.userEmail,
         sessionTitle: order.sessionTitle,
         cinemaName: order.cinemaName,
-        amount: (order.amount / 100).toFixed(2),
+        amount: (order.amountCents / 100).toFixed(2),
         status: order.status,
         createdAt: new Date(order.createdAt).toLocaleString('pt-BR'),
       })

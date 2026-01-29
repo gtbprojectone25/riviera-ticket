@@ -1,16 +1,18 @@
-// API Route: POST /api/auth/verify-email
-// Verifica código de 5 dígitos, ativa conta, criptografa dados e retorna JWT
+﻿// API Route: POST /api/auth/verify-email
+// Verifica código de 5 dígitos, ativa conta, criptografa dados e cria sessão via cookie
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { users, emailVerifications } from '@/db/schema'
+import { randomBytes } from 'node:crypto'
+import { users, emailVerifications, userSessions } from '@/db/schema'
 import { eq, and, desc, gt } from 'drizzle-orm'
-import jwt from 'jsonwebtoken'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { encryptionService } from '@/lib/encryption-service'
 import { webhookService } from '@/lib/webhook-service'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
+function generateSessionToken(): string {
+  return randomBytes(32).toString('hex')
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -140,14 +142,15 @@ export async function POST(request: NextRequest) {
       .set({ emailVerified: true, updatedAt: new Date() })
       .where(eq(users.id, user.id))
 
-    // Gerar JWT
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    )
+    // Criar sessão
+    const sessionToken = generateSessionToken()
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
 
-    // TODO: Salvar sessão no banco (userSessions table)
+    await db.insert(userSessions).values({
+      userId: user.id,
+      sessionToken,
+      expiresAt
+    })
 
     // Enviar webhook de notificação para API externa (código confirmado)
     webhookService.sendNotificacaoWebhook({
@@ -159,9 +162,9 @@ export async function POST(request: NextRequest) {
       console.error('Erro ao enviar webhook de notificacao (nao bloqueia o fluxo):', error)
     })
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
-      token,
+      token: sessionToken,
       user: {
         id: user.id,
         email: user.email,
@@ -169,6 +172,15 @@ export async function POST(request: NextRequest) {
         surname: user.surname
       }
     })
+
+    response.cookies.set('session', sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      expires: expiresAt
+    })
+
+    return response
   } catch (error) {
     console.error('❌ Error in verify-email:', error)
     return NextResponse.json(

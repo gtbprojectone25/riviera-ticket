@@ -1,7 +1,8 @@
-'use client'
+﻿'use client'
 
 import { Button } from '@/components/ui/button'
 import { Minus, Plus } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils'
 
 interface TicketCounterProps {
   label: string
@@ -24,54 +25,53 @@ export function TicketCounter({
   currentTotal,
   isVip = false
 }: TicketCounterProps) {
+  const cardClass = 'bg-linear-to-b from-white/5 via-white/2 to-black/95'
+
   return (
-    <div className={`bg-[#000000] border border-gray-800 rounded-lg p-6 ${isVip ? 'relative' : ''}`}>
-      {/* Gradiente VIP */}
-      {isVip && (
-        <div className="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-purple-500 via-blue-500 to-yellow-500 rounded-t-lg"></div>
-      )}
-      
-      {/* Título e Preço */}
-      <div className="flex justify-between items-center mb-4">
-        <h4 className="text-xl font-semibold text-white">{label}</h4>
-        <div className="bg-gray-600 text-white px-4 py-2 rounded-full font-semibold">
-          ${price}
+    <div className={`border border-white/10 rounded-xl p-4 backdrop-blur-sm ${cardClass} ${isVip ? 'relative' : ''}`}>
+      <div className="flex items-center justify-between">
+        <h4 className="text-base font-semibold text-white">{label}</h4>
+        <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-semibold">
+          {formatCurrency(price)}
         </div>
       </div>
-      
-      
-                 <hr className="border-gray-700 mb-4" />
 
-      {/* Descrição */}
-      <ul className="space-y-2 mb-6">
+      {isVip ? (
+        <div className="my-3 -mx-4 h-1 w-[calc(100%+2rem)] bg-linear-to-r from-purple-500 via-blue-500 to-yellow-500" />
+      ) : (
+        <div className="my-3 h-px w-full bg-white/10" />
+      )}
+
+      <ul className="space-y-2">
         {description.map((desc, index) => (
-          <li key={index} className="text-sm text-gray-300 flex items-start">
-            <span className="text-gray-500 mr-2">•</span>
-            {desc}
+          <li key={index} className="text-xs text-gray-300 flex items-start gap-2">
+            <span className="text-gray-500">•</span>
+            <span>{desc}</span>
           </li>
         ))}
       </ul>
 
-      {/* Seletor de Quantidade */}
-      <div className="space-y-3">
-        <p className="text-sm font-medium text-white">Amount</p>
-        <div className="flex items-center justify-center gap-4">
+      <div className="mt-4 flex items-center justify-between">
+        <p className="text-xs font-medium text-gray-300">Amount</p>
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="icon"
-            className="bg-gray-800 border-gray-700 hover:bg-gray-700 text-white rounded-full"
+            className="h-11 w-11 bg-gray-900 border-gray-700 hover:bg-gray-800 text-white rounded-full"
             onClick={() => onAmountChange(-1)}
             disabled={amount <= 0}
           >
             <Minus className="h-4 w-4" />
           </Button>
-          <span className="text-2xl font-bold text-white w-8 text-center">
+
+          <div className="w-10 rounded-md bg-gray-900 px-2 py-1 text-center text-base font-semibold text-white">
             {amount}
-          </span>
+          </div>
+
           <Button
             variant="outline"
             size="icon"
-            className="bg-gray-800 border-gray-700 hover:bg-gray-700 text-white rounded-full"
+            className="h-11 w-11 bg-gray-900 border-gray-700 hover:bg-gray-800 text-white rounded-full"
             onClick={() => onAmountChange(1)}
             disabled={currentTotal >= maxTotal}
           >
@@ -82,3 +82,4 @@ export function TicketCounter({
     </div>
   )
 }
+

@@ -7,12 +7,14 @@ import { ChevronLeft, Clock } from 'lucide-react'
 // Componentes Visuais / UI
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { OdysseyLoading } from '@/components/ui/OdysseyLoading';
 
 // Componentes do Mapa
 import { SeatLegend } from './SeatLegend';
 import { SeatMap } from './SeatMap';
 import { SelectedSeatsPanel } from './SelectedSeatsPanel';
 import { ApplyButton } from './ApplyButton';
+import { formatCurrency } from '@/lib/utils';
 
 // Store e Tipos
 import { useBookingStore, type FinalizedTicket } from '@/stores/booking';
@@ -134,8 +136,9 @@ export default function SeatSelectionPage() {
 
   return (
     <div className="min-h-screen text-white relative overflow-x-hidden bg-black/60">
+      <OdysseyLoading isLoading={seatsLoading} />
       <div className="relative z-10 flex flex-col items-center min-h-screen pt-6">
-        <div className="w-full max-w-md space-y-6 relative rounded-2xl p-10 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
+        <div className="w-full max-w-md space-y-6 relative rounded-xl p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
              {/* Urgency Banner */}
                       <div className="w-full bg-[#0266FC] p-3 flex items-center justify-center rounded-lg">
                         <Clock className="h-4 w-4 text-white shrink-0 mr-2" />
@@ -147,7 +150,7 @@ export default function SeatSelectionPage() {
             <div className="space-y-1">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold text-white">The Odyssey</h1>
-                    <Badge variant="secondary" className="bg-[#2A2A2A] hover:bg-[#333] text-gray-300 px-4 py-1.5 rounded-full border-0 font-medium">
+                    <Badge variant="secondary" className="bg-[#2A2A2A] hover:bg-[#333] text-gray-300 px-3 py-1 border-0 font-medium">
                         Pre-order
                     </Badge>
                 </div>
@@ -180,23 +183,23 @@ export default function SeatSelectionPage() {
                             <div className="bg-white/10 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-bold">
                                 9.7/10
                             </div>
-                            <span className="text-[10px] font-medium text-white">Extraordinary</span>
+                            <span className="text-xs font-medium text-white">Extraordinary</span>
                         </div>
-                    <p className="text-[10px] text-gray-500">2.987 reviews</p>
+                    <p className="text-xs text-gray-500">2.987 reviews</p>
                 </div>
             </div>
 
             {/* Resumo dos Tickets */}
-            <div className="bg-[#171C20] rounded-2xl p-5 border border-white/5">
+            <div className="bg-[#171C20] rounded-xl p-5 border border-white/5">
               {summaryTickets.map((ticket, index) => (
                 <div key={ticket.id}>
                     <div className="flex justify-between items-center">
                         <div>
                             <h3 className="text-white font-semibold text-base">{ticket.name}</h3>
-                            <p className="text-gray-500 text-xs mt-1">{ticket.amount}x ${ticket.price}</p>
+                            <p className="text-gray-500 text-xs mt-1">{ticket.amount}x {formatCurrency(ticket.price)}</p>
                         </div>
-                        <div className="px-4 py-2 rounded-full bg-[#2A2A2A] border border-white/5 text-white text-xs font-bold">
-                            ${ticket.price}
+                        <div className="px-3 py-1 rounded-full bg-[#2A2A2A] border border-white/5 text-white text-xs font-bold">
+                            {formatCurrency(ticket.price)}
                         </div>
                     </div>
                     {index < summaryTickets.length - 1 && (

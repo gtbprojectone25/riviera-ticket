@@ -7,6 +7,7 @@ import { ChevronLeft, CreditCard, Lock } from 'lucide-react'
 import { useBookingStore } from '@/stores/booking'
 import { createCart, type SelectedSeat } from '@/actions/bookings'
 import { useAuth } from '@/context/auth'
+import { formatCurrency } from '@/lib/utils'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements } from '@stripe/react-stripe-js'
 import { StripeCheckoutForm } from './StripeCheckoutForm'
@@ -61,7 +62,7 @@ export default function PaymentPage() {
         setCartId(cartResult.cartId)
         setCurrentCartId(cartResult.cartId)
 
-        const totalAmount = finalizedTickets.reduce((acc, t) => acc + t.price, 0)
+        const totalAmountCents = finalizedTickets.reduce((acc, t) => acc + t.price, 0)
 
         const intentResponse = await fetch('/api/payment/stripe/create-intent', {
           method: 'POST',
@@ -70,7 +71,7 @@ export default function PaymentPage() {
           },
           body: JSON.stringify({
             cartId: cartResult.cartId,
-            amount: totalAmount,
+            amountCents: totalAmountCents,
             currency: 'usd',
           }),
         })
@@ -100,12 +101,12 @@ export default function PaymentPage() {
   }, [finalizedTickets, selectedSessionId, user?.id, router, clientSecret, setCartId])
 
   const handleSuccess = useCallback(() => {
-    const totalAmount = finalizedTickets.reduce((acc, t) => acc + t.price, 0)
+    const totalAmountCents = finalizedTickets.reduce((acc, t) => acc + t.price, 0)
     
     // Salvar dados do pagamento na store
     setPaymentData({
       orderId: currentCartId || `ORD-${Date.now()}`,
-      totalAmount,
+      totalAmount: totalAmountCents,
       paymentDate: new Date().toISOString(),
       status: 'succeeded',
     })
@@ -117,13 +118,13 @@ export default function PaymentPage() {
     return null
   }
 
-  const totalAmount = finalizedTickets.reduce((acc, t) => acc + t.price, 0)
+  const totalAmountCents = finalizedTickets.reduce((acc, t) => acc + t.price, 0)
   const ticketCount = finalizedTickets.length
 
   return (
     <div className="min-h-screen text-white relative overflow-x-hidden bg-black/60">
       {/* Top Alert */}
-      <div className="bg-[#0066FF] text-white text-center py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium tracking-wide relative z-20">
+      <div className="bg-[#0066FF] text-white text-center py-3 px-3 text-xs font-medium tracking-wide relative z-20">
         To guarantee your place, finish within 10:00 minutes (only 4 per session).
       </div>
 
@@ -146,7 +147,7 @@ export default function PaymentPage() {
         {/* Content */}
         <div className="container mx-auto px-4 py-6 max-w-md relative z-10">
           {/* Order Summary */}
-          <div className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl overflow-hidden border border-gray-700 shadow-2xl mb-6 p-6">
+          <div className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-xl overflow-hidden border border-gray-700 shadow-2xl mb-6 p-6">
             <h2 className="text-xl font-bold text-white mb-4">Order Summary</h2>
 
             <div className="space-y-3 mb-4">
@@ -168,7 +169,7 @@ export default function PaymentPage() {
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400 text-lg">Total</span>
                   <span className="text-white font-bold text-2xl">
-                    ${totalAmount.toLocaleString()}
+                    {formatCurrency(totalAmountCents)}
                   </span>
                 </div>
               </div>
@@ -176,7 +177,7 @@ export default function PaymentPage() {
           </div>
 
           {/* Payment Methods */}
-          <div className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl overflow-hidden border border-gray-700 shadow-2xl mb-6 p-6">
+          <div className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-xl overflow-hidden border border-gray-700 shadow-2xl mb-6 p-6">
             <h2 className="text-xl font-bold text-white mb-4">Payment Method</h2>
 
             <div className="space-y-3">
@@ -207,7 +208,7 @@ export default function PaymentPage() {
           {!clientSecret || !stripePromise ? (
             <Button
               disabled
-              className="w-full bg-[#0066FF] text-white py-6 rounded-xl text-base font-bold flex items-center justify-center gap-2"
+              className="w-full bg-[#0066FF] text-white h-12 rounded-xl text-base font-semibold flex items-center justify-center gap-2"
             >
               {isInitializingPayment ? (
                 <>
@@ -223,7 +224,7 @@ export default function PaymentPage() {
             </Button>
           ) : (
             <Elements stripe={stripePromise} options={{ clientSecret }}>
-              <StripeCheckoutForm amount={totalAmount} onSuccess={handleSuccess} />
+              <StripeCheckoutForm amountCents={totalAmountCents} onSuccess={handleSuccess} />
             </Elements>
           )}
         </div>
@@ -231,4 +232,3 @@ export default function PaymentPage() {
     </div>
   )
 }
-

@@ -2,6 +2,7 @@
 
 import { ShoppingCart } from 'lucide-react'
 import Image from 'next/image'
+import { formatCurrency } from '@/lib/utils'
 
 interface TicketType {
   id: string
@@ -45,11 +46,11 @@ export function PremiumTicketSummary({ tickets }: PremiumTicketSummaryProps) {
                   Ticket {ticket.name === 'VIP' ? 'Vip' : 'Standard'}
                 </span>
                 <div className="text-sm text-gray-400 mt-1">
-                  {ticket.amount}x ${ticket.price}
+                  {ticket.amount}x {formatCurrency(ticket.price)}
                 </div>
               </div>
               <div className="px-4 py-2 rounded-full bg-[#2A2A2A] border border-white/5 text-white text-xs font-bold">
-                ${ticket.price}
+                {formatCurrency(ticket.price)}
               </div>
             </div>
             {index < ticketsWithAmount.length - 1 && (
@@ -64,7 +65,7 @@ export function PremiumTicketSummary({ tickets }: PremiumTicketSummaryProps) {
               Total ({getTotalTickets()} tickets)
             </span>
             <span className="text-2xl font-bold text-green-400">
-              ${getTotalPrice().toLocaleString()}
+              {formatCurrency(getTotalPrice())}
             </span>
           </div>
         </div>

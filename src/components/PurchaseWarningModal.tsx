@@ -24,10 +24,8 @@ export function PurchaseWarningModal({
     const router = useRouter()
 
     const [timeLeft, setTimeLeft] = useState(15)
-    const [progress, setProgress] = useState(58)
-
-    // Handler para nunca deixar progress abaixo de 75%
-    const normalizeProgress = (value: number) => Math.max(value, 58)
+    const totalSeconds = 15
+    const [progress, setProgress] = useState(0)
 
     useEffect(() => {
         if (!open) return
@@ -44,14 +42,30 @@ export function PurchaseWarningModal({
                 }
                 return prev - 1
             })
-
-            // Exemplo: aumentar progresso ao longo do tempo
-            setProgress(prev => normalizeProgress(prev + 3))
-
         }, 1000)
 
         return () => clearInterval(interval)
     }, [open, onTimeout, router])
+
+    useEffect(() => {
+        if (!open) return
+        setProgress(0)
+        let rafId = 0
+        const start = performance.now()
+        const durationMs = totalSeconds * 1000
+
+        const tick = (now: number) => {
+            const elapsed = now - start
+            const next = Math.min(100, (elapsed / durationMs) * 100)
+            setProgress(next)
+            if (next < 100) {
+                rafId = requestAnimationFrame(tick)
+            }
+        }
+
+        rafId = requestAnimationFrame(tick)
+        return () => cancelAnimationFrame(rafId)
+    }, [open, totalSeconds])
 
 
     return (
@@ -59,7 +73,7 @@ export function PurchaseWarningModal({
             <DialogOverlay className="bg-black/10 backdrop-blur-sm" />
             <DialogContent
                 key={open ? 'open' : 'closed'}
-                className="w-[92vw] max-w-[370px] bg-gray-800/80 border-gray-800/60 backdrop-blur-md rounded-2xl p-0 shadow-xl flex flex-col items-center justify-center m-2"
+                className="w-[92vw] max-w-[360px] bg-gray-800/80 border-gray-800/60 backdrop-blur-md rounded-2xl p-0 shadow-xl flex flex-col items-center justify-center mx-auto"
                 style={{ minWidth: 0, maxHeight: '90vh', overflow: 'visible' }}
             >
                 <DialogTitle className="sr-only">
@@ -75,10 +89,10 @@ export function PurchaseWarningModal({
                         </p>
                         <div className="space-y-1">
                             <Progress
-                                value={normalizeProgress(progress)}
+                                value={progress}
                                 className="w-full h-[5px] bg-gray-800"
                             />
-                            <p className="text-[11px] text-gray-400">
+                            <p className="text-xs text-gray-400">
                                 Você será redirecionado em {timeLeft} segundo{timeLeft !== 1 ? 's' : ''}...
                             </p>
                         </div>

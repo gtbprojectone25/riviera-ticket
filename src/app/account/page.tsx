@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Image from 'next/image'
+import { formatCurrency } from '@/lib/utils'
 
 
 type ActiveTab = 'pendants' | 'events' | 'account'
@@ -153,7 +154,7 @@ export default function AccountPage() {
           key={tab}
           onClick={() => setActiveTab(tab)}
           className={`flex-1 py-4 px-4 text-center text-sm font-medium transition-colors ${activeTab === tab
-              ? 'border-b-2 border-[#0066FF] text-[#0066FF]'
+              ? 'border-b-2 border-blue-600 text-blue-600'
               : 'text-gray-400 hover:text-white'
             }`}
         >
@@ -199,7 +200,7 @@ export default function AccountPage() {
             <div className="text-right">
               <p className="text-gray-400 text-sm mb-1">Total</p>
               <p className="text-white font-bold text-xl">
-                ${totalAmount.toLocaleString()}
+                {formatCurrency(totalAmount)}
               </p>
             </div>
           </div>

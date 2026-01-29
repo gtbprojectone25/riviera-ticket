@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { CheckCircle, Download, Share2, Calendar, Clock, Armchair, QrCode, MapPin } from 'lucide-react'
 import { useBookingStore } from '@/stores/booking'
 import { qrcodeService } from '@/lib/qrcode-service'
+import { formatCurrency } from '@/lib/utils'
 
 export default function ConfirmationPage() {
   const router = useRouter()
@@ -158,8 +159,8 @@ export default function ConfirmationPage() {
     <div className="min-h-screen text-white bg-black/60">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-800">
-        <div className="text-white font-bold">RIVIERA</div>
-        <div className="text-blue-400 font-bold text-xl">IMAX</div>
+        <div className="text-white font-semibold text-base">RIVIERA</div>
+        <div className="text-blue-400 font-semibold text-base">IMAX</div>
       </div>
 
       <div className="container mx-auto px-4 py-8 max-w-md">
@@ -232,7 +233,7 @@ export default function ConfirmationPage() {
               <div className="flex justify-between items-center mt-2">
                 <span className="text-gray-400">Total Paid</span>
                 <span className="text-green-400 text-xl font-bold">
-                  ${totalAmount.toLocaleString()}
+                  {formatCurrency(totalAmount)}
                 </span>
               </div>
             </div>
@@ -314,7 +315,7 @@ export default function ConfirmationPage() {
         <div className="space-y-3">
           <Button 
             onClick={handleNewBooking}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
           >
             Book Another Movie
           </Button>
@@ -322,7 +323,7 @@ export default function ConfirmationPage() {
           <Button 
             variant="outline"
             onClick={() => router.push('/my-tickets')}
-            className="w-full bg-gray-800 border-gray-600 text-white hover:bg-gray-700 py-3 rounded-lg"
+            className="w-full bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
           >
             View My Tickets
           </Button>

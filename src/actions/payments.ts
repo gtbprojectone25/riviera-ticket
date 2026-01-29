@@ -8,7 +8,7 @@ import { z } from 'zod'
 const paymentSchema = z.object({
   cartId: z.string(),
   userId: z.string().optional(),
-  amount: z.number(),
+  amountCents: z.number().int().nonnegative(),
   paymentMethod: z.enum(['credit_card', 'debit_card', 'pix']),
   cardDetails: z.object({
     number: z.string(),
@@ -21,7 +21,7 @@ const paymentSchema = z.object({
 export async function processPayment(data: z.infer<typeof paymentSchema>) {
   try {
     const validatedData = paymentSchema.parse(data)
-    const { cartId, userId, amount, paymentMethod, cardDetails } = validatedData
+    const { cartId, userId, amountCents, paymentMethod, cardDetails } = validatedData
 
     // Verificar se o carrinho existe e está ativo
     const cart = await db
@@ -42,7 +42,7 @@ export async function processPayment(data: z.infer<typeof paymentSchema>) {
 
     // Simular processamento de pagamento
     // Em produção, integrar com gateway de pagamento real
-    const isPaymentSuccessful = await simulatePaymentProcessing(amount, paymentMethod, cardDetails)
+    const isPaymentSuccessful = await simulatePaymentProcessing(amountCents, paymentMethod, cardDetails)
 
     if (!isPaymentSuccessful) {
       return {
@@ -55,7 +55,7 @@ export async function processPayment(data: z.infer<typeof paymentSchema>) {
     const payment = await db.insert(paymentIntents).values({
       cartId,
       userId: userId || null,
-      amount,
+      amountCents,
       currency: 'brl',
       status: 'SUCCEEDED',
       stripePaymentIntentId: generateTransactionId(),
@@ -118,7 +118,7 @@ export async function getPaymentStatus(paymentId: string) {
 
 // Função auxiliar para simular processamento de pagamento
 async function simulatePaymentProcessing(
-  amount: number, 
+  amountCents: number,
   method: string, 
   cardDetails?: { number: string; holder: string; expiry: string; cvv: string }
 ): Promise<boolean> {

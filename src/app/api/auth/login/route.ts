@@ -1,57 +1,82 @@
 // API Route: POST /api/auth/login
-// Autentica usuário com email e senha (hashed com argon2) e retorna JWT
+// Authenticates user and creates session cookie
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { users } from '@/db/schema'
+import { users, userSessions } from '@/db/schema'
 import { eq } from 'drizzle-orm'
-import argon2 from 'argon2'
-import jwt from 'jsonwebtoken'
+import { randomBytes } from 'node:crypto'
+import { hashPassword, verifyPasswordWithMigration } from '@/lib/password'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'
+function generateSessionToken(): string {
+  return randomBytes(32).toString('hex')
+}
 
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json()
 
-    if (!email || !password) {
+    if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
       return NextResponse.json(
-        { error: 'Email e senha são obrigatórios' },
+        { error: 'Email e senha sao obrigatorios' },
         { status: 400 }
       )
     }
 
+    const normalizedEmail = email.trim().toLowerCase()
+
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.email, email))
+      .where(eq(users.email, normalizedEmail))
       .limit(1)
 
-    if (!user || !user.hashedPassword) {
+    if (!user) {
       return NextResponse.json(
-        { error: 'Credenciais inválidas' },
+        { error: 'Credenciais invalidas' },
         { status: 401 }
       )
     }
 
-    const isValid = await argon2.verify(user.hashedPassword, password)
+    if (!user.hashedPassword) {
+      return NextResponse.json(
+        { error: 'PASSWORD_NOT_SET' },
+        { status: 401 }
+      )
+    }
+
+    const { valid: isValid, needsRehash } = await verifyPasswordWithMigration(
+      password,
+      user.hashedPassword
+    )
 
     if (!isValid) {
       return NextResponse.json(
-        { error: 'Credenciais inválidas' },
+        { error: 'Credenciais invalidas' },
         { status: 401 }
       )
     }
 
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    )
+    if (needsRehash) {
+      const newHash = await hashPassword(password)
+      await db
+        .update(users)
+        .set({ hashedPassword: newHash, updatedAt: new Date() })
+        .where(eq(users.id, user.id))
+    }
 
-    return NextResponse.json({
+    const sessionToken = generateSessionToken()
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+
+    await db.insert(userSessions).values({
+      userId: user.id,
+      sessionToken,
+      expiresAt,
+    })
+
+    const response = NextResponse.json({
       success: true,
-      token,
+      token: sessionToken,
       user: {
         id: user.id,
         email: user.email,
@@ -59,6 +84,15 @@ export async function POST(request: NextRequest) {
         surname: user.surname,
       },
     })
+
+    response.cookies.set('session', sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      expires: expiresAt,
+    })
+
+    return response
   } catch (error) {
     console.error('Erro ao fazer login:', error)
     return NextResponse.json(
@@ -67,4 +101,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

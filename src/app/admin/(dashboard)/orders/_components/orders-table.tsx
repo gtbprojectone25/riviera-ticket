@@ -13,7 +13,7 @@ type SearchParams = Promise<{ [key: string]: string | undefined }>
 type OrderRow = {
   id: string
   stripeId: string | null
-  amount: number
+  amountCents: number
   status: string | null
   createdAt: Date
   cartId: string | null
@@ -52,7 +52,7 @@ async function getOrders(params: { [key: string]: string | undefined }) {
     .select({
       id: paymentIntents.id,
       stripeId: paymentIntents.stripePaymentIntentId,
-      amount: paymentIntents.amount,
+      amountCents: paymentIntents.amountCents,
       status: paymentIntents.status,
       createdAt: paymentIntents.createdAt,
       cartId: paymentIntents.cartId,
@@ -204,7 +204,7 @@ export async function OrdersTable({ searchParams }: { searchParams: SearchParams
                   </td>
                   <td className="px-4 py-4">
                     <p className="text-sm font-medium text-white">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.amount / 100)}
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.amountCents / 100)}
                     </p>
                   </td>
                   <td className="px-4 py-4">

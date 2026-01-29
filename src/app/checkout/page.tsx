@@ -12,6 +12,7 @@ import {
   FeatureCards,
   BuyerGuarantee,
 } from './_components/premium-summary'
+import { formatCurrency } from '@/lib/utils'
 
 type SessionApi = {
   id: string
@@ -63,7 +64,7 @@ export default function CheckoutPage() {
   }, [selectedSessionId])
 
   // Dados derivados
-  const totalAmount = finalizedTickets.reduce((acc, t) => acc + t.price, 0)
+  const totalAmountCents = finalizedTickets.reduce((acc, t) => acc + t.price, 0)
   const selectedSeatIds = finalizedTickets
     .map((t) => t.assignedSeatId)
     .filter(Boolean) as string[]
@@ -119,7 +120,7 @@ export default function CheckoutPage() {
 
       <div className="relative z-10 flex flex-col items-center min-h-screen pt-6">
         
-        <div className="w-full max-w-md space-y-6 relative rounded-2xl p-10 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)] pb-40">
+        <div className="w-full max-w-md space-y-6 relative rounded-xl p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)] pb-32">
            {/* Urgency Banner */}
           <div className="w-full bg-[#0266FC] p-3 flex items-center justify-center rounded-lg">
             <Clock className="h-4 w-4 text-white shrink-0 mr-2" />
@@ -137,7 +138,7 @@ export default function CheckoutPage() {
           </button>
 
           {/* Title */}
-          <h1 className="text-3xl font-bold text-white mb-2">Order summary</h1>
+          <h1 className="text-2xl font-bold text-white">Order summary</h1>
 
           {/* Divider */}
           <div className="h-px bg-white/10 w-full" />
@@ -208,7 +209,7 @@ export default function CheckoutPage() {
 
           {/* Your Accent (Seats) */}
           <div className="mt-6 space-y-4">
-            <div className="space-y-1">
+            <div className="space-y-2">
               <h3 className="text-xs text-gray-400 font-medium uppercase tracking-wider">
                 Your Accent
               </h3>
@@ -218,7 +219,7 @@ export default function CheckoutPage() {
             </div>
 
             {/* Map Visualization */}
-            <div className="w-full bg-[#111] rounded-xl border border-white/5 p-2 min-h-[300px] flex items-center justify-center">
+            <div className="w-full bg-[#111] rounded-xl border border-white/5 p-3 min-h-[300px] flex items-center justify-center">
               <SeatMap
                 rows={seatRows}
                 selectedSeats={selectedSeatIds}
@@ -246,14 +247,14 @@ export default function CheckoutPage() {
           </div>
 
           {/* Go to Payment Button */}
-          <div className="fixed bottom-0 left-0 w-full p-6 bg-linear-to-t from-black via-black to-transparent pt-12 z-30 max-w-md mx-auto right-0">
+          <div className="fixed bottom-0 left-0 w-full p-4 bg-linear-to-t from-black via-black to-transparent pt-10 z-30 max-w-md mx-auto right-0">
             <Button
-              className="w-full bg-[#0066FF] hover:bg-[#0052cc] text-white py-6 rounded-xl text-base font-bold shadow-[0_0_20px_rgba(0,102,255,0.3)] transition-all active:scale-[0.98]"
+              className="w-full bg-[#0066FF] hover:bg-[#0052cc] text-white h-12 rounded-xl text-base font-semibold shadow-lg transition-all active:scale-[0.98]"
               onClick={() => {
                 router.push('/register?returnUrl=/payment')
               }}
             >
-              Go to payment ${totalAmount.toLocaleString()}
+              Go to payment {formatCurrency(totalAmountCents)}
             </Button>
           </div>
         </div>
@@ -261,4 +262,3 @@ export default function CheckoutPage() {
     </div>
   )
 }
-

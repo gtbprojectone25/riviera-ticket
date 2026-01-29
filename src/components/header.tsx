@@ -32,7 +32,7 @@ export function Header({ className }: HeaderProps) {
       "sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60",
       className
     )}>
-      <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className="flex h-14 items-center justify-between px-4">
         {/* Logo Section */}
         <div className="flex items-center space-x-4">
           <Link href="/" className="flex items-center space-x-2 cursor-pointer">
@@ -48,13 +48,13 @@ export function Header({ className }: HeaderProps) {
         </div>
 
         {/* User Actions */}
-        <div className="flex items-center space-x-2 mr-24 ">
+        <div className="flex items-center space-x-2 mr-20">
           {/** Esconde o botão SIGN IN nessas rotas */}
           {!['/account', '/register', '/login'].some((p) => pathname.startsWith(p)) && (
             <Button
               variant="ghost"
               size="sm"
-              className="text-white hover:text-white/80 font-extrabold cursor-pointer"
+              className="text-white hover:text-white/80 font-semibold"
               onClick={() => router.push('/login')}
             >
               Sign In

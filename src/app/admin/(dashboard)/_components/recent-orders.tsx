@@ -7,7 +7,7 @@ import { ptBR } from 'date-fns/locale'
 
 type PaymentRow = Pick<
   typeof paymentIntents.$inferSelect,
-  'id' | 'amount' | 'status' | 'createdAt' | 'cartId' | 'userId'
+  'id' | 'amountCents' | 'status' | 'createdAt' | 'cartId' | 'userId'
 >
 
 type OrderWithDetails = PaymentRow & {
@@ -20,7 +20,7 @@ async function getRecentOrders() {
   const recentPayments = (await db
     .select({
       id: paymentIntents.id,
-      amount: paymentIntents.amount,
+      amountCents: paymentIntents.amountCents,
       status: paymentIntents.status,
       createdAt: paymentIntents.createdAt,
       cartId: paymentIntents.cartId,
@@ -109,7 +109,7 @@ export async function RecentOrders() {
                   {new Intl.NumberFormat('pt-BR', { 
                     style: 'currency', 
                     currency: 'BRL' 
-                  }).format(order.amount / 100)}
+                  }).format(order.amountCents / 100)}
                 </p>
                 <p className="text-xs text-gray-500">
                   {formatDistanceToNow(new Date(order.createdAt), { 

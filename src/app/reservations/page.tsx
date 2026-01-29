@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ArrowRight } from 'lucide-react'
 import { useBookingStore } from '@/stores/booking'
+import { formatCurrency } from '@/lib/utils'
 
 export default function ReservationsPage() {
   const router = useRouter()
@@ -39,7 +40,7 @@ export default function ReservationsPage() {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-800 relative z-20">
-          <button className="flex-1 py-4 px-4 text-center border-b-2 border-[#0066FF] text-[#0066FF] font-medium">
+          <button className="flex-1 py-4 px-4 text-center border-b-2 border-blue-600 text-blue-600 font-medium">
             Pendants
           </button>
           <button
@@ -86,7 +87,7 @@ export default function ReservationsPage() {
                 <div className="text-right">
                   <p className="text-gray-400 text-sm mb-1">Total</p>
                   <p className="text-white font-bold text-xl">
-                    ${totalAmount.toLocaleString()}
+                    {formatCurrency(totalAmount)}
                   </p>
                 </div>
               </div>
@@ -114,4 +115,3 @@ export default function ReservationsPage() {
     </div>
   )
 }
-

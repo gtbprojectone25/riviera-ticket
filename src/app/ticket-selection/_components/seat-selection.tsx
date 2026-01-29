@@ -44,7 +44,7 @@ export function SeatSelection({
           seatId,
           available: seatData ? seatData.isAvailable : false,
           type: isVIP ? 'VIP' : 'STANDARD',
-          price: isVIP ? 4999 : 2999 // $49.99 for VIP, $29.99 for Standard
+          price: isVIP ? 44900 : 34900 // $449.00 for VIP, $349.00 for Standard
         })
       }
       
@@ -144,11 +144,11 @@ export function SeatSelection({
         <div className="flex justify-center items-center space-x-6 text-xs">
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 bg-gray-100 border-2 border-gray-300 rounded-t-lg"></div>
-            <span className="text-muted-foreground">Available ($29.99)</span>
+            <span className="text-muted-foreground">Available ($349.99)</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 bg-yellow-100 border-2 border-yellow-400 rounded-t-lg"></div>
-            <span className="text-muted-foreground">VIP ($49.99)</span>
+            <span className="text-muted-foreground">VIP ($449.99)</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 bg-blue-600 border-2 border-blue-700 rounded-t-lg"></div>

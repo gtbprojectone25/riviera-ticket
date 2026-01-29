@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { releaseExpiredReservations } from '@/lib/seat-reservation'
+import { releaseExpiredReservations } from '@/db/queries'
 
 const CRON_SECRET = process.env.CRON_SECRET
 
@@ -31,19 +31,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Executar limpeza
-    const result = await releaseExpiredReservations()
+    const releasedSeats = await releaseExpiredReservations()
 
-    if (!result.success) {
-      return NextResponse.json(
-        { error: 'Falha ao liberar reservas' },
-        { status: 500 }
-      )
+    if (releasedSeats.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: 'Nenhum assento expirado para liberar',
+        releasedCount: 0,
+        timestamp: new Date().toISOString(),
+      })
     }
 
     return NextResponse.json({
       success: true,
-      message: `Liberados ${result.releasedCount} assentos expirados`,
-      releasedCount: result.releasedCount,
+      message: `Liberados ${releasedSeats.length} assentos expirados`,
+      releasedCount: releasedSeats.length,
       timestamp: new Date().toISOString(),
     })
   } catch (error) {

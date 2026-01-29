@@ -1,51 +1,51 @@
 /**
  * Password Utilities - Secure password hashing using bcrypt
- * 
- * IMPORTANTE: Este módulo substitui o hash Base64 inseguro por bcrypt
+ *
+ * IMPORTANT: This module migrates legacy Base64/Argon2 hashes to bcrypt.
  */
 
 import bcrypt from 'bcryptjs'
+import argon2 from 'argon2'
 
-// Custo do bcrypt (10-12 é recomendado para produção)
+// Bcrypt cost (10-12 recommended)
 const SALT_ROUNDS = 12
 
 /**
- * Hash de senha usando bcrypt
- * @param password - Senha em texto plano
- * @returns Hash bcrypt seguro
+ * Hash password using bcrypt
  */
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, SALT_ROUNDS)
 }
 
 /**
- * Verifica se a senha corresponde ao hash
- * @param password - Senha em texto plano
- * @param hash - Hash bcrypt armazenado
- * @returns true se corresponder, false caso contrário
+ * Verify password against bcrypt hash
  */
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
   return bcrypt.compare(password, hash)
 }
 
 /**
- * Verifica se um hash é um hash bcrypt válido
- * Útil para migração de senhas antigas (Base64)
+ * Detect bcrypt hashes ($2a$, $2b$, $2y$)
  */
 export function isBcryptHash(hash: string): boolean {
-  // Hashes bcrypt começam com $2a$, $2b$ ou $2y$
   return /^\$2[aby]\$\d{2}\$/.test(hash)
 }
 
 /**
- * Verifica se é um hash Base64 legado (inseguro)
- * Usado apenas para migração
+ * Detect Argon2 hashes ($argon2...)
+ */
+export function isArgon2Hash(hash: string): boolean {
+  return hash.startsWith('$argon2')
+}
+
+/**
+ * Detect legacy Base64 hashes (insecure)
  */
 export function isLegacyBase64Hash(hash: string): boolean {
+  if (!hash || isBcryptHash(hash) || isArgon2Hash(hash)) return false
+  if (!/^[A-Za-z0-9+/=]+$/.test(hash)) return false
   try {
-    // Tenta decodificar como Base64
     const decoded = Buffer.from(hash, 'base64').toString('utf8')
-    // Se decodificar sem erros e não parecer hash bcrypt, é legado
     return decoded.length > 0 && !isBcryptHash(hash)
   } catch {
     return false
@@ -53,27 +53,34 @@ export function isLegacyBase64Hash(hash: string): boolean {
 }
 
 /**
- * Verifica senha com suporte a migração de hash legado
- * Se a senha estiver em Base64 legado e for válida, 
- * retorna um flag indicando que precisa ser atualizada
+ * Verify password with migration support (bcrypt/argon2/legacy Base64).
+ * When legacy/argon2 is valid, caller should rehash to bcrypt.
  */
 export async function verifyPasswordWithMigration(
   password: string,
   storedHash: string
 ): Promise<{ valid: boolean; needsRehash: boolean }> {
-  // Primeiro, tenta verificar como bcrypt
+  if (!storedHash) return { valid: false, needsRehash: false }
+
   if (isBcryptHash(storedHash)) {
     const valid = await verifyPassword(password, storedHash)
     return { valid, needsRehash: false }
   }
 
-  // Se não for bcrypt, tenta como Base64 legado
+  if (isArgon2Hash(storedHash)) {
+    try {
+      const valid = await argon2.verify(storedHash, password)
+      return { valid, needsRehash: valid }
+    } catch {
+      return { valid: false, needsRehash: false }
+    }
+  }
+
   if (isLegacyBase64Hash(storedHash)) {
     const legacyHash = Buffer.from(password).toString('base64')
     const valid = legacyHash === storedHash
-    return { valid, needsRehash: valid } // Se válido, precisa atualizar
+    return { valid, needsRehash: valid }
   }
 
-  // Hash não reconhecido
   return { valid: false, needsRehash: false }
 }
