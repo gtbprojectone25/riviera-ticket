@@ -154,7 +154,7 @@ export default function AccountPage() {
           key={tab}
           onClick={() => setActiveTab(tab)}
           className={`flex-1 py-4 px-4 text-center text-sm font-medium transition-colors ${activeTab === tab
-              ? 'border-b-2 border-[#0066FF] text-[#0066FF]'
+              ? 'border-b-2 border-blue-600 text-blue-600'
               : 'text-gray-400 hover:text-white'
             }`}
         >

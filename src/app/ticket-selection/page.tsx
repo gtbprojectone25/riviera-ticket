@@ -50,14 +50,14 @@ export default function TicketSelectionPage() {
   const [tickets, setTickets] = useState<SelectedTicket[]>([
     {
       id: 'standard',
-      name: 'Standard Ticket',
+      name: 'Standard',
       price: 34900,
-      description: ['Valid only for the chosen session', 'Online ticket'],
+      description: ['Valid only for the chosen session', 'Online ticket with access via QR code'],
       amount: 0,
     },
     {
       id: 'vip',
-      name: 'VIP Experience',
+      name: 'VIP',
       price: 44900,
       description: ['Valid only for the chosen session', 'Priority access'],
       amount: 0,
@@ -197,15 +197,20 @@ export default function TicketSelectionPage() {
   }
 
   const handleTicketAmountChange = (ticketId: string, change: number) => {
-    setTickets((prev) =>
-      prev.map((ticket) => {
-        if (ticket.id === ticketId) {
-          const newAmount = Math.max(0, Math.min(4, ticket.amount + change))
-          return { ...ticket, amount: newAmount }
+    setTickets((prev) => {
+      const total = prev.reduce((sum, t) => sum + t.amount, 0)
+
+      return prev.map((ticket) => {
+        if (ticket.id !== ticketId) return ticket
+
+        if (change > 0 && total >= 4) {
+          return ticket
         }
-        return ticket
-      }),
-    )
+
+        const next = Math.max(0, ticket.amount + change)
+        return { ...ticket, amount: Math.min(4, next) }
+      })
+    })
   }
 
   const getTotalTickets = () => {
@@ -235,7 +240,7 @@ export default function TicketSelectionPage() {
   return (
     <div className="min-h-screen text-white relative overflow-hidden bg-black/60">
       <div className="relative z-10 flex flex-col items-center justify-center min-h-[calc(100vh-100px)] pt-8 ">
-        <div className="w-full max-w-md rounded-2xl mx-4 space-y-6 p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
+        <div className="w-full max-w-md rounded-xl mx-4 space-y-6 p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
           {/* Urgency Banner */}
           <div className="w-full bg-[#0266FC] p-3 flex items-center justify-center rounded-lg">
             <Clock className="h-4 w-4 text-white shrink-0 mr-2" />
@@ -250,7 +255,7 @@ export default function TicketSelectionPage() {
               <h1 className="text-2xl font-bold text-white">The Odyssey</h1>
               <Badge
                 variant="secondary"
-                className="bg-gray-700 text-white px-4 py-2 rounded-full"
+                className="bg-gray-700 text-white px-3 py-1.5"
               >
                 Pre-order
               </Badge>
@@ -267,7 +272,7 @@ export default function TicketSelectionPage() {
           </div>
 
           {/* Cinema Image */}
-          <div className="relative w-full aspect-3/4 rounded-2xl overflow-hidden bg-black/50">
+          <div className="relative w-full aspect-3/4 rounded-xl overflow-hidden bg-black/50">
             <Image
               src="/sala-cinema.png"
               alt="The Odyssey Cinema Pre-order"
@@ -293,7 +298,7 @@ export default function TicketSelectionPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <Badge className="bg-gray-700 text-white px-4 py-2 rounded-full">
+                <Badge className="bg-gray-700 text-white px-3 py-1.5">
                   9.7/10
                 </Badge>
                 <div className="text-right">
@@ -353,7 +358,7 @@ export default function TicketSelectionPage() {
 
           <div className="pb-6">
             <Button
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 text-lg font-semibold rounded-lg shadow-[0_0_15px_rgba(37,99,235,0.5)]"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-base font-semibold rounded-xl shadow-lg"
               disabled={getTotalTickets() === 0}
               onClick={handleNextStep}
             >

@@ -124,7 +124,7 @@ export default function PaymentPage() {
   return (
     <div className="min-h-screen text-white relative overflow-x-hidden bg-black/60">
       {/* Top Alert */}
-      <div className="bg-[#0066FF] text-white text-center py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium tracking-wide relative z-20">
+      <div className="bg-[#0066FF] text-white text-center py-3 px-3 text-xs font-medium tracking-wide relative z-20">
         To guarantee your place, finish within 10:00 minutes (only 4 per session).
       </div>
 
@@ -147,7 +147,7 @@ export default function PaymentPage() {
         {/* Content */}
         <div className="container mx-auto px-4 py-6 max-w-md relative z-10">
           {/* Order Summary */}
-          <div className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl overflow-hidden border border-gray-700 shadow-2xl mb-6 p-6">
+          <div className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-xl overflow-hidden border border-gray-700 shadow-2xl mb-6 p-6">
             <h2 className="text-xl font-bold text-white mb-4">Order Summary</h2>
 
             <div className="space-y-3 mb-4">
@@ -177,7 +177,7 @@ export default function PaymentPage() {
           </div>
 
           {/* Payment Methods */}
-          <div className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl overflow-hidden border border-gray-700 shadow-2xl mb-6 p-6">
+          <div className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-xl overflow-hidden border border-gray-700 shadow-2xl mb-6 p-6">
             <h2 className="text-xl font-bold text-white mb-4">Payment Method</h2>
 
             <div className="space-y-3">
@@ -208,7 +208,7 @@ export default function PaymentPage() {
           {!clientSecret || !stripePromise ? (
             <Button
               disabled
-              className="w-full bg-[#0066FF] text-white py-6 rounded-xl text-base font-bold flex items-center justify-center gap-2"
+              className="w-full bg-[#0066FF] text-white h-12 rounded-xl text-base font-semibold flex items-center justify-center gap-2"
             >
               {isInitializingPayment ? (
                 <>

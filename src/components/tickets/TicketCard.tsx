@@ -33,7 +33,7 @@ export function TicketCard({
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-3xl border',
+        'relative overflow-hidden rounded-xl border',
         isVip ? 'bg-[#0A0A0A] border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900',
         'shadow-xl',
       )}
@@ -44,7 +44,7 @@ export function TicketCard({
       )}
 
       {/* Barra superior gradiente */}
-      <div className="relative flex items-center justify-between px-5 py-3 text-xs font-semibold tracking-wide text-white">
+      <div className="relative flex items-center justify-between px-4 py-3 text-xs font-semibold tracking-wide text-white">
         <div className="absolute inset-0 bg-linear-to-r from-[#44A4FF] via-[#C34EFF] to-[#FF8056]" />
         <span className="relative z-10 uppercase">{type === 'VIP' ? 'VIP' : 'STANDARD'}</span>
         <span className="relative z-10 uppercase">{screenType || 'IMAX'}</span>
@@ -59,7 +59,7 @@ export function TicketCard({
         <p className={cn('text-xs font-medium uppercase', isVip ? 'text-gray-300' : 'text-gray-500')}>
           Order ID
         </p>
-        <p className="text-2xl font-bold tracking-wide mt-1">
+        <p className="text-xl font-bold tracking-wide mt-1">
           #{orderId.slice(0, 8).toUpperCase()}
         </p>
 

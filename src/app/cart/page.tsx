@@ -73,9 +73,9 @@ export default function CartPage() {
     <PageContainer>
       <div className="space-y-6">
         {/* Header with countdown */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+        <div className="flex flex-col space-y-4">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Review Your Order</h1>
+            <h1 className="text-2xl font-bold text-white mb-2">Review Your Order</h1>
             <p className="text-muted-foreground">
               Review your selected seats and proceed to checkout
             </p>
@@ -83,9 +83,9 @@ export default function CartPage() {
           <CountdownTimer onExpired={handleSessionExpired} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           {/* Main content */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="space-y-6">
             {/* Session Information */}
             <Card>
               <CardHeader>
@@ -112,7 +112,7 @@ export default function CartPage() {
                   </div>
                   <div>
                     <span className="text-muted-foreground">Format:</span>
-                    <div className="bg-blue-600 px-2 py-1 rounded text-xs text-white font-semibold inline-block">
+                    <div className="bg-blue-600 px-2 py-1 rounded-md text-xs text-white font-semibold inline-block">
                       IMAX 70MM
                     </div>
                   </div>
@@ -128,9 +128,9 @@ export default function CartPage() {
               <CardContent>
                 <div className="space-y-3">
                   {cart.seats.map(seat => (
-                    <div key={seat.seatId} className="flex items-center justify-between p-3 bg-muted/20 rounded-lg">
+                    <div key={seat.seatId} className="flex items-center justify-between p-3 bg-muted/20 rounded-xl">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-blue-600 rounded text-white text-sm font-semibold flex items-center justify-center">
+                        <div className="w-8 h-8 bg-blue-600 rounded-md text-white text-sm font-semibold flex items-center justify-center">
                           {seat.seatId}
                         </div>
                         <div>

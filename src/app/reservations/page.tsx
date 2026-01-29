@@ -40,7 +40,7 @@ export default function ReservationsPage() {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-800 relative z-20">
-          <button className="flex-1 py-4 px-4 text-center border-b-2 border-[#0066FF] text-[#0066FF] font-medium">
+          <button className="flex-1 py-4 px-4 text-center border-b-2 border-blue-600 text-blue-600 font-medium">
             Pendants
           </button>
           <button

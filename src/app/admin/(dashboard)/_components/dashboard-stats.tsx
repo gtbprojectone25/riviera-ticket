@@ -3,6 +3,24 @@ import { tickets, sessions, paymentIntents } from '@/db/schema'
 import { eq, gte, sql, and, count } from 'drizzle-orm'
 import { DollarSign, Ticket, CalendarCheck, TrendingUp } from 'lucide-react'
 
+async function safeSumPaymentIntents(fromDate: Date) {
+  try {
+    const [row] = await db
+      .select({ total: sql<number>`COALESCE(SUM(${paymentIntents.amountCents}), 0)` })
+      .from(paymentIntents)
+      .where(and(
+        eq(paymentIntents.status, 'SUCCEEDED'),
+        gte(paymentIntents.createdAt, fromDate)
+      ))
+
+    return Number(row?.total || 0)
+  } catch (error) {
+    const cause = (error as { cause?: unknown })?.cause
+    console.error('DashboardStats: failed to sum payment_intents', { error, cause })
+    return 0
+  }
+}
+
 async function getStats() {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -14,22 +32,10 @@ async function getStats() {
   monthAgo.setMonth(monthAgo.getMonth() - 1)
 
   // Faturamento hoje
-  const [todayRevenue] = await db
-    .select({ total: sql<number>`COALESCE(SUM(${paymentIntents.amountCents}), 0)` })
-    .from(paymentIntents)
-    .where(and(
-      eq(paymentIntents.status, 'SUCCEEDED'),
-      gte(paymentIntents.createdAt, today)
-    ))
+  const todayRevenue = await safeSumPaymentIntents(today)
 
   // Faturamento do mês
-  const [monthRevenue] = await db
-    .select({ total: sql<number>`COALESCE(SUM(${paymentIntents.amountCents}), 0)` })
-    .from(paymentIntents)
-    .where(and(
-      eq(paymentIntents.status, 'SUCCEEDED'),
-      gte(paymentIntents.createdAt, monthAgo)
-    ))
+  const monthRevenue = await safeSumPaymentIntents(monthAgo)
 
   // Tickets vendidos hoje
   const [todayTickets] = await db
@@ -47,8 +53,8 @@ async function getStats() {
     .where(gte(sessions.startTime, today))
 
   return {
-    todayRevenue: Number(todayRevenue?.total || 0) / 100,
-    monthRevenue: Number(monthRevenue?.total || 0) / 100,
+    todayRevenue: todayRevenue / 100,
+    monthRevenue: monthRevenue / 100,
     todayTickets: todayTickets?.count || 0,
     activeSessions: activeSessions?.count || 0,
   }

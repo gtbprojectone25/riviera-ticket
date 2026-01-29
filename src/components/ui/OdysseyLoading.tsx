@@ -113,14 +113,9 @@ export function OdysseyLoading({ isLoading, progress }: OdysseyLoadingProps) {
       `}</style>
 
       <div className="relative z-10 flex flex-col items-center gap-3 px-6">
-        <div
-          className="rounded-3xl border border-white/10 bg-white/5 px-10 py-8 shadow-2xl"
-          style={{ backdropFilter: "blur(18px)" }}
-        >
-          <div className="flex items-center justify-center" style={{ perspective: 900 }}>
-            <div className={`h-32 w-32 sm:h-36 sm:w-36 ${shouldReduceMotion ? "" : "odyssey-rotate"}`}>
-              <HelmetSvg progress={displayProgress} reduceMotion={shouldReduceMotion} />
-            </div>
+        <div className="flex items-center justify-center" style={{ perspective: 900 }}>
+          <div className={`h-32 w-32 sm:h-36 sm:w-36 ${shouldReduceMotion ? "" : "odyssey-rotate"}`}>
+            <HelmetSvg progress={displayProgress} reduceMotion={shouldReduceMotion} />
           </div>
         </div>
         <span className="text-base font-medium text-white/80">Loading...</span>

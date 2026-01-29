@@ -10,7 +10,7 @@ type SeatRow = typeof seats.$inferSelect
 export type SelectedSeat = {
   id: string
   price: number
-  type: 'STANDARD' | 'VIP' | 'PREMIUM'
+  type: SeatRow['type']
 }
 
 const HOLD_MINUTES = 10
@@ -158,7 +158,7 @@ export async function createCart(userId: string | null, sessionId: string, selec
     const totalAmount = selectedSeats.reduce((sum, seat) => sum + seat.price, 0)
     const uuidRegex = /^[0-9a-fA-F-]{8}-[0-9a-fA-F-4]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/
 
-    const result = await db.transaction(async (tx) => {
+    const createCartWithClient = async (tx: typeof db) => {
       const now = new Date()
       const heldUntil = new Date(now.getTime() + HOLD_MINUTES * 60 * 1000)
 
@@ -231,7 +231,21 @@ export async function createCart(userId: string | null, sessionId: string, selec
         cartId: cart.id,
         heldUntil: holdResult.heldUntil
       }
-    })
+    }
+
+    let result: { cartId: string; heldUntil: Date }
+    try {
+      result = await db.transaction(async (tx) => {
+        return await createCartWithClient(tx as unknown as typeof db)
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      if (message.includes('No transactions support')) {
+        result = await createCartWithClient(db)
+      } else {
+        throw error
+      }
+    }
 
     return {
       success: true,
