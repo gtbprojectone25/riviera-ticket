@@ -23,7 +23,7 @@ export function HeroSection() {
       (Math.floor(Math.random() * (max - min + 1)) + min)
     targetProgressRef.current = target
 
-    const durationMs = 9000
+    const durationMs = 7000
     const start = performance.now()
 
     const tick = (now: number) => {
@@ -44,7 +44,7 @@ export function HeroSection() {
     setIsLoading(true)
     setTimeout(() => {
       router.push('/pre-order')
-    }, 14000) 
+    }, 7000) 
   }
 
   return (
