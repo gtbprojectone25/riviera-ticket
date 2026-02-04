@@ -11,9 +11,21 @@ export type AccountEvent = {
   barcode?: string
 }
 
+export type AccountPending = {
+  id: string
+  sessionId: string
+  totalAmount: number
+  status: string
+  createdAt: string
+  expiresAt: string
+  sessionTime: string
+  movieTitle: string
+  cinemaName: string
+  cinemaAddress?: string
+}
+
 export type UserProfile = {
   firstName: string
   lastName: string
-  ssn: string
   email: string
 }

@@ -1,3 +1,6 @@
+﻿// LEGACY SCHEMA (deprecated)
+// Use '@/db/schema' as the single source of truth. Do not import from this file.
+
 import { pgTable, uuid, varchar, timestamp } from 'drizzle-orm/pg-core'
 import { orders } from './orders'
 import { users } from './users'
@@ -23,10 +26,11 @@ export const tickets = pgTable('tickets', {
 })
 
 /**
- * Índice único parcial sugerido (em SQL manual):
+ * Ãndice Ãºnico parcial sugerido (em SQL manual):
  *
  * CREATE UNIQUE INDEX unique_active_ticket_per_seat
  * ON tickets(seat_id)
  * WHERE status IN ('reserved', 'paid');
  */
+
 

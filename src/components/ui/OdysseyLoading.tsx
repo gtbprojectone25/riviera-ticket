@@ -109,20 +109,33 @@ export function OdysseyLoading({ isLoading, progress }: OdysseyLoadingProps) {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
+        @keyframes odyssey-glow {
+          0% { box-shadow: 0 0 10px rgba(37,99,235,0.25), 0 0 26px rgba(37,99,235,0.18); }
+          50% { box-shadow: 0 0 18px rgba(37,99,235,0.5), 0 0 40px rgba(37,99,235,0.35); }
+          100% { box-shadow: 0 0 10px rgba(37,99,235,0.25), 0 0 26px rgba(37,99,235,0.18); }
+        }
         .odyssey-spin {
           animation: odyssey-spin 1.1s linear infinite;
+        }
+        .odyssey-glow {
+          animation: odyssey-glow 1.6s ease-in-out infinite;
         }
       `}</style>
 
       <div className="relative z-10 flex flex-col items-center gap-3 px-6">
-        <div
-          className={`relative h-20 w-20 sm:h-24 sm:w-24 rounded-full ${shouldReduceMotion ? "" : "odyssey-spin"}`}
-          style={{
-            background: `conic-gradient(#3b82f6 ${ringAngle}, rgba(59,130,246,0.2) 0deg)`
-          }}
-          aria-hidden
-        >
-          <div className="absolute inset-1.5 rounded-full bg-black/80" />
+        <div className="relative">
+          <div
+            className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-full odyssey-spin odyssey-glow"
+            style={{
+              background: `conic-gradient(from 0deg, rgba(37,99,235,0) 0deg, rgba(37,99,235,0) 260deg, rgba(37,99,235,0.95) ${ringAngle}, rgba(37,99,235,0) 360deg)`,
+              WebkitMaskImage: 'radial-gradient(circle, transparent 55%, black 58%)',
+              maskImage: 'radial-gradient(circle, transparent 55%, black 58%)',
+              willChange: 'transform',
+              animation: 'odyssey-spin 1.1s linear infinite',
+              transformOrigin: 'center',
+            }}
+            aria-hidden
+          />
         </div>
         <span className="text-base font-medium text-white/80">Loading...</span>
       </div>

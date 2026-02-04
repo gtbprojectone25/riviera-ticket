@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/auth'
 import { useRouter } from 'next/navigation'
-import { TicketCard } from '@/components/tickets/TicketCard'
+import { EventTicketShowcase } from '@/components/tickets/EventTicketShowcase'
 import type { AccountEvent } from '@/types/account'
 
 type Status = 'idle' | 'loading' | 'error' | 'success'
@@ -28,7 +28,7 @@ export default function MyEventsPage() {
       try {
         setStatus('loading')
         setError(null)
-        const res = await fetch('/api/user/tickets', {
+        const res = await fetch('/api/account/events', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -72,45 +72,27 @@ export default function MyEventsPage() {
           <p className="text-sm text-red-400">Error: {error}</p>
         )}
         {status === 'success' && events.length === 0 && (
-          <p className="text-sm text-gray-400">No events yet.</p>
+          <p className="text-sm text-gray-400">No events yet. Showing a preview ticket below.</p>
         )}
 
-        {events
-          .filter((event) =>
-            event.status ? event.status.toLowerCase() === 'paid' : true,
-          )
-          .map((event) => {
-            const start = new Date(event.sessionTime)
-            const date = start.toLocaleDateString()
-            const time = start.toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            })
-            const orderId = event.id.slice(0, 8).toUpperCase()
-
-            const ticketType: 'STANDARD' | 'VIP' =
-              event.type === 'VIP' ? 'VIP' : 'STANDARD'
-            const cinemaAddress = event.cinemaAddress ?? ''
-            const barcode = event.barcode ?? event.id
-
-            return (
-              <TicketCard
-                key={event.id}
-                type={ticketType}
-                orderId={orderId}
-                movie={event.movieTitle}
-                date={date}
-                time={time}
-                seat={event.seatLabels.join(', ')}
-                cinema={event.cinemaName}
-                cinemaAddress={cinemaAddress}
-                barcode={barcode}
-                screenType="IMAX"
-              />
-            )
-          })}
+        {(status === 'success' && events.length === 0
+          ? [{
+            id: 'demo-ticket',
+            movieTitle: 'The Odyssey',
+            sessionTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+            cinemaName: 'Riviera IMAX',
+            cinemaAddress: '123 Demo Ave',
+            seatLabels: ['B12', 'B13'],
+            status: 'reserved',
+            amount: 0,
+            type: 'STANDARD' as const,
+            barcode: undefined,
+          }]
+          : events
+        ).map((event) => (
+          <EventTicketShowcase key={event.id} event={event} />
+        ))}
       </div>
     </div>
   )
 }
-

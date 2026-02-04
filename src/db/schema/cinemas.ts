@@ -1,3 +1,6 @@
+﻿// LEGACY SCHEMA (deprecated)
+// Use '@/db/schema' as the single source of truth. Do not import from this file.
+
 import {
   pgTable,
   text,
@@ -27,4 +30,5 @@ export const cinemas = pgTable('cinemas', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })
+
 

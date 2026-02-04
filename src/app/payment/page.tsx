@@ -19,6 +19,7 @@ export default function PaymentPage() {
   const finalizedTickets = useBookingStore((s) => s.finalizedTickets)
   const selectedCinema = useBookingStore((s) => s.selectedCinema)
   const selectedSessionId = useBookingStore((s) => s.selectedSessionId)
+  const cartId = useBookingStore((s) => s.cartId)
   const setPaymentData = useBookingStore((s) => s.setPaymentData)
   const setCartId = useBookingStore((s) => s.setCartId)
   const { user } = useAuth()
@@ -52,15 +53,17 @@ export default function PaymentPage() {
             type: t.type === 'VIP' ? 'VIP' : 'STANDARD',
           }))
 
-        const cartResult = await createCart(user?.id ?? null, selectedSessionId, seatsForCart)
-
-        if (!cartResult.success || !cartResult.cartId) {
-          throw new Error(cartResult.message || 'Failed to create cart')
+        let activeCartId = cartId ?? null
+        if (!activeCartId) {
+          const cartResult = await createCart(user?.id ?? null, selectedSessionId, seatsForCart)
+          if (!cartResult.success || !cartResult.cartId) {
+            throw new Error(cartResult.message || 'Failed to create cart')
+          }
+          activeCartId = cartResult.cartId
+          // Salvar cartId na store e localmente
+          setCartId(activeCartId)
         }
-
-        // Salvar cartId na store e localmente
-        setCartId(cartResult.cartId)
-        setCurrentCartId(cartResult.cartId)
+        setCurrentCartId(activeCartId)
 
         const totalAmountCents = finalizedTickets.reduce((acc, t) => acc + t.price, 0)
 
@@ -70,7 +73,7 @@ export default function PaymentPage() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            cartId: cartResult.cartId,
+            cartId: activeCartId,
             amountCents: totalAmountCents,
             currency: 'usd',
           }),
@@ -98,7 +101,7 @@ export default function PaymentPage() {
     }
 
     void setupPayment()
-  }, [finalizedTickets, selectedSessionId, user?.id, router, clientSecret, setCartId])
+  }, [finalizedTickets, selectedSessionId, user?.id, router, clientSecret, cartId, setCartId])
 
   const handleSuccess = useCallback(() => {
     const totalAmountCents = finalizedTickets.reduce((acc, t) => acc + t.price, 0)
@@ -123,110 +126,114 @@ export default function PaymentPage() {
 
   return (
     <div className="min-h-screen text-white relative overflow-x-hidden bg-black/60">
-      {/* Top Alert */}
-      <div className="bg-[#0066FF] text-white text-center py-3 px-3 text-xs font-medium tracking-wide relative z-20">
-        To guarantee your place, finish within 10:00 minutes (only 4 per session).
-      </div>
-
       <div className="relative z-10">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-800 relative z-20">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.back()}
-              className="text-white hover:bg-gray-800"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <div className="text-white font-bold text-lg">Payment</div>
-          </div>
+        <div className="flex items-center gap-2 p-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.back()}
+            className="text-white hover:bg-white/5"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <div className="text-white font-semibold text-base">Payment</div>
         </div>
 
         {/* Content */}
-        <div className="container mx-auto px-4 py-6 max-w-md relative z-10">
+        <div className="container mx-auto px-4 pb-8 max-w-md relative z-10 space-y-5">
           {/* Order Summary */}
-          <div className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-xl overflow-hidden border border-gray-700 shadow-2xl mb-6 p-6">
-            <h2 className="text-xl font-bold text-white mb-4">Order Summary</h2>
+          <div className="bg-zinc-800/90 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.45)] p-5">
+            <h2 className="text-lg font-semibold text-white mb-3">Order Summary</h2>
 
-            <div className="space-y-3 mb-4">
-              <div className="flex justify-between">
-                <span className="text-gray-400">Tickets</span>
-                <span className="text-white font-semibold">
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between text-white/80">
+                <span>Tickets</span>
+                <span className="text-white">
                   {ticketCount} Premium Ticket{ticketCount > 1 ? 's' : ''}
                 </span>
               </div>
 
               {selectedCinema && (
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Cinema</span>
-                  <span className="text-white font-semibold">{selectedCinema.name}</span>
+                <div className="flex justify-between text-white/80">
+                  <span>Cinema</span>
+                  <span className="text-white">{selectedCinema.name}</span>
                 </div>
               )}
 
-              <div className="border-t border-gray-700 pt-3 mt-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-lg">Total</span>
-                  <span className="text-white font-bold text-2xl">
-                    {formatCurrency(totalAmountCents)}
-                  </span>
-                </div>
+              <div className="h-px bg-white/10 my-3" />
+
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-white/70">Total</span>
+                <span className="text-white font-semibold">
+                  {formatCurrency(totalAmountCents)}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Payment Methods */}
-          <div className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-xl overflow-hidden border border-gray-700 shadow-2xl mb-6 p-6">
-            <h2 className="text-xl font-bold text-white mb-4">Payment Method</h2>
+          {/* Payment Methods + Stripe */}
+          <div className="bg-zinc-800/90 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.45)] p-5 space-y-4">
+            <h2 className="text-lg font-semibold text-white">Payment Method</h2>
 
-            <div className="space-y-3">
-              <div className="w-full p-4 bg-gray-800 rounded-lg border border-gray-700 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <CreditCard className="w-5 h-5 text-blue-400" />
-                  <span className="text-white font-medium">Credit Card (Stripe)</span>
-                </div>
-                <div className="w-4 h-4 rounded-full border-2 border-blue-400 bg-blue-400" />
+            <div className="w-full px-4 py-3 bg-zinc-700/80 rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <CreditCard className="w-4 h-4 text-blue-400" />
+                <span className="text-white text-sm">Credit Card</span>
               </div>
-
-              <div className="w-full p-4 bg-gray-800 rounded-lg border border-gray-700 flex items-center justify-between opacity-50">
-                <div className="flex items-center gap-3">
-                  <CreditCard className="w-5 h-5 text-gray-500" />
-                  <span className="text-gray-500">Other methods (soon)</span>
-                </div>
-              </div>
+              <div className="h-2 w-2 rounded-full bg-blue-400" />
             </div>
+
+            {initError && (
+              <p className="text-sm text-red-500">
+                {initError}
+              </p>
+            )}
+
+            {!clientSecret || !stripePromise ? (
+              <Button
+                disabled
+                className="w-full bg-[#0066FF] text-white h-12 rounded-xl text-base font-semibold flex items-center justify-center gap-2"
+              >
+                {isInitializingPayment ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Preparing payment...
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-5 h-5" />
+                    Unable to start payment
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Elements
+                stripe={stripePromise}
+                options={{
+                  clientSecret,
+                  appearance: {
+                    theme: 'stripe',
+                    variables: {
+                      colorPrimary: '#2563eb',
+                      colorBackground: '#ffffff',
+                      colorText: '#0f172a',
+                      colorTextSecondary: '#64748b',
+                      borderRadius: '10px',
+                      fontFamily: 'inherit',
+                    },
+                    rules: {
+                      '.Input': { backgroundColor: '#ffffff', border: '1px solid #e5e7eb' },
+                      '.Label': { color: '#e5e7eb' },
+                      '.Tab': { border: '1px solid #e5e7eb' },
+                    },
+                  },
+                }}
+              >
+                <StripeCheckoutForm amountCents={totalAmountCents} onSuccess={handleSuccess} />
+              </Elements>
+            )}
           </div>
-
-          {/* Stripe Payment Element */}
-          {initError && (
-            <p className="text-sm text-red-500 mb-4">
-              {initError}
-            </p>
-          )}
-
-          {!clientSecret || !stripePromise ? (
-            <Button
-              disabled
-              className="w-full bg-[#0066FF] text-white h-12 rounded-xl text-base font-semibold flex items-center justify-center gap-2"
-            >
-              {isInitializingPayment ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Preparing payment...
-                </>
-              ) : (
-                <>
-                  <Lock className="w-5 h-5" />
-                  Unable to start payment
-                </>
-              )}
-            </Button>
-          ) : (
-            <Elements stripe={stripePromise} options={{ clientSecret }}>
-              <StripeCheckoutForm amountCents={totalAmountCents} onSuccess={handleSuccess} />
-            </Elements>
-          )}
         </div>
       </div>
     </div>

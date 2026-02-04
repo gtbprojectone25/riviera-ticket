@@ -23,24 +23,70 @@ export default function ConfirmationPage() {
 
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [dbTickets, setDbTickets] = useState<typeof finalizedTickets>([])
+  const [dbSession, setDbSession] = useState<typeof sessionData | null>(null)
+
+  const ticketsForDisplay = finalizedTickets.length > 0 ? finalizedTickets : dbTickets
 
   // Dados derivados
   const totalAmount = useMemo(() => 
-    finalizedTickets.reduce((acc, t) => acc + t.price, 0), 
-    [finalizedTickets]
+    ticketsForDisplay.reduce((acc, t) => acc + t.price, 0), 
+    [ticketsForDisplay]
   )
 
   const selectedSeats = useMemo(() => 
-    finalizedTickets
+    ticketsForDisplay
       .map((t) => t.assignedSeatId)
       .filter(Boolean) as string[],
-    [finalizedTickets]
+    [ticketsForDisplay]
   )
 
   const orderId = useMemo(() => 
     paymentData?.orderId || cartId || `ORD-${Date.now()}`,
     [paymentData, cartId]
   )
+
+  useEffect(() => {
+    if (finalizedTickets.length > 0) return
+    if (!cartId) return
+
+    let isMounted = true
+    const loadTickets = async () => {
+      try {
+        const res = await fetch(`/api/tickets/by-cart?cartId=${cartId}`)
+        if (!res.ok) return
+        const data = await res.json()
+
+        const mapped = (data?.tickets || []).map((t: { id: string; type: string; price: number; seatId: string }) => ({
+          id: t.id,
+          name: t.type === 'VIP' ? 'VIP Ticket' : 'Standard Ticket',
+          type: t.type,
+          price: t.price,
+          assignedSeatId: t.seatId,
+        }))
+
+        if (!isMounted) return
+        setDbTickets(mapped)
+
+        if (data?.session) {
+          setDbSession({
+            id: data.session.id,
+            movieTitle: data.session.movieTitle,
+            startTime: data.session.startTime,
+            endTime: data.session.endTime,
+          })
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    void loadTickets()
+
+    return () => {
+      isMounted = false
+    }
+  }, [finalizedTickets, cartId])
 
   // Gerar QR Code
   useEffect(() => {
@@ -53,9 +99,9 @@ export default function ConfirmationPage() {
       try {
         const qrData = qrcodeService.generateTicketQRData({
           orderId,
-          ticketId: finalizedTickets[0]?.id || 'ticket-1',
+          ticketId: ticketsForDisplay[0]?.id || 'ticket-1',
           seatId: selectedSeats.join('-'),
-          sessionId: sessionData?.id || 'session-1',
+          sessionId: sessionData?.id || dbSession?.id || 'session-1',
         })
 
         const dataUrl = await qrcodeService.generateDataURL(qrData, {
@@ -77,20 +123,18 @@ export default function ConfirmationPage() {
     // Pequeno delay para simular carregamento
     const timer = setTimeout(generateQR, 1000)
     return () => clearTimeout(timer)
-  }, [orderId, finalizedTickets, selectedSeats, sessionData?.id])
+  }, [orderId, ticketsForDisplay, selectedSeats, sessionData?.id, dbSession?.id])
 
-  // ProteÃ§Ã£o de rota
+  // Proteção de rota
   useEffect(() => {
-    if (!finalizedTickets || finalizedTickets.length === 0) {
-      // Se nÃ£o hÃ¡ tickets, pode ser um refresh - tentar usar dados do localStorage
-      const timer = setTimeout(() => {
-        if (!finalizedTickets || finalizedTickets.length === 0) {
-          router.push('/')
-        }
-      }, 2000)
-      return () => clearTimeout(timer)
-    }
-  }, [finalizedTickets, router])
+    if (ticketsForDisplay.length > 0) return
+    const timer = setTimeout(() => {
+      if (ticketsForDisplay.length === 0) {
+        router.push('/')
+      }
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [ticketsForDisplay, router])
 
   const handleDownloadTicket = useCallback(() => {
     if (!qrCodeUrl) return
@@ -106,8 +150,8 @@ export default function ConfirmationPage() {
 
   const handleShareTicket = useCallback(async () => {
     const shareData = {
-      title: `${sessionData?.movieTitle || 'Die Odyssee'} - Ticket Confirmation`,
-      text: `My ticket for ${sessionData?.movieTitle || 'Die Odyssee'} at ${selectedCinema?.name || 'IMAX Cinema'}`,
+      title: `${sessionData?.movieTitle || dbSession?.movieTitle || 'Die Odyssee'} - Ticket Confirmation`,
+      text: `My ticket for ${sessionData?.movieTitle || dbSession?.movieTitle || 'Die Odyssee'} at ${selectedCinema?.name || 'IMAX Cinema'}`,
       url: window.location.href,
     }
 
@@ -121,7 +165,7 @@ export default function ConfirmationPage() {
       await navigator.clipboard.writeText(window.location.href)
       alert('Ticket link copied to clipboard!')
     }
-  }, [sessionData?.movieTitle, selectedCinema?.name])
+  }, [sessionData?.movieTitle, dbSession?.movieTitle, selectedCinema?.name])
 
   const handleNewBooking = useCallback(() => {
     resetBooking()
@@ -182,7 +226,7 @@ export default function ConfirmationPage() {
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="text-white font-medium text-lg">
-                  {sessionData?.movieTitle || 'Die Odyssee'}
+                  {sessionData?.movieTitle || dbSession?.movieTitle || 'Die Odyssee'}
                 </h3>
                 <p className="text-gray-400 text-sm">{selectedCinema?.name || 'IMAX Cinema'}</p>
                 {selectedCinema && (
@@ -201,16 +245,16 @@ export default function ConfirmationPage() {
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-gray-400" />
                 <span className="text-gray-400">
-                  {sessionData?.startTime 
-                    ? formatDate(sessionData.startTime)
+                  {sessionData?.startTime || dbSession?.startTime
+                    ? formatDate(sessionData?.startTime || dbSession?.startTime || '')
                     : 'April 16, 2026'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-gray-400" />
                 <span className="text-gray-400">
-                  {sessionData?.startTime && sessionData?.endTime
-                    ? `${formatTime(sessionData.startTime)} - ${formatTime(sessionData.endTime)}`
+                  {(sessionData?.startTime || dbSession?.startTime) && (sessionData?.endTime || dbSession?.endTime)
+                    ? `${formatTime(sessionData?.startTime || dbSession?.startTime || '')} - ${formatTime(sessionData?.endTime || dbSession?.endTime || '')}`
                     : '18:00 - 21:00'}
                 </span>
               </div>
@@ -220,7 +264,7 @@ export default function ConfirmationPage() {
                   Seats: {selectedSeats.length > 0 ? selectedSeats.join(', ') : 'H8, H9'}
                 </span>
                 <Badge variant="outline" className="text-xs ml-auto">
-                  {finalizedTickets[0]?.type || 'VIP'}
+                  {ticketsForDisplay[0]?.type || 'VIP'}
                 </Badge>
               </div>
             </div>
@@ -293,10 +337,10 @@ export default function ConfirmationPage() {
           <CardContent className="p-4">
             <h4 className="text-yellow-400 font-medium mb-2">Important Information</h4>
             <ul className="text-gray-300 text-sm space-y-1">
-              <li>â€¢ Arrive at least 30 minutes before the show</li>
-              <li>â€¢ Bring a valid ID for verification</li>
-              <li>â€¢ No outside food or drinks allowed</li>
-              <li>â€¢ Cancellation allowed up to 2 hours before showtime</li>
+              <li>• Arrive at least 30 minutes before the show</li>
+              <li>• Bring a valid ID for verification</li>
+              <li>• No outside food or drinks allowed</li>
+              <li>• Cancellation allowed up to 2 hours before showtime</li>
             </ul>
           </CardContent>
         </Card>
@@ -322,7 +366,7 @@ export default function ConfirmationPage() {
           
           <Button 
             variant="outline"
-            onClick={() => router.push('/my-tickets')}
+            onClick={() => router.push('/account?tab=events&refresh=1')}
             className="w-full bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
           >
             View My Tickets

@@ -15,17 +15,19 @@ import type {
   NewPaymentIntent,
   NewAuditorium
 } from './schema'
-import { 
-  users, 
+import {
+  users,
   cinemas,
-  sessions, 
+  sessions,
   auditoriums,
   priceRules,
-  seats, 
-  carts, 
-  cartItems, 
-  tickets, 
-  paymentIntents
+  seats,
+  carts,
+  cartItems,
+  tickets,
+  paymentIntents,
+  queueCounters,
+  queueEntries,
 } from './schema'
 
 type DbClient = typeof db
@@ -90,6 +92,15 @@ export async function findSessionConflict(params: {
 export async function createSession(sessionData: NewSession) {
   const [session] = await db.insert(sessions).values(sessionData).returning()
   return session
+}
+
+export async function getSeatCountForSession(sessionId: string, client: DbInstance = db) {
+  const [row] = await client
+    .select({ count: sql<number>`count(*)` })
+    .from(seats)
+    .where(eq(seats.sessionId, sessionId))
+    .limit(1)
+  return Number(row?.count ?? 0)
 }
 
 // Price rule operations
@@ -447,8 +458,6 @@ export async function createSeatsForSession(sessionId: string) {
         seatId,
         type: isVIP ? 'VIP' : 'STANDARD',
         price: isVIP ? 44900 : 34900, // in cents ($449.00 VIP, $349.00 Standard)
-        isAvailable: true,
-        isReserved: false,
       })
     }
   })
@@ -465,10 +474,6 @@ export async function reserveSeat(seatId: string, userId: string, expiresAt: Dat
       heldUntil: expiresAt,
       heldBy: userId,
       heldByCartId: null,
-      isReserved: true,
-      reservedBy: userId,
-      reservedUntil: expiresAt,
-      isAvailable: false,
       updatedAt: now,
     })
     .where(
@@ -522,10 +527,6 @@ async function holdSeatsInTx(
       heldUntil,
       heldBy: cart.userId,
       heldByCartId: cart.id,
-      isAvailable: false,
-      isReserved: true,
-      reservedBy: cart.userId,
-      reservedUntil: heldUntil,
       updatedAt: now,
     })
     .where(
@@ -591,10 +592,6 @@ export async function releaseExpiredReservations() {
       heldUntil: null,
       heldBy: null,
       heldByCartId: null,
-      isAvailable: true,
-      isReserved: false,
-      reservedBy: null,
-      reservedUntil: null,
       updatedAt: now,
     })
     .where(
@@ -651,6 +648,9 @@ export async function addItemToCart(cartId: string, seatId: string, price: numbe
   const [item] = await db
     .insert(cartItems)
     .values({ cartId, seatId, price })
+    .onConflictDoNothing({
+      target: [cartItems.cartId, cartItems.seatId],
+    })
     .returning()
   
   // Update cart total
@@ -738,10 +738,6 @@ export async function createTicketsFromCart(cartId: string) {
       heldUntil: null,
       heldBy: null,
       heldByCartId: null,
-      isAvailable: false, 
-      isReserved: false,
-      reservedBy: null,
-      reservedUntil: null,
       updatedAt: now,
     })
     .where(inArray(seats.id, seatIds))
@@ -853,10 +849,6 @@ export async function consumeSeatsAndCreateTickets(
       heldUntil: null,
       heldBy: null,
       heldByCartId: null,
-      isAvailable: false,
-      isReserved: false,
-      reservedBy: null,
-      reservedUntil: null,
       updatedAt: now,
     })
     .where(
@@ -953,7 +945,6 @@ export async function releaseCartHolds(
         eq(seats.heldBy, params.userId),
       ),
     )
-    releaseConditions.push(and(eq(seats.status, 'HELD'), eq(seats.reservedBy, params.userId)))
   }
 
   const releasedSeats = await tx
@@ -965,10 +956,6 @@ export async function releaseCartHolds(
       heldByCartId: null,
       soldAt: null,
       soldCartId: null,
-      isAvailable: true,
-      isReserved: false,
-      reservedBy: null,
-      reservedUntil: null,
       updatedAt: now,
     })
     .where(
@@ -1089,5 +1076,98 @@ export async function getSessionStatistics(sessionId: string) {
     reservedSeats,
     availableSeats,
     revenue: soldTickets.reduce((sum, ticket) => sum + ticket.price, 0),
+  }
+}
+
+type QueueAllocateResult = {
+  entryId: string
+  queueNumber: number
+  status: 'WAITING' | 'READY' | 'EXPIRED' | 'COMPLETED'
+  expiresAt: Date
+}
+
+export async function allocateQueueNumber(params: {
+  scopeKey: string
+  userId?: string | null
+  cartId?: string | null
+}): Promise<QueueAllocateResult> {
+  const now = new Date()
+  const expiresAt = new Date(now.getTime() + 10 * 60 * 1000)
+
+  const counterResult = await db.execute(sql<{ next_number: number }>`
+    INSERT INTO queue_counters (scope_key, next_number, created_at, updated_at)
+    VALUES (${params.scopeKey}, 2, now(), now())
+    ON CONFLICT (scope_key)
+    DO UPDATE SET next_number = queue_counters.next_number + 1, updated_at = now()
+    RETURNING next_number
+  `)
+
+  const counterRow = counterResult?.rows?.[0]
+  const nextNumber = Number(counterRow?.next_number ?? 1)
+  const queueNumber = Math.max(1, nextNumber - 1)
+
+  const [entry] = await db
+    .insert(queueEntries)
+    .values({
+      scopeKey: params.scopeKey,
+      userId: params.userId ?? null,
+      cartId: params.cartId ?? null,
+      queueNumber,
+      status: 'WAITING',
+      expiresAt,
+      updatedAt: now,
+    })
+    .returning()
+
+  return {
+    entryId: entry.id,
+    queueNumber,
+    status: entry.status,
+    expiresAt: entry.expiresAt ?? expiresAt,
+  }
+}
+
+export async function getQueueStatus(entryId: string) {
+  const now = new Date()
+  const [entry] = await db
+    .select()
+    .from(queueEntries)
+    .where(eq(queueEntries.id, entryId))
+    .limit(1)
+
+  if (!entry) return null
+
+  let status = entry.status
+  const createdAt = entry.createdAt ?? now
+
+  if (entry.expiresAt && entry.expiresAt < now) {
+    if (status !== 'EXPIRED') {
+      await db
+        .update(queueEntries)
+        .set({ status: 'EXPIRED', updatedAt: now })
+        .where(eq(queueEntries.id, entryId))
+      status = 'EXPIRED'
+    }
+  } else if (status === 'WAITING') {
+    const elapsedMs = now.getTime() - createdAt.getTime()
+    if (elapsedMs >= 6000) {
+      await db
+        .update(queueEntries)
+        .set({ status: 'READY', updatedAt: now })
+        .where(eq(queueEntries.id, entryId))
+      status = 'READY'
+    }
+  }
+
+  const elapsedMs = Math.max(0, now.getTime() - createdAt.getTime())
+  const progress = status === 'READY'
+    ? 100
+    : Math.min(90, Math.round((elapsedMs / 6000) * 90))
+
+  return {
+    status,
+    queueNumber: entry.queueNumber,
+    scopeKey: entry.scopeKey,
+    progress,
   }
 }

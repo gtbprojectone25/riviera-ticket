@@ -1,7 +1,8 @@
 'use client';
 
 import { cinemas } from "@/data/cinemas";
-import { GoogleMap, Marker, useJsApiLoader, MarkerClusterer } from "@react-google-maps/api";
+import { GoogleMap, Marker, useJsApiLoader, MarkerClustererF } from "@react-google-maps/api";
+import type { ClusterRenderer } from "@googlemaps/markerclusterer";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,28 @@ export function MapModal({ open, onClose, center }: Props) {
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY! ,
   });
+
+  // Custom cluster renderer to use a readable green badge instead of default blue
+  const clusterRenderer: ClusterRenderer = ({ count, position }) => {
+    return new google.maps.Marker({
+      position,
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        fillColor: "#22c55e",
+        fillOpacity: 0.92,
+        strokeColor: "#14532d",
+        strokeWeight: 2,
+        scale: 24,
+      },
+      label: {
+        text: String(count),
+        color: "#0b1b0f",
+        fontWeight: "800",
+        fontSize: "13px",
+      },
+      zIndex: Number(count),
+    });
+  };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -35,7 +58,7 @@ export function MapModal({ open, onClose, center }: Props) {
           gestureHandling: "greedy",
         }}
       >
-        <MarkerClusterer>
+        <MarkerClustererF options={{ renderer: clusterRenderer }}>
           {(clusterer) => (
             <>
               {cinemas.map((cinema) => (
@@ -43,16 +66,12 @@ export function MapModal({ open, onClose, center }: Props) {
                   key={cinema.id}
                   position={{ lat: cinema.lat, lng: cinema.lng }}
                   clusterer={clusterer}
-                  label={{
-                    text: cinema.name,
-                    className:
-                      "text-xs font-bold bg-black/80 text-white px-2 py-1 rounded",
-                  }}
+                  options={getReadableMarkerOptions(cinema.name)}
                 />
               ))}
             </>
           )}
-        </MarkerClusterer>
+        </MarkerClustererF>
       </GoogleMap>
     )}
   </div>
@@ -63,4 +82,30 @@ export function MapModal({ open, onClose, center }: Props) {
 </DialogContent>
     </Dialog>
   );
+}
+
+function getReadableMarkerOptions(labelText: string): google.maps.MarkerOptions {
+  const width = Math.min(260, Math.max(140, labelText.length * 7));
+  const height = 36;
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns='http://www.w3.org/2000/svg' width='${width}' height='${height}'>
+  <rect x='0.5' y='0.5' rx='10' ry='10' width='${width - 1}' height='${height - 1}' fill='#0f172a' stroke='#0ea5e9' stroke-width='1.5'/>
+</svg>`;
+
+  const icon: google.maps.Icon = {
+    url: `data:image/svg+xml;base64,${btoa(svg)}`,
+    scaledSize: new google.maps.Size(width, height),
+    labelOrigin: new google.maps.Point(width / 2, height / 2 + 1),
+  };
+
+  return {
+    icon,
+    label: {
+      text: labelText,
+      color: "#e2e8f0",
+      fontWeight: "700",
+      fontSize: "13px",
+    },
+    opacity: 0.97,
+  };
 }

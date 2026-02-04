@@ -5,7 +5,11 @@ import type { AccountEvent } from '@/types/account'
 
 type Status = 'idle' | 'loading' | 'error' | 'success'
 
-export function useAccountEvents(token: string | null, active: boolean) {
+export function useAccountEvents(
+  token: string | null,
+  active: boolean,
+  refreshKey: number = 0,
+) {
   const [events, setEvents] = useState<AccountEvent[]>([])
   const [status, setStatus] = useState<Status>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -40,8 +44,7 @@ export function useAccountEvents(token: string | null, active: boolean) {
 
     void load()
     return () => controller.abort()
-  }, [token, active])
+  }, [token, active, refreshKey])
 
   return { events, status, error }
 }
-

@@ -14,6 +14,7 @@ export const cartStatusEnum = pgEnum('cart_status', ['ACTIVE', 'EXPIRED', 'COMPL
 export const paymentStatusEnum = pgEnum('payment_status', ['PENDING', 'SUCCEEDED', 'FAILED', 'CANCELLED'])
 export const screenTypeEnum = pgEnum('screen_type', ['IMAX_70MM', 'STANDARD'])
 export const sessionSalesStatusEnum = pgEnum('session_sales_status', ['ACTIVE', 'PAUSED', 'CLOSED'])
+export const queueStatusEnum = pgEnum('queue_status', ['WAITING', 'READY', 'EXPIRED', 'COMPLETED'])
 export const auditoriumTypeEnum = pgEnum('auditorium_type', ['IMAX', 'NORMAL'])
 export const userRoleEnum = pgEnum('user_role', ['USER', 'ADMIN', 'SUPER_ADMIN'])
 export const assetSlotEnum = pgEnum('asset_slot', ['HOME_HERO', 'POSTER', 'CINEMA_COVER', 'AUDITORIUM_IMAGE'])
@@ -25,8 +26,6 @@ export const users = pgTable('users', {
   name: text('name').notNull(),
   surname: text('surname').notNull(),
   hashedPassword: text('hashed_password'),
-  encryptedSsn: text('encrypted_ssn'),
-  ssnHash: text('ssn_hash'),
   emailVerified: boolean('email_verified').default(false),
   role: text('role').notNull().default('USER'), // USER, ADMIN, SUPER_ADMIN
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -39,6 +38,7 @@ export const users = pgTable('users', {
 // Sessions table (for movie sessions)
 export const sessions = pgTable('sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
+  movieId: uuid('movie_id').references(() => movies.id),
   movieTitle: text('movie_title').notNull(),
   movieDuration: integer('movie_duration').notNull(), // in minutes
   startTime: timestamp('start_time').notNull(),
@@ -55,6 +55,7 @@ export const sessions = pgTable('sessions', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
+  movieIdIdx: index('idx_sessions_movie_id').on(table.movieId),
   auditoriumIdIdx: index('idx_sessions_auditorium_id').on(table.auditoriumId),
   startTimeIdx: index('idx_sessions_start_time').on(table.startTime),
   salesStatusIdx: index('idx_sessions_sales_status').on(table.salesStatus),
@@ -96,6 +97,7 @@ export const seats = pgTable('seats', {
   heldByCartId: uuid('held_by_cart_id'),
   soldAt: timestamp('sold_at'),
   soldCartId: uuid('sold_cart_id'),
+  // LEGACY FLAGS (do not use for logic; will be removed after migration)
   isAvailable: boolean('is_available').default(true).notNull(),
   isReserved: boolean('is_reserved').default(false).notNull(),
   reservedBy: uuid('reserved_by').references(() => users.id),
@@ -108,6 +110,7 @@ export const seats = pgTable('seats', {
 }, (table) => ({
   sessionIdIdx: index('idx_seats_session_id').on(table.sessionId),
   sessionSeatIdx: index('idx_seats_session_seat').on(table.sessionId, table.seatId),
+  sessionSeatUnique: uniqueIndex('uq_seats_session_seat').on(table.sessionId, table.seatId),
   sessionStatusHeldIdx: index('idx_seats_session_status_held_until').on(table.sessionId, table.status, table.heldUntil),
   statusIdx: index('idx_seats_status').on(table.status),
   heldUntilIdx: index('idx_seats_held_until').on(table.heldUntil),
@@ -142,7 +145,9 @@ export const cartItems = pgTable('cart_items', {
   seatId: uuid('seat_id').references(() => seats.id, { onDelete: 'cascade' }).notNull(),
   price: integer('price').notNull(), // in cents (snapshot of price at time of adding)
   createdAt: timestamp('created_at').defaultNow().notNull(),
-})
+}, (table) => ({
+  cartSeatUnique: uniqueIndex('uq_cart_items_cart_seat').on(table.cartId, table.seatId),
+}))
 
 // Cinemas table
 export const cinemas = pgTable('cinemas', {
@@ -163,9 +168,22 @@ export const cinemas = pgTable('cinemas', {
 
 // Auditorium layout type for JSONB column
 export type AuditoriumLayout = {
-  rowsConfig: { row: string; seatCount: number }[]
+  rowsConfig?: { row: string; seatCount: number }[]
   accessible?: { row: string; seats: number[] }[]
   vipZones?: { rows: string[]; fromPercent: number; toPercent: number }[]
+  rows?: {
+    label: string
+    seats: {
+      id?: string
+      row: string
+      number: number
+      type: 'STANDARD' | 'VIP' | 'WHEELCHAIR' | 'GAP'
+      status?: 'AVAILABLE' | 'HELD' | 'SOLD'
+      heldUntil?: string | null
+      heldByCartId?: string | null
+      soldAt?: string | null
+    }[]
+  }[]
 }
 
 // Auditoriums table (salas dentro de cada cinema)
@@ -273,6 +291,31 @@ export const paymentIntents = pgTable('payment_intents', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })
 
+// Queue counters (by scope)
+export const queueCounters = pgTable('queue_counters', {
+  scopeKey: text('scope_key').primaryKey(),
+  nextNumber: integer('next_number').notNull().default(1),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
+// Queue entries
+export const queueEntries = pgTable('queue_entries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  scopeKey: text('scope_key').notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  cartId: uuid('cart_id').references(() => carts.id, { onDelete: 'set null' }),
+  queueNumber: integer('queue_number').notNull(),
+  status: queueStatusEnum('status').notNull().default('WAITING'),
+  expiresAt: timestamp('expires_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  scopeNumberIdx: uniqueIndex('uq_queue_scope_number').on(table.scopeKey, table.queueNumber),
+  scopeIdx: index('idx_queue_scope').on(table.scopeKey),
+  statusIdx: index('idx_queue_status').on(table.status),
+}))
+
 // User sessions table (authentication)
 export const userSessions = pgTable('user_sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -312,10 +355,14 @@ export const usersRelations = relations(users, ({ many }) => ({
   paymentIntents: many(paymentIntents),
 }))
 
-export const sessionsRelations = relations(sessions, ({ many }) => ({
+export const sessionsRelations = relations(sessions, ({ many, one }) => ({
   seats: many(seats),
   tickets: many(tickets),
   carts: many(carts),
+  movie: one(movies, {
+    fields: [sessions.movieId],
+    references: [movies.id],
+  }),
 }))
 
 export const seatsRelations = relations(seats, ({ one, many }) => ({

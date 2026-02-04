@@ -1,3 +1,6 @@
+﻿// LEGACY SCHEMA (deprecated)
+// Use '@/db/schema' as the single source of truth. Do not import from this file.
+
 import { pgTable, uuid, timestamp, uniqueIndex } from 'drizzle-orm/pg-core'
 import { carts } from './carts'
 import { seats } from './seats'
@@ -21,4 +24,5 @@ export const cartItems = pgTable(
     ),
   }),
 )
+
 

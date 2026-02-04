@@ -88,7 +88,7 @@ class EmailService {
     }
   ): Promise<boolean> {
     if (!this.transporter) {
-      console.warn('Email service not configured')
+      console.warn('Email service not configured. Confirmation not sent for:', email)
       return false
     }
 
@@ -140,6 +140,17 @@ class EmailService {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private getTicketConfirmationTemplate(details: any): string {
+    const safeMovie = details.movieTitle || 'Your Tickets'
+    const safeCinema = details.cinemaName || 'Riviera'
+    const safeDate = details.date || 'TBD'
+    const safeTime = details.time || 'TBD'
+    const safeSeats = Array.isArray(details.seats) && details.seats.length
+      ? details.seats.join(', ')
+      : '-'
+    const safeTotal = typeof details.totalAmount === 'number'
+      ? details.totalAmount.toLocaleString()
+      : '0.00'
+
     return `
       <!DOCTYPE html>
       <html>
@@ -157,13 +168,13 @@ class EmailService {
           <div class="container">
             <h1>Ticket Confirmation</h1>
             <div class="ticket-info">
-              <h2>${details.movieTitle}</h2>
+              <h2>${safeMovie}</h2>
               <p><strong>Order ID:</strong> ${details.orderId}</p>
-              <p><strong>Cinema:</strong> ${details.cinemaName}</p>
-              <p><strong>Date:</strong> ${details.date}</p>
-              <p><strong>Time:</strong> ${details.time}</p>
-              <p><strong>Seats:</strong> ${details.seats.join(', ')}</p>
-              <p><strong>Total:</strong> $${details.totalAmount.toLocaleString()}</p>
+              <p><strong>Cinema:</strong> ${safeCinema}</p>
+              <p><strong>Date:</strong> ${safeDate}</p>
+              <p><strong>Time:</strong> ${safeTime}</p>
+              <p><strong>Seats:</strong> ${safeSeats}</p>
+              <p><strong>Total:</strong> $${safeTotal}</p>
             </div>
             <p>Your tickets will be available in your account. Barcodes will be revealed on the day of the event.</p>
             <div class="footer">

@@ -5,16 +5,17 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { auditoriums, cinemas, sessions } from '@/db/schema'
+import { auditoriums, cinemas, movies, sessions } from '@/db/schema'
 import { requireRole } from '@/lib/admin-auth'
 import { writeAuditLog } from '@/lib/audit-log'
 import { findSessionConflict } from '@/db/queries'
 import { z } from 'zod'
-import { and, eq, desc } from 'drizzle-orm'
+import { and, eq, desc, sql } from 'drizzle-orm'
 import { generateSeatsForSession } from '@/server/seats/generateSeatsForSession'
 
 const sessionSchema = z.object({
-  movieTitle: z.string().min(1, 'titulo obrigatorio'),
+  movieId: z.string().uuid('movieId invalido'),
+  movieTitle: z.string().min(1, 'titulo obrigatorio').optional(),
   movieDuration: z.number().int().min(1, 'duracao obrigatoria'),
   startTime: z.string().min(1, 'data/hora obrigatoria'),
   cinemaId: z.string().min(1, 'cinema obrigatorio'),
@@ -27,9 +28,21 @@ const sessionSchema = z.object({
 
 function getTotalSeats(layout: unknown) {
   if (!layout || typeof layout !== 'object') return 0
-  const rowsConfig = (layout as { rowsConfig?: Array<{ seatCount?: number }> }).rowsConfig
-  if (!Array.isArray(rowsConfig)) return 0
-  return rowsConfig.reduce((sum, row) => sum + (row?.seatCount ?? 0), 0)
+  const cast = layout as {
+    rowsConfig?: Array<{ seatCount?: number }>
+    rows?: Array<{ seats?: Array<{ type?: string }> }>
+  }
+  if (Array.isArray(cast.rowsConfig)) {
+    return cast.rowsConfig.reduce((sum, row) => sum + (row?.seatCount ?? 0), 0)
+  }
+  if (Array.isArray(cast.rows)) {
+    return cast.rows.reduce((sum, row) => {
+      const seats = Array.isArray(row.seats) ? row.seats : []
+      const count = seats.filter((s) => s?.type !== 'GAP').length
+      return sum + count
+    }, 0)
+  }
+  return 0
 }
 
 function parseDate(value: string) {
@@ -53,8 +66,12 @@ export async function GET(request: NextRequest) {
     const salesStatus = searchParams.get('salesStatus')
 
     const rows = await db
-      .select()
+      .select({
+        session: sessions,
+        movieTitle: sql<string>`coalesce(${movies.title}, ${sessions.movieTitle})`.as('movie_title'),
+      })
       .from(sessions)
+      .leftJoin(movies, eq(sessions.movieId, movies.id))
       .where(
         and(
           cinemaId ? eq(sessions.cinemaId, cinemaId) : undefined,
@@ -64,7 +81,12 @@ export async function GET(request: NextRequest) {
       )
       .orderBy(desc(sessions.startTime))
 
-    return NextResponse.json(rows)
+    return NextResponse.json(
+      rows.map((row) => ({
+        ...row.session,
+        movieTitle: row.movieTitle,
+      })),
+    )
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {
       return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
@@ -98,6 +120,16 @@ export async function POST(request: NextRequest) {
     }
 
     const endDate = new Date(startDate.getTime() + data.movieDuration * 60 * 1000)
+
+    const [movie] = await db
+      .select()
+      .from(movies)
+      .where(eq(movies.id, data.movieId))
+      .limit(1)
+
+    if (!movie) {
+      return NextResponse.json({ error: 'Filme nao encontrado' }, { status: 404 })
+    }
 
     const [cinema] = await db
       .select()
@@ -138,7 +170,8 @@ export async function POST(request: NextRequest) {
     const [session] = await db
       .insert(sessions)
       .values({
-        movieTitle: data.movieTitle,
+        movieId: movie.id,
+        movieTitle: movie.title ?? data.movieTitle,
         movieDuration: data.movieDuration,
         startTime: startDate,
         endTime: endDate,

@@ -6,8 +6,6 @@ import { db } from '@/db'
 import { randomBytes } from 'node:crypto'
 import { users, emailVerifications, userSessions } from '@/db/schema'
 import { eq, and, desc, gt } from 'drizzle-orm'
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { encryptionService } from '@/lib/encryption-service'
 import { webhookService } from '@/lib/webhook-service'
 
 function generateSessionToken(): string {
@@ -130,12 +128,6 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('✅ Usuário encontrado:', user.email)
-
-    // Criptografar dados sensíveis (SSN) se ainda não foi feito
-    // (Já feito no register-continue, mas garantir aqui também)
-    if (user.encryptedSsn && !user.emailVerified) {
-      // Dados já criptografados, apenas verificar
-    }
 
     // Atualizar usuário como verificado
     await db.update(users)

@@ -4,6 +4,7 @@ import "./globals.css";
 import { Header } from "@/components/header";
 import { AnimatedBackground } from "@/components/animated-background";
 import { AuthProvider } from "@/context/auth";
+import { CheckoutTimerProvider, PurchaseTimerBanner, ExtensionModal } from "@/components/flow";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,12 +40,16 @@ export default function RootLayout({
       >
         <AnimatedBackground />
         <AuthProvider>
-          <div className="relative z-10">
-            <Header />
-            <main>
-              {children}
-            </main>
-          </div>
+          <CheckoutTimerProvider>
+            <div className="relative z-10">
+              <Header />
+              <PurchaseTimerBanner />
+              <main>
+                {children}
+              </main>
+            </div>
+            <ExtensionModal />
+          </CheckoutTimerProvider>
         </AuthProvider>
       </body>
     </html>

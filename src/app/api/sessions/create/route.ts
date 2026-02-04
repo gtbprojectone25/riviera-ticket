@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { cinemas, auditoriums, sessions } from '@/db/schema'
+import { cinemas, auditoriums, movies, sessions } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { generateSeatsForSession } from '@/server/seats/generateSeatsForSession'
 
 type CreateSessionPayload = {
-  movieTitle: string
+  movieId: string
+  movieTitle?: string
   movieDuration: number
   startTime: string
   cinemaId: string
@@ -19,19 +20,20 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as CreateSessionPayload
 
-    const {
-      movieTitle,
-      movieDuration,
-      startTime,
-      cinemaId,
-      auditoriumId,
+  const {
+    movieId,
+    movieTitle,
+    movieDuration,
+    startTime,
+    cinemaId,
+    auditoriumId,
       screenType,
       basePrice,
       vipPrice,
     } = body
 
     if (
-      !movieTitle ||
+      !movieId ||
       !movieDuration ||
       !startTime ||
       !cinemaId ||
@@ -43,6 +45,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 },
+      )
+    }
+
+    const [movie] = await db
+      .select()
+      .from(movies)
+      .where(eq(movies.id, movieId))
+      .limit(1)
+
+    if (!movie) {
+      return NextResponse.json(
+        { error: 'Movie not found' },
+        { status: 404 },
       )
     }
 
@@ -72,11 +87,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const layout = auditorium.layout
-    const totalSeatsFromLayout = layout.rowsConfig.reduce(
-      (acc: number, row: { seatCount: number }) => acc + row.seatCount,
-      0,
-    )
+    const layout = auditorium.seatMapConfig ?? auditorium.layout
+    const totalSeatsFromLayout = Array.isArray((layout as { rowsConfig?: Array<{ seatCount?: number }> }).rowsConfig)
+      ? (layout as { rowsConfig: Array<{ seatCount: number }> }).rowsConfig.reduce(
+          (acc: number, row: { seatCount: number }) => acc + row.seatCount,
+          0,
+        )
+      : Array.isArray((layout as { rows?: Array<{ seats?: Array<{ type?: string }> }> }).rows)
+        ? (layout as { rows: Array<{ seats?: Array<{ type?: string }> }> }).rows.reduce((acc: number, row) => {
+            const seats = Array.isArray(row.seats) ? row.seats : []
+            const count = seats.filter((s) => s?.type !== 'GAP').length
+            return acc + count
+          }, 0)
+        : 0
 
     const startDate = new Date(startTime)
     const endDate = new Date(startDate.getTime() + movieDuration * 60 * 1000)
@@ -84,7 +107,8 @@ export async function POST(request: NextRequest) {
     const [session] = await db
       .insert(sessions)
       .values({
-        movieTitle,
+        movieId: movie.id,
+        movieTitle: movie.title ?? movieTitle ?? '',
         movieDuration,
         startTime: startDate,
         endTime: endDate,
@@ -113,4 +137,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

@@ -6,11 +6,12 @@ import type { Row } from './types';
 
 // Cores exatas do design
 const COLORS = {
-  standard: '#4AA7F5',    // Azul Claro
-  vip: '#7658F6',         // Roxo
-  selected: '#FF7513',    // Laranja
-  unavailable: '#1F2937', // Cinza escuro (ocupado)
-  wheelchair: '#2563EB',  // Azul Royal
+  standard: '#4AA7F5',    // Disponível (Standard)
+  vip: '#6D28D9',         // VIP (roxinho claro)
+  selected: '#F59E0B',    // Selecionado
+  held: '#6B7280',        // Reservado (HELD)
+  unavailable: '#DC2626', // Indisponível (SOLD)
+  wheelchair: '#3B82F6',  // Cadeira de roda (azul)
   gap: 'transparent',
 };
 
@@ -21,9 +22,10 @@ type SeatMapProps = {
   allowedTypes: string[];
   maxSelectable: number;
   readOnly?: boolean; // Para checkout
+  currentCartId?: string | null;
 };
 
-export function SeatMap({ rows, selectedSeats, onSeatClick, allowedTypes, readOnly = false }: SeatMapProps) {
+export function SeatMap({ rows, selectedSeats, onSeatClick, allowedTypes, readOnly = false, currentCartId }: SeatMapProps) {
   // Estado do Zoom
   const [scale, setScale] = useState(1);
   
@@ -118,11 +120,15 @@ export function SeatMap({ rows, selectedSeats, onSeatClick, allowedTypes, readOn
     setIsDragging(false);
   };
 
-  function getSeatStyle(type: string, status: string, isSelected: boolean, isAllowed: boolean) {
+  function getSeatStyle(type: string, status: string, isSelected: boolean, isAllowed: boolean, heldByCartId?: string | null) {
     if (type === 'GAP') return { background: 'transparent', border: 'none' };
     
-    if (status === 'occupied' || (!readOnly && !isAllowed)) {
+    if (status === 'SOLD' || (!readOnly && !isAllowed)) {
         return { background: COLORS.unavailable, cursor: 'not-allowed' };
+    }
+
+    if (status === 'HELD' && heldByCartId !== currentCartId) {
+        return { background: COLORS.held, cursor: 'not-allowed' };
     }
 
     if (isSelected) {
@@ -241,8 +247,9 @@ export function SeatMap({ rows, selectedSeats, onSeatClick, allowedTypes, readOn
                                         allowedTypes.includes(seat.type) ||
                                         (seat.type === 'WHEELCHAIR' && allowedTypes.includes('STANDARD'));
 
-                                      const isAvailable = seat.status === 'available';
-                                      const style = getSeatStyle(seat.type, seat.status, isSelected, isTypeAllowed);
+                                      const isHeldByOther = seat.status === 'HELD' && seat.heldByCartId !== currentCartId;
+                                      const isAvailable = seat.status === 'AVAILABLE' || (seat.status === 'HELD' && !isHeldByOther);
+                                      const style = getSeatStyle(seat.type, seat.status, isSelected, isTypeAllowed, seat.heldByCartId);
 
                                       const canClick = !readOnly && isAvailable && isTypeAllowed;
 
@@ -261,11 +268,11 @@ export function SeatMap({ rows, selectedSeats, onSeatClick, allowedTypes, readOn
                                                   ${readOnly ? 'cursor-default' : ''}
                                               `}
                                           >
-                                              {seat.status === 'occupied' ? (
-                                                  <X size={12} className="text-gray-500/50" strokeWidth={4} />
+                                              {seat.status === 'SOLD' ? (
+                                                  <X size={12} className="text-red-200" strokeWidth={4} />
                                               ) : seat.type === 'WHEELCHAIR' ? (
-                                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-white/80">
-                                                      <path d="M14 4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2 2-.9 2-2zM8.5 11c-.83 0-1.5.67-1.5 1.5S7.67 14 8.5 14h1.15l-2.09 3.63c-.23.4-.64.66-1.1.72l-2.46.31v2l2.31-.29c1.46-.18 2.72-.99 3.44-2.22l2.36-4.1H14c1.1 0 2 .9 2 2v5h2v-5c0-2.21-1.79-4-4-4H9.36l-.86-2H8.5z"/>
+                                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-white">
+                                                      <path d="M12 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm-1 5h2l.6 3h3.2a1 1 0 0 1 0 2h-2.7l.8 4.1a3.5 3.5 0 1 1-2 .4l-.9-4.5-1.7 1.1a1 1 0 0 1-1.4-.3l-1-1.6a1 1 0 1 1 1.7-1l.5.8 2.5-1.5-.6-3Z"/>
                                                   </svg>
                                               ) : null}
                                           </button>

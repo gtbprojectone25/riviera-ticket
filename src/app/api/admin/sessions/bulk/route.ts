@@ -27,9 +27,21 @@ function addDays(date: Date, days: number) {
 
 function getTotalSeats(layout: unknown) {
   if (!layout || typeof layout !== 'object') return 0
-  const rowsConfig = (layout as { rowsConfig?: Array<{ seatCount?: number }> }).rowsConfig
-  if (!Array.isArray(rowsConfig)) return 0
-  return rowsConfig.reduce((sum, row) => sum + (row?.seatCount ?? 0), 0)
+  const cast = layout as {
+    rowsConfig?: Array<{ seatCount?: number }>
+    rows?: Array<{ seats?: Array<{ type?: string }> }>
+  }
+  if (Array.isArray(cast.rowsConfig)) {
+    return cast.rowsConfig.reduce((sum, row) => sum + (row?.seatCount ?? 0), 0)
+  }
+  if (Array.isArray(cast.rows)) {
+    return cast.rows.reduce((sum, row) => {
+      const seats = Array.isArray(row.seats) ? row.seats : []
+      const count = seats.filter((s) => s?.type !== 'GAP').length
+      return sum + count
+    }, 0)
+  }
+  return 0
 }
 
 function getClientMeta(request: NextRequest) {
@@ -143,6 +155,7 @@ export async function POST(request: NextRequest) {
       const [created] = await db
         .insert(sessions)
         .values({
+          movieId: session.movieId ?? null,
           movieTitle: session.movieTitle,
           movieDuration: session.movieDuration,
           startTime: newStart,

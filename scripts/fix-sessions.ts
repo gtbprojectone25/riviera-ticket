@@ -52,7 +52,8 @@ async function main() {
           ],
           vipZones: [{ rows: ['F', 'G', 'H'], fromPercent: 0.3, toPercent: 0.7 }],
         }
-        const totalSeats = layout.rowsConfig.reduce((acc, r) => acc + r.seatCount, 0)
+        const rowConfigs = layout.rowsConfig ?? []
+        const totalSeats = rowConfigs.reduce((acc, r) => acc + r.seatCount, 0)
         
         ;[aud] = await db.insert(auditoriums).values({
           cinemaId: cinema.id,

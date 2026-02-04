@@ -5,14 +5,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { auditoriums, cinemas, sessions, seats, tickets } from '@/db/schema'
+import { auditoriums, cinemas, movies, sessions, seats, tickets } from '@/db/schema'
 import { requireRole } from '@/lib/admin-auth'
 import { writeAuditLog } from '@/lib/audit-log'
 import { findSessionConflict } from '@/db/queries'
-import { count, eq } from 'drizzle-orm'
+import { count, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 
 const updateSchema = z.object({
+  movieId: z.string().uuid().optional(),
   movieTitle: z.string().min(1).optional(),
   movieDuration: z.number().int().min(1).optional(),
   startTime: z.string().min(1).optional(),
@@ -26,9 +27,21 @@ const updateSchema = z.object({
 
 function getTotalSeats(layout: unknown) {
   if (!layout || typeof layout !== 'object') return 0
-  const rowsConfig = (layout as { rowsConfig?: Array<{ seatCount?: number }> }).rowsConfig
-  if (!Array.isArray(rowsConfig)) return 0
-  return rowsConfig.reduce((sum, row) => sum + (row?.seatCount ?? 0), 0)
+  const cast = layout as {
+    rowsConfig?: Array<{ seatCount?: number }>
+    rows?: Array<{ seats?: Array<{ type?: string }> }>
+  }
+  if (Array.isArray(cast.rowsConfig)) {
+    return cast.rowsConfig.reduce((sum, row) => sum + (row?.seatCount ?? 0), 0)
+  }
+  if (Array.isArray(cast.rows)) {
+    return cast.rows.reduce((sum, row) => {
+      const seats = Array.isArray(row.seats) ? row.seats : []
+      const count = seats.filter((s) => s?.type !== 'GAP').length
+      return sum + count
+    }, 0)
+  }
+  return 0
 }
 
 function parseDate(value: string) {
@@ -51,17 +64,24 @@ export async function GET(_: NextRequest, context: RouteContext) {
     await requireRole(['ADMIN', 'SUPER_ADMIN', 'SUPPORT'])
 
     const { id } = await context.params
-    const [session] = await db
-      .select()
+    const [row] = await db
+      .select({
+        session: sessions,
+        movieTitle: sql<string>`coalesce(${movies.title}, ${sessions.movieTitle})`.as('movie_title'),
+      })
       .from(sessions)
+      .leftJoin(movies, eq(sessions.movieId, movies.id))
       .where(eq(sessions.id, id))
       .limit(1)
 
-    if (!session) {
+    if (!row) {
       return NextResponse.json({ error: 'Sessao nao encontrada' }, { status: 404 })
     }
 
-    return NextResponse.json(session)
+    return NextResponse.json({
+      ...row.session,
+      movieTitle: row.movieTitle,
+    })
   } catch (error) {
     if ((error as Error).message === 'Unauthorized') {
       return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
@@ -141,6 +161,24 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       )
     }
 
+    let movieTitle = data.movieTitle ?? existing.movieTitle
+    let movieId = existing.movieId ?? null
+
+    if (data.movieId && data.movieId !== existing.movieId) {
+      const [movie] = await db
+        .select()
+        .from(movies)
+        .where(eq(movies.id, data.movieId))
+        .limit(1)
+
+      if (!movie) {
+        return NextResponse.json({ error: 'Filme nao encontrado' }, { status: 404 })
+      }
+
+      movieId = movie.id
+      movieTitle = movie.title ?? movieTitle
+    }
+
     let cinemaName = existing.cinemaName
     let cinemaId = existing.cinemaId
 
@@ -179,7 +217,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
 
     const updates = {
-      movieTitle: data.movieTitle ?? existing.movieTitle,
+      movieId,
+      movieTitle,
       movieDuration: duration,
       startTime: startDate,
       endTime: endDate,

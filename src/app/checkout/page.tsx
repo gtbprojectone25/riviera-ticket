@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, Clock } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
 import { useBookingStore } from '@/stores/booking'
 import { SeatMap } from '../seat-selection/SeatMap'
 import { useSessionSeats } from '../seat-selection/useSessionSeats'
@@ -92,24 +92,17 @@ export default function CheckoutPage() {
   }, [finalizedTickets])
 
   const sessionDateLabel = useMemo(() => {
-    if (!session) return 'To be defined'
-    const start = new Date(session.startTime)
-    return start.toLocaleDateString()
-  }, [session])
+    // Data oficial fixa para todos os cinemas
+    return '16/07/2026'
+  }, [])
 
   const sessionTimeLabel = useMemo(() => {
-    if (!session) return 'To be defined'
+    if (!session) return '07:00 PM'
     const start = new Date(session.startTime)
-    const end = new Date(session.endTime)
-    const startLabel = start.toLocaleTimeString([], {
+    return start.toLocaleTimeString([], {
       hour: '2-digit',
       minute: '2-digit',
     })
-    const endLabel = end.toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-    return `${startLabel} at ${endLabel}`
   }, [session])
 
   if (!selectedCinema) return null
@@ -121,13 +114,6 @@ export default function CheckoutPage() {
       <div className="relative z-10 flex flex-col items-center min-h-screen pt-6">
         
         <div className="w-full max-w-md space-y-6 relative rounded-xl p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)] pb-32">
-           {/* Urgency Banner */}
-          <div className="w-full bg-[#0266FC] p-3 flex items-center justify-center rounded-lg">
-            <Clock className="h-4 w-4 text-white shrink-0 mr-2" />
-            <p className="text-white text-xs font-medium text-center">
-              To guarantee your place, finish within 10:00 minutes.
-            </p>
-          </div>
           {/* Back Button */}
           <button
             onClick={() => router.back()}
@@ -151,7 +137,7 @@ export default function CheckoutPage() {
                 Pre-Sale
               </span>
               <span className="text-base text-white font-bold">
-                Die Odyssee
+                The Odyssey
               </span>
             </div>
 
@@ -178,7 +164,7 @@ export default function CheckoutPage() {
               </span>
               <div className="text-right">
                 <div className="text-base text-white font-bold">
-                  {finalizedTickets.length} Premium Ticket
+                  {finalizedTickets.length} {finalizedTickets.length === 1 ? 'Ticket' : 'Tickets'}
                 </div>
                 <div className="text-xs text-gray-500 mt-1 max-w-[180px] leading-relaxed">
                   Tickets are available the week of the premiere
