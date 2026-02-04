@@ -8,7 +8,8 @@ import { paymentIntents, carts } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+const stripeKey = process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder'
+const stripe = new Stripe(stripeKey, {
   apiVersion: '2025-10-29.clover',
 })
 
@@ -19,6 +20,14 @@ const createIntentSchema = z.object({
 })
 
 export async function POST(request: NextRequest) {
+  // Verifica se a chave do Stripe está configurada
+  if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_placeholder') {
+    return NextResponse.json(
+      { error: 'Stripe não configurado' },
+      { status: 500 }
+    )
+  }
+
   try {
     const body = await request.json()
     const validation = createIntentSchema.safeParse(body)
