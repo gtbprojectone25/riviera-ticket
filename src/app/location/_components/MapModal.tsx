@@ -17,28 +17,6 @@ export function MapModal({ open, onClose, center }: Props) {
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY! ,
   });
 
-  // Custom cluster renderer to use a readable green badge instead of default blue
-  const clusterRenderer: any = ({ count, position }: any) => {
-    return new google.maps.Marker({
-      position,
-      icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        fillColor: "#22c55e",
-        fillOpacity: 0.92,
-        strokeColor: "#14532d",
-        strokeWeight: 2,
-        scale: 24,
-      },
-      label: {
-        text: String(count),
-        color: "#0b1b0f",
-        fontWeight: "800",
-        fontSize: "13px",
-      },
-      zIndex: Number(count),
-    });
-  };
-
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg p-0 bg-black">
@@ -57,7 +35,7 @@ export function MapModal({ open, onClose, center }: Props) {
           gestureHandling: "greedy",
         }}
       >
-        <MarkerClustererF options={{ renderer: clusterRenderer }}>
+        <MarkerClustererF>
           {(clusterer) => (
             <>
               {cinemas.map((cinema) => (
