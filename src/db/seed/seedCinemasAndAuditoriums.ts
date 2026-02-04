@@ -259,7 +259,8 @@ export async function seedCinemasAndAuditoriums() {
     const name = special?.name ?? `${cinema.name} IMAX`
     const format = special?.format ?? cinema.format ?? 'IMAX'
 
-    const totalSeats = layout.rowsConfig.reduce(
+    const rowsConfig = layout.rowsConfig ?? []
+    const totalSeats = rowsConfig.reduce(
       (acc, row) => acc + row.seatCount,
       0,
     )

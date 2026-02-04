@@ -66,7 +66,7 @@ type BookingState = {
   setSelectedTickets: (tickets: SelectedTicket[]) => void;
   setFinalizedTickets: (tickets: FinalizedTicket[]) => void;
   setPaymentData: (data: PaymentData) => void;
-  setCartId: (id: string) => void;
+  setCartId: (id: string | null) => void;
 
   // Limpar todo o estado (após confirmação ou expiração)
   resetBooking: () => void;

@@ -10,12 +10,16 @@ export type Ticket = {
   assignedSeatId?: string;
 };
 
+export type SeatStatus = 'AVAILABLE' | 'HELD' | 'SOLD';
+
 export type Seat = {
   id: string;
   row: string;
   number: number;
   type: SeatType;
-  status: 'available' | 'occupied';
+  status: SeatStatus;
+  heldUntil?: string | null;
+  heldByCartId?: string | null;
 };
 
 export type Row = {

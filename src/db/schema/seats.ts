@@ -1,3 +1,6 @@
+﻿// LEGACY SCHEMA (deprecated)
+// Use '@/db/schema' as the single source of truth. Do not import from this file.
+
 import { pgTable, uuid, varchar, timestamp } from 'drizzle-orm/pg-core'
 import { users } from './users'
 import { sessions } from './sessions'
@@ -18,10 +21,11 @@ export const seats = pgTable('seats', {
 })
 
 /**
- * SQL de referência para a constraint UNIQUE(session_id, row, number):
+ * SQL de referÃªncia para a constraint UNIQUE(session_id, row, number):
  *
  * ALTER TABLE seats
  * ADD CONSTRAINT seats_session_row_number_unique
  * UNIQUE (session_id, row, number);
  */
+
 

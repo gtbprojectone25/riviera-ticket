@@ -1,16 +1,17 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { ArrowRight, ChevronLeft, LogOut, RefreshCw } from 'lucide-react'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { ChevronLeft, LogOut, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/context/auth'
-import { useBookingStore } from '@/stores/booking'
 import { useAccountEvents } from '@/hooks/use-account-events'
+import { useAccountPendents } from '@/hooks/use-account-pendents'
 import { useAccountProfile } from '@/hooks/use-account-profile'
 import type { UserProfile } from '@/types/account'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { EventTicketShowcase } from '@/components/tickets/EventTicketShowcase'
 import Image from 'next/image'
 import { formatCurrency } from '@/lib/utils'
 
@@ -18,16 +19,23 @@ import { formatCurrency } from '@/lib/utils'
 type ActiveTab = 'pendants' | 'events' | 'account'
 
 export default function AccountPage() {
-  const router = useRouter()
-  const { user, token, isAuthenticated, logout } = useAuth()
-  const finalizedTickets = useBookingStore((s) => s.finalizedTickets)
-  const selectedCinema = useBookingStore((s) => s.selectedCinema)
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black text-white flex items-center justify-center">Loading...</div>}>
+      <AccountPageContent />
+    </Suspense>
+  )
+}
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>('pendants')
+function AccountPageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { user, token, isAuthenticated, isLoading, logout } = useAuth()
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>('events')
+  const [refreshKey, setRefreshKey] = useState(0)
   const [profileForm, setProfileForm] = useState<UserProfile>({
     firstName: user?.name ?? '',
     lastName: user?.surname ?? '',
-    ssn: '',
     email: user?.email ?? '',
   })
   const [passwordForm, setPasswordForm] = useState({
@@ -45,7 +53,13 @@ export default function AccountPage() {
     events,
     status: eventsStatus,
     error: eventsError,
-  } = useAccountEvents(token, activeTab === 'events')
+  } = useAccountEvents(token, activeTab === 'events', refreshKey)
+
+  const {
+    pendents,
+    status: pendentsStatus,
+    error: pendentsError,
+  } = useAccountPendents(token, activeTab === 'pendants', refreshKey)
 
   // Perfil
   const {
@@ -56,17 +70,35 @@ export default function AccountPage() {
   } = useAccountProfile(token, activeTab === 'account')
 
   useEffect(() => {
+    if (isLoading) return
     if (!isAuthenticated) {
       router.push('/login')
     }
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, isLoading, router])
+
+  useEffect(() => {
+    const tab = searchParams.get('tab') as ActiveTab | null
+    const refresh = searchParams.get('refresh')
+    if (tab && (tab === 'events' || tab === 'pendants' || tab === 'account')) {
+      setActiveTab(tab)
+    } else {
+      setActiveTab('events')
+    }
+
+    if (refresh) {
+      setRefreshKey(Date.now())
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('refresh')
+      const next = params.toString()
+      router.replace(next ? `/account?${next}` : '/account')
+    }
+  }, [searchParams, router])
 
   useEffect(() => {
     if (profile) {
       setProfileForm({
         firstName: profile.firstName ?? user?.name ?? '',
         lastName: profile.lastName ?? user?.surname ?? '',
-        ssn: profile.ssn ?? '',
         email: profile.email ?? user?.email ?? '',
       })
     } else if (profileError) {
@@ -74,17 +106,10 @@ export default function AccountPage() {
       setProfileForm((prev) => ({
         firstName: prev.firstName || user?.name || '',
         lastName: prev.lastName || user?.surname || '',
-        ssn: prev.ssn || '',
         email: prev.email || user?.email || '',
       }))
     }
   }, [profile, profileError, user])
-
-  const totalAmount = useMemo(
-    () => finalizedTickets.reduce((acc, t) => acc + t.price, 0),
-    [finalizedTickets],
-  )
-  const ticketCount = finalizedTickets.length
 
   const handleSaveProfile = async () => {
     if (!token) return
@@ -105,7 +130,24 @@ export default function AccountPage() {
       }
       const data = (await res.json()) as UserProfile
       setProfile(data)
+      
+      // Update localStorage with new user data
+      if (typeof window !== 'undefined' && user) {
+        const updatedUser = {
+          ...user,
+          name: profileForm.firstName,
+          surname: profileForm.lastName,
+          email: profileForm.email,
+        }
+        localStorage.setItem('riviera_user', JSON.stringify(updatedUser))
+      }
+      
       setProfileMessage('Profile updated successfully')
+      
+      // Refresh page to update user data in header
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
     } catch (err) {
       setProfileMessage(
         err instanceof Error ? err.message : 'Failed to update profile',
@@ -168,110 +210,103 @@ export default function AccountPage() {
 
   const renderPendants = () => (
     <div className="relative z-10">
-      <div className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl overflow-hidden border border-gray-700 shadow-2xl mb-6">
+      {pendentsStatus === 'loading' && (
+        <p className="text-sm text-gray-400">Loading pending purchases...</p>
+      )}
+      {pendentsError && (
+        <p className="text-sm text-red-400">Error: {pendentsError}</p>
+      )}
+      {pendentsStatus === 'success' && pendents.length === 0 && (
+        <p className="text-sm text-gray-400">No pending purchases.</p>
+      )}
 
-        {/* Poster - same proportions as hero-section */}
-        <div className="relative aspect-2/3 max-w-md mx-auto mt-4 rounded-2xl overflow-hidden cursor-pointer">
-          <Image
-            src="/theodyssey.jpg"
-            alt="The Odyssey"
-            fill
-            className="object-cover"
-            sizes="(min-width: 768px) 420px, 320px"
-            priority
-          />
-          <div className="absolute bottom-0 left-0 right-0 h-[65%] bg-linear-to-t from-black/90 to-transparent" />
-          <div className="absolute bottom-4 left-0 right-0 flex flex-wrap gap-2 justify-center px-4 z-10">
-            
-          </div>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="text-gray-400 text-sm mb-1">Tickets</p>
-              <p className="text-white font-bold text-lg">
-                {ticketCount} Premium Ticket{ticketCount > 1 ? 's' : ''}
-              </p>
-              <p className="text-gray-500 text-xs mt-1">
-                Tickets are available the week of the premiere.
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-gray-400 text-sm mb-1">Total</p>
-              <p className="text-white font-bold text-xl">
-                {formatCurrency(totalAmount)}
-              </p>
-            </div>
+      {pendents.map((pending) => (
+        <div
+          key={pending.id}
+          className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl overflow-hidden border border-gray-700 shadow-2xl mb-6"
+        >
+          {/* Poster - same proportions as hero-section */}
+          <div className="relative aspect-2/3 max-w-md mx-auto mt-4 rounded-2xl overflow-hidden cursor-pointer">
+            <Image
+              src="/aquiles-capa.png"
+              alt={pending.movieTitle}
+              fill
+              className="object-cover"
+              sizes="(min-width: 768px) 420px, 320px"
+              priority
+            />
+            <div className="absolute bottom-0 left-0 right-0 h-[65%] bg-linear-to-t from-black/90 to-transparent" />
           </div>
 
-          {selectedCinema && (
-            <div className="pt-4 border-top border-gray-700">
-              <p className="text-gray-400 text-xs mb-1">Cinema</p>
-              <p className="text-white font-semibold">{selectedCinema.name}</p>
-              <p className="text-gray-500 text-xs mt-1">{selectedCinema.address}</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <Button
-        onClick={() => router.push('/payment')}
-        className="w-full bg-[#0066FF] hover:bg-[#0052cc] text-white py-6 rounded-xl text-base font-bold shadow-[0_0_20px_rgba(0,102,255,0.3)] transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-      >
-        My reservation
-        <ArrowRight className="w-5 h-5" />
-      </Button>
-    </div>
-  )
-
-  const renderEvents = () => (
-    <div className="relative z-10 pt-2">
-      {eventsStatus === 'loading' && (
-        <p className="text-sm text-gray-400">Loading events...</p>
-      )}
-      {eventsError && (
-        <p className="text-sm text-red-400">Error: {eventsError}</p>
-      )}
-      {eventsStatus === 'success' && events.length === 0 && (
-        <p className="text-sm text-gray-400">You don&apos;t have confirmed events yet.</p>
-      )}
-      {events.map((event) => {
-        const start = new Date(event.sessionTime)
-        const dateLabel = start.toLocaleDateString()
-        const timeLabel = start.toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-        })
-        return (
-          <div
-            key={event.id}
-            className="bg-[#111827] border border-gray-800 rounded-2xl p-5 mb-4 shadow-lg"
-          >
-            <div className="flex justify-between items-start">
+          <div className="p-6 space-y-4">
+            <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-lg font-bold text-white">
-                  {event.movieTitle}
-                </h3>
-                <p className="text-xs text-gray-400 mt-1">
-                  {dateLabel} at {timeLabel} — {event.cinemaName}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Seats: {event.seatLabels.join(', ')}
+                <p className="text-gray-400 text-sm mb-1">Session</p>
+                <p className="text-white font-bold text-lg">{pending.movieTitle}</p>
+                <p className="text-gray-500 text-xs mt-1">
+                  {new Date(pending.sessionTime).toLocaleDateString()} ·{' '}
+                  {new Date(pending.sessionTime).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-xs text-gray-400 uppercase">{event.status}</p>
-                <p className="text-base font-bold text-white">
-                  ${(event.amount / 100).toLocaleString()}
+                <p className="text-gray-400 text-sm mb-1">Total</p>
+                <p className="text-white font-bold text-xl">
+                  {formatCurrency(pending.totalAmount)}
                 </p>
               </div>
             </div>
+
+            <div className="pt-4 border-top border-gray-700">
+              <p className="text-gray-400 text-xs mb-1">Cinema</p>
+              <p className="text-white font-semibold">{pending.cinemaName}</p>
+              {pending.cinemaAddress && (
+                <p className="text-gray-500 text-xs mt-1">{pending.cinemaAddress}</p>
+              )}
+            </div>
           </div>
-        )
-      })}
+        </div>
+      ))}
     </div>
   )
+
+  const renderEvents = () => {
+    const demoEvent = {
+      id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', // UUID de exemplo (seria o cartId real)
+      movieTitle: 'The Odyssey',
+      sessionTime: new Date('2026-07-16T19:45:00').toISOString(), // 16/07/2026 às 19:45 (7:45 PM)
+      cinemaName: 'AMC Lincoln Square',
+      cinemaAddress: 'New York, NY, USA',
+      seatLabels: ['B12', 'B13'],
+      status: 'reserved',
+      amount: 0,
+      type: 'STANDARD' as const,
+      barcode: undefined,
+    }
+
+    const list = eventsStatus === 'success' && events.length === 0 ? [demoEvent] : events
+
+    return (
+      <div className="relative z-10 pt-2 space-y-touch-4">
+        {eventsStatus === 'loading' && (
+          <p className="text-sm text-gray-400">Loading events...</p>
+        )}
+        {eventsError && (
+          <p className="text-sm text-red-400">Error: {eventsError}</p>
+        )}
+        {eventsStatus === 'success' && events.length === 0 && (
+          <p className="text-sm text-gray-400">You don&apos;t have confirmed events yet. Showing a preview ticket below.</p>
+        )}
+        {list.map((event) => (
+          <div key={event.id} className="space-y-touch-3">
+            <EventTicketShowcase event={event} />
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   const renderAccount = () => (
     <div className="relative z-10 pt-2">
@@ -314,21 +349,6 @@ export default function AccountPage() {
               }
               className="bg-[#1F2933] border-gray-700 text-white placeholder:text-gray-500"
               placeholder="Last name"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ssn" className="text-gray-300 text-sm">
-              SSN
-            </Label>
-            <Input
-              id="ssn"
-              value={profileForm.ssn}
-              onChange={(e) => {
-                const digits = e.target.value.replace(/\D/g, '').slice(0, 9)
-                setProfileForm((p) => ({ ...p, ssn: digits }))
-              }}
-              className="bg-[#1F2933] border-gray-700 text-white placeholder:text-gray-500"
-              placeholder="9 digits"
             />
           </div>
           <div className="space-y-2">
@@ -450,6 +470,14 @@ export default function AccountPage() {
     </div>
   )
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <p className="text-sm text-gray-400">Loading...</p>
+      </div>
+    )
+  }
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -462,10 +490,6 @@ export default function AccountPage() {
     // quero menor esse card
     <div className="min-h-screen  text-white flex justify-center px-4 py-6 sm:px-6 sm:py-8">
       <div className="w-full max-w-3xl bg-[#0d1117] border border-gray-800 rounded-3xl shadow-2xl overflow-hidden">
-        <div className="bg-[#0066FF] text-white text-center py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium tracking-wide">
-          To guarantee your place, finish within 10:00 minutes (only 4 per session).
-        </div>
-
         <div className="p-4 sm:p-6 space-y-4">
           {/* Header */}
           <div className="flex items-center justify-between gap-4 border-b border-gray-800 pb-4">
@@ -511,3 +535,4 @@ export default function AccountPage() {
     </div>
   )
 }
+

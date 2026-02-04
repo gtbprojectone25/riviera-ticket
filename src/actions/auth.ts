@@ -35,8 +35,7 @@ const registerSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
   surname: z.string().min(2, 'Sobrenome deve ter pelo menos 2 caracteres'),
   email: z.string().email('Email inválido'),
-  password: z.string().min(8, 'Senha deve ter pelo menos 8 caracteres'),
-  ssn: z.string().optional()
+  password: z.string().min(8, 'Senha deve ter pelo menos 8 caracteres')
 })
 
 export async function loginUser(prevState: ActionState | null, formData: FormData): Promise<ActionState> {
@@ -148,8 +147,7 @@ export async function registerUser(prevState: ActionState | null, formData: Form
       name: formData.get('name') as string,
       surname: formData.get('surname') as string,
       email: formData.get('email') as string,
-      password: formData.get('password') as string,
-      ssn: formData.get('ssn') as string
+      password: formData.get('password') as string
     }
 
     const validatedFields = registerSchema.safeParse(rawFormData)

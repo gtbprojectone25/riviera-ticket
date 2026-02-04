@@ -16,10 +16,6 @@ export default function ReservationsPage() {
 
   return (
     <div className="min-h-screen text-white relative overflow-x-hidden bg-black/60">
-      {/* Top Alert */}
-      <div className="bg-[#0066FF] text-white text-center py-3 px-2 sm:px-4 text-xs sm:text-sm font-medium tracking-wide relative z-20">
-        To guarantee your place, finish within 10:00 minutes (only 4 per session).
-      </div>
 
       <div className="relative z-10">
         {/* Header */}

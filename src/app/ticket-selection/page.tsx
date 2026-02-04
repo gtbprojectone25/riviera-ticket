@@ -6,7 +6,7 @@ import Image from 'next/image'
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ChevronLeft, Clock } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
 
 import { TicketCounter } from './_components/ticket-counter'
 import { TicketSummary } from './_components/ticket-summary'
@@ -37,11 +37,15 @@ type SessionApi = {
 export default function TicketSelectionPage() {
   const router = useRouter()
   const bootstrapAttempted = useRef(false)
+  const isDev = process.env.NODE_ENV !== 'production'
 
   const selectedCinema = useBookingStore((state) => state.selectedCinema)
   const setSelectedTickets = useBookingStore((state) => state.setSelectedTickets)
+  const selectedSessionId = useBookingStore((state) => state.selectedSessionId)
   const setSelectedSessionId = useBookingStore((state) => state.setSelectedSessionId)
   const setSessionData = useBookingStore((state) => state.setSessionData)
+  const setCartId = useBookingStore((state) => state.setCartId)
+  const setFinalizedTickets = useBookingStore((state) => state.setFinalizedTickets)
 
   const [sessionTimes, setSessionTimes] = useState<SessionTime[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
@@ -49,20 +53,26 @@ export default function TicketSelectionPage() {
 
   const [tickets, setTickets] = useState<SelectedTicket[]>([
     {
-      id: 'standard',
-      name: 'Standard',
-      price: 34900,
-      description: ['Valid only for the chosen session', 'Online ticket with access via QR code'],
-      amount: 0,
-    },
-    {
       id: 'vip',
       name: 'VIP',
       price: 44900,
       description: ['Valid only for the chosen session', 'Priority access'],
       amount: 0,
     },
+    {
+      id: 'standard',
+      name: 'Standard',
+      price: 34900,
+      description: ['Valid only for the chosen session', 'Online ticket with access via QR code'],
+      amount: 0,
+    },
   ])
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && selectedSessionId && selectedSessionId.length !== 36) {
+      console.warn('BAD SESSION ID', selectedSessionId, selectedSessionId.length)
+    }
+  }, [selectedSessionId])
 
   // Proteção de rota + carregamento das sessões reais
   useEffect(() => {
@@ -71,8 +81,7 @@ export default function TicketSelectionPage() {
       return
     }
 
-    const controller = new AbortController()
-
+    let cancelled = false
     const load = async () => {
       try {
         setSessionsLoading(true)
@@ -83,9 +92,7 @@ export default function TicketSelectionPage() {
           params.set('cinemaId', selectedCinema.id)
         }
 
-        const res = await fetch(`/api/sessions?${params.toString()}`, {
-          signal: controller.signal,
-        })
+        const res = await fetch(`/api/sessions?${params.toString()}`)
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}))
@@ -93,6 +100,7 @@ export default function TicketSelectionPage() {
         }
 
         const data = (await res.json()) as SessionApi[]
+        if (cancelled) return
 
         // Usar todas as sessões retornadas (a API já filtra por cinema)
         let filtered = data
@@ -108,12 +116,9 @@ export default function TicketSelectionPage() {
                 cinemaId: selectedCinema.id,
                 cinemaName: selectedCinema.name 
               }),
-              signal: controller.signal,
             })
             if (createRes.ok) {
-              const refresh = await fetch(`/api/sessions?${params.toString()}`, {
-                signal: controller.signal,
-              })
+              const refresh = await fetch(`/api/sessions?${params.toString()}`)
               if (refresh.ok) {
                 const refreshed = (await refresh.json()) as SessionApi[]
                 filtered = refreshed
@@ -138,7 +143,7 @@ export default function TicketSelectionPage() {
 
           return {
             id: s.id,
-            time: `${startLabel} - ${endLabel}`,
+            time: startLabel, // Apenas horário de início
             selected: index === 0,
             movieTitle: s.movieTitle,
             startTime: s.startTime,
@@ -149,7 +154,12 @@ export default function TicketSelectionPage() {
         setSessionTimes(mapped)
 
         if (mapped[0]) {
+          if (mapped[0].id.length !== 36 && isDev) {
+            console.warn('[ticket-selection] sessionId length mismatch on bootstrap', { sessionId: mapped[0].id, length: mapped[0].id.length })
+          }
           setSelectedSessionId(mapped[0].id)
+          setCartId(null)
+          setFinalizedTickets([])
           // Salvar dados completos da sessão na store
           setSessionData({
             id: mapped[0].id,
@@ -159,12 +169,12 @@ export default function TicketSelectionPage() {
           })
         }
       } catch (err) {
-        if (controller.signal.aborted) return
+        if (cancelled) return
         const msg =
           err instanceof Error ? err.message : 'Erro ao carregar sessões'
         setSessionsError(msg)
       } finally {
-        if (!controller.signal.aborted) {
+        if (!cancelled) {
           setSessionsLoading(false)
         }
       }
@@ -172,16 +182,37 @@ export default function TicketSelectionPage() {
 
     void load()
 
-    return () => controller.abort()
-  }, [selectedCinema, router, setSelectedSessionId, setSessionData])
+    return () => {
+      cancelled = true
+    }
+  }, [selectedCinema, router, setSelectedSessionId, setSessionData, setCartId, setFinalizedTickets, isDev, selectedSessionId])
 
   const handleSessionSelect = (sessionId: string) => {
+    if (isDev) {
+      console.debug('[ticket-selection] session click', { sessionId, length: sessionId.length })
+      console.warn('sessionId', sessionId, sessionId.length)
+    }
+    if (sessionId.length !== 36) {
+      if (isDev) {
+        console.warn('[ticket-selection] invalid sessionId length', { sessionId, length: sessionId.length })
+        // Toast dev-only fallback
+        if (typeof window !== 'undefined') {
+          window.alert('Session id inválido (dev)')
+        }
+      }
+      return
+    }
+
     setSessionTimes((prev) =>
       prev.map((session) => ({
         ...session,
         selected: session.id === sessionId,
       })),
     )
+    if (sessionId !== selectedSessionId) {
+      setCartId(null)
+      setFinalizedTickets([])
+    }
     setSelectedSessionId(sessionId)
 
     // Atualizar dados da sessão na store
@@ -218,21 +249,38 @@ export default function TicketSelectionPage() {
   }
 
   const handleNextStep = () => {
+    const currentSession = sessionTimes.find((s) => s.selected)
+    if (!currentSession) {
+      setSessionsError('Selecione uma sessão antes de continuar')
+      return
+    }
+
+    if (isDev) {
+      console.debug('[ticket-selection] navigate', { sessionId: currentSession.id, length: currentSession.id.length })
+    }
+    if (currentSession.id.length !== 36) {
+      if (isDev) {
+        console.warn('[ticket-selection] navigation blocked due to invalid sessionId length', { sessionId: currentSession.id, length: currentSession.id.length })
+        if (typeof window !== 'undefined') {
+          window.alert('Session id inválido (dev)')
+        }
+      }
+      setSessionsError('ID de sessão inválido')
+      return
+    }
+
     const selectedTickets = tickets.filter((t) => t.amount > 0)
     setSelectedTickets(selectedTickets)
 
-    const currentSession = sessionTimes.find((s) => s.selected)
-    if (currentSession) {
-      setSelectedSessionId(currentSession.id)
-      setSessionData({
-        id: currentSession.id,
-        movieTitle: currentSession.movieTitle || 'Die Odyssee',
-        startTime: currentSession.startTime || '',
-        endTime: currentSession.endTime || '',
-      })
-    }
+    setSelectedSessionId(currentSession.id)
+    setSessionData({
+      id: currentSession.id,
+      movieTitle: currentSession.movieTitle || 'Die Odyssee',
+      startTime: currentSession.startTime || '',
+      endTime: currentSession.endTime || '',
+    })
 
-    router.push('/seat-selection')
+    router.push(`/seat-selection?sessionId=${currentSession.id}`)
   }
 
   if (!selectedCinema) return null
@@ -241,14 +289,6 @@ export default function TicketSelectionPage() {
     <div className="min-h-screen text-white relative overflow-hidden bg-black/60">
       <div className="relative z-10 flex flex-col items-center justify-center min-h-[calc(100vh-100px)] pt-8 ">
         <div className="w-full max-w-md rounded-xl mx-4 space-y-6 p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
-          {/* Urgency Banner */}
-          <div className="w-full bg-[#0266FC] p-3 flex items-center justify-center rounded-lg">
-            <Clock className="h-4 w-4 text-white shrink-0 mr-2" />
-            <p className="text-white text-xs font-medium text-center">
-              To guarantee your place, finish within 10:00 minutes.
-            </p>
-          </div>
-
           {/* Header */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -359,7 +399,7 @@ export default function TicketSelectionPage() {
           <div className="pb-6">
             <Button
               className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-base font-semibold rounded-xl shadow-lg"
-              disabled={getTotalTickets() === 0}
+              disabled={getTotalTickets() === 0 || sessionsLoading || sessionTimes.length === 0}
               onClick={handleNextStep}
             >
               Escolher assentos

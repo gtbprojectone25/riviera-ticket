@@ -12,6 +12,12 @@ import { emailService } from '@/lib/email-service'
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+const isDev = process.env.NODE_ENV !== 'production'
+const log = (...args: unknown[]) => {
+  if (isDev) {
+    console.log('[stripe-webhook]', ...args)
+  }
+}
 
 export async function POST(request: NextRequest) {
   if (!stripeSecret || !webhookSecret) {
@@ -51,6 +57,11 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       case 'payment_intent.succeeded': {
         const paymentIntent = event.data.object as Stripe.PaymentIntent
+        log('payment_intent.succeeded', {
+          id: paymentIntent.id,
+          amount: paymentIntent.amount,
+          currency: paymentIntent.currency,
+        })
         await handlePaymentSuccess(paymentIntent)
         break
       }
@@ -79,6 +90,7 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
   const result = await db.transaction(async (tx) => {
     const now = new Date()
 
+    log('fetching payment_intent', paymentIntent.id)
     const [dbPaymentIntent] = await tx
       .select()
       .from(paymentIntents)
@@ -91,12 +103,14 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
     }
 
     if (dbPaymentIntent.status !== 'SUCCEEDED') {
+      log('updating payment_intent status', dbPaymentIntent.id)
       await tx
         .update(paymentIntents)
         .set({ status: 'SUCCEEDED', updatedAt: now })
         .where(eq(paymentIntents.id, dbPaymentIntent.id))
     }
 
+    log('updating cart status', dbPaymentIntent.cartId)
     await tx
       .update(carts)
       .set({ status: 'COMPLETED', updatedAt: now })
@@ -119,6 +133,11 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
       userId: dbPaymentIntent.userId,
       guestEmail,
     })
+    log('tickets created', {
+      count: createdTickets.length,
+      alreadyProcessed,
+      cartId: dbPaymentIntent.cartId,
+    })
 
     let sessionData: Session | null = null
     if (items[0]) {
@@ -129,6 +148,7 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
         .limit(1)
       sessionData = session
     }
+    log('session data', sessionData ? sessionData.id : 'missing')
 
     return {
       dbPaymentIntent,
@@ -146,50 +166,69 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
   }
 
   if (result.alreadyProcessed) {
+    log('already processed', result.dbPaymentIntent.cartId)
     return
   }
 
   for (const ticket of result.createdTickets) {
-    const barcodeData = barcodeService.generateBarcodeData(ticket.id, result.dbPaymentIntent.cartId)
-    const { realPath, blurredPath } = await barcodeService.saveBarcode(ticket.id, barcodeData)
+    try {
+      const barcodeData = barcodeService.generateBarcodeData(ticket.id, result.dbPaymentIntent.cartId)
+      const { realPath, blurredPath } = await barcodeService.saveBarcode(ticket.id, barcodeData)
 
-    await db.update(tickets).set({
-      barcodePath: realPath,
-      barcodeBlurredPath: blurredPath,
-      barcodeData,
-      barcodeRevealedAt: result.sessionData?.startTime || new Date(),
-    }).where(eq(tickets.id, ticket.id))
+      await db.update(tickets).set({
+        barcodePath: realPath,
+        barcodeBlurredPath: blurredPath,
+        barcodeData,
+        barcodeRevealedAt: result.sessionData?.startTime || new Date(),
+      }).where(eq(tickets.id, ticket.id))
+    } catch (error) {
+      console.error('Erro ao gerar barcode:', error)
+    }
   }
 
-  if (result.sessionData) {
-    let recipientEmail: string | null = null
+  let recipientEmail: string | null = null
 
-    if (result.resolvedUserId) {
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, result.resolvedUserId))
-        .limit(1)
-      if (user) {
-        recipientEmail = user.email
-      }
+  if (result.resolvedUserId) {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, result.resolvedUserId))
+      .limit(1)
+    if (user) {
+      recipientEmail = user.email
     }
+  }
 
-    if (!recipientEmail && result.resolvedGuestEmail) {
-      recipientEmail = result.resolvedGuestEmail
-    }
+  if (!recipientEmail && result.resolvedGuestEmail) {
+    recipientEmail = result.resolvedGuestEmail
+  }
 
-    if (recipientEmail) {
-      await emailService.sendTicketConfirmation(recipientEmail, {
-        orderId: result.dbPaymentIntent.cartId,
-        movieTitle: result.sessionData.movieTitle,
-        cinemaName: result.sessionData.cinemaName,
-        date: new Date(result.sessionData.startTime).toLocaleDateString('pt-BR'),
-        time: new Date(result.sessionData.startTime).toLocaleTimeString('pt-BR'),
-        seats: result.items.map((item) => item.seat.seatId),
-        totalAmount: result.dbPaymentIntent.amountCents / 100,
-      })
+  if (recipientEmail) {
+    const sessionStart = result.sessionData?.startTime
+    const fallbackDate = sessionStart
+      ? new Date(sessionStart).toLocaleDateString('pt-BR')
+      : 'TBD'
+    const fallbackTime = sessionStart
+      ? new Date(sessionStart).toLocaleTimeString('pt-BR')
+      : 'TBD'
+
+    const sent = await emailService.sendTicketConfirmation(recipientEmail, {
+      orderId: result.dbPaymentIntent.cartId,
+      movieTitle: result.sessionData?.movieTitle || 'Your Tickets',
+      cinemaName: result.sessionData?.cinemaName || 'Riviera',
+      date: fallbackDate,
+      time: fallbackTime,
+      seats: result.items.map((item) => item.seat.seatId),
+      totalAmount: result.dbPaymentIntent.amountCents / 100,
+    })
+
+    if (!sent) {
+      console.warn('Falha ao enviar email de confirmacao para', recipientEmail)
+    } else {
+      log('email confirmation sent', recipientEmail)
     }
+  } else {
+    console.warn('Email de confirmacao nao enviado: destinatario ausente')
   }
 }
 

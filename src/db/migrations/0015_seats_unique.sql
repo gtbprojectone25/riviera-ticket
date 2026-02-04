@@ -1,0 +1,1 @@
+﻿CREATE UNIQUE INDEX IF NOT EXISTS "uq_seats_session_seat" ON "seats" USING btree ("session_id","seat_id");

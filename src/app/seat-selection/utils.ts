@@ -12,7 +12,7 @@ export const generateSeats = (): Seat[] => {
     
     for (let i = 1; i <= 25; i++) {
       let seatType: SeatType = defaultType;
-      let status: 'available' | 'occupied' = 'available';
+      let status: 'AVAILABLE' | 'SOLD' = 'AVAILABLE';
 
       if (isVipRow) {
         if (i >= 7 && i <= 18) {
@@ -23,7 +23,7 @@ export const generateSeats = (): Seat[] => {
       } 
       else {
           if (row === 'E') {
-            if (i === 1 || i === 2) status = 'occupied';
+            if (i === 1 || i === 2) status = 'SOLD';
             else if (i === 3 || i === 4) seatType = 'STANDARD';
             else if (i === 5 || i === 6) seatType = 'WHEELCHAIR';
             else if (i >= 7 && i <= 10) seatType = 'GAP';

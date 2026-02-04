@@ -2,7 +2,7 @@
 
 /**
  * Background com vídeo em tela cheia
- * Usa o arquivo public/small-vecteezy_orange.mp4
+ * Usa o arquivo public/small-vecteezy_dark-blue-dramatic-background-with-smoke-clouds_27989987_small.mp4
  */
 export function AnimatedBackground() {
   return (
@@ -14,10 +14,9 @@ export function AnimatedBackground() {
         muted
         playsInline
       >
-        <source src="/small-vecteezy_orange.mp4" type="video/mp4" />
+        <source src="/small-vecteezy_dark-blue-dramatic-background-with-smoke-clouds_27989987_small.mp4" type="video/mp4" />
       </video>
-      <div className="pointer-events-none absolute inset-0 bg-black/40" />
+      <div className="pointer-events-none absolute inset-0 bg-black/25" />
     </div>
   )
 }
-

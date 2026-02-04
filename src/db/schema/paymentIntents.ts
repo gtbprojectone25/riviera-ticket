@@ -1,3 +1,6 @@
+﻿// LEGACY SCHEMA (deprecated)
+// Use '@/db/schema' as the single source of truth. Do not import from this file.
+
 import { pgTable, uuid, varchar, integer, timestamp, uniqueIndex } from 'drizzle-orm/pg-core'
 import { users } from './users'
 import { orders } from './orders'
@@ -26,4 +29,5 @@ export const paymentIntents = pgTable(
     orderUnique: uniqueIndex('payment_intents_order_id_unique').on(table.orderId),
   }),
 )
+
 

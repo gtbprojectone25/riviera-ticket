@@ -32,7 +32,7 @@ export default function PreOrderPage() {
           <div className="relative rounded-xl overflow-hidden shadow-[0_15px_40px_rgba(0,0,0,0.4)] bg-black/40 border-0">
             <div className="relative aspect-9/16">
               <Image
-                src="/posterodysseyedt.png"
+                src="/aquiles-capa.png"
                 alt="The Odyssey Poster"
                 fill
                 className="object-cover"

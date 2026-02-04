@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import AlertIcon from '@/assets/icons/Rectangle.svg'
+import { useCheckoutTimer } from '@/components/flow'
 
 interface PurchaseWarningModalProps {
     open: boolean
@@ -22,6 +23,7 @@ export function PurchaseWarningModal({
 }: PurchaseWarningModalProps) {
 
     const router = useRouter()
+    const { startTimer } = useCheckoutTimer()
 
     const [timeLeft, setTimeLeft] = useState(15)
     const totalSeconds = 15
@@ -36,6 +38,7 @@ export function PurchaseWarningModal({
                     clearInterval(interval)
                     setTimeout(() => {
                         onTimeout?.()
+                        startTimer()
                         router.push('/location')
                     }, 0)
                     return 0
@@ -45,10 +48,11 @@ export function PurchaseWarningModal({
         }, 1000)
 
         return () => clearInterval(interval)
-    }, [open, onTimeout, router])
+    }, [open, onTimeout, router, startTimer])
 
     useEffect(() => {
         if (!open) return
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setProgress(0)
         let rafId = 0
         const start = performance.now()

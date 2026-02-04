@@ -1,27 +1,26 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import Link from "next/link";
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ChevronLeft, Eye, EyeOff, Check, Lock } from 'lucide-react'
 
-type AuthStep = 'email' | 'info' | 'password' | 'verify' | 'encrypting' | 'success'
+type AuthStep = 'info' | 'password' | 'verify' | 'encrypting' | 'success'
 
 function RegisterContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [currentStep, setCurrentStep] = useState<AuthStep>('email')
-  const [email, setEmail] = useState('')
+  const [currentStep, setCurrentStep] = useState<AuthStep>('info')
   const [formData, setFormData] = useState({
     name: '',
     surname: '',
-    ssn: '',
+    email: '',
     password: '',
     confirmPassword: ''
   })
+  const email = formData.email
   const [verificationCode, setVerificationCode] = useState(['', '', '', '', ''])
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -52,68 +51,54 @@ function RegisterContent() {
     }
   }, [resendTimer])
 
-  // Step 1: Email submission
-  const handleEmailSubmit = async () => {
+  const sendVerificationCode = async () => {
     if (!email || !email.includes('@')) {
       setError('Por favor, insira um email válido')
-      return
+      return false
     }
 
-    setIsLoading(true)
-    setError(null)
-    try {
-      const response = await fetch('/api/auth/register-init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
-      })
+    const response = await fetch('/api/auth/register-init', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    })
 
-      const data = await response.json()
+    const data = await response.json()
 
-      if (!response.ok) {
-        setError(data.error || 'Erro ao enviar código')
-        return
-      }
-
-      // Salvar código se retornado (modo desenvolvimento)
-      if (data.code) {
-        setVerificationCodeFromApi(data.code)
-      }
-
-      setResendTimer(60)
-      setCurrentStep('info')
-    } catch (error) {
-      console.error('Error sending code:', error)
-      setError('Erro ao enviar código. Tente novamente.')
-    } finally {
-      setIsLoading(false)
+    if (!response.ok) {
+      setError(data.error || 'Erro ao enviar código')
+      return false
     }
+
+    // Salvar código se retornado (modo desenvolvimento)
+    if (data.code) {
+      setVerificationCodeFromApi(data.code)
+    }
+
+    setResendTimer(60)
+    return true
   }
 
-  // Step 2: Info submission
+  // Step 1: Info submission
   const handleInfoSubmit = async () => {
-    if (!formData.name || !formData.surname || !formData.ssn) {
+    if (!formData.name || !formData.surname || !email) {
       setError('Todos os campos são obrigatórios')
       return
     }
 
-    const ssnDigits = formData.ssn.replace(/\D/g, '')
-    if (ssnDigits.length !== 9) {
-      setError('SSN deve ter 9 dígitos')
-      return
-    }
-
     setIsLoading(true)
     setError(null)
     try {
+      const codeSent = await sendVerificationCode()
+      if (!codeSent) return
+
       const response = await fetch('/api/auth/register-continue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email,
           name: formData.name,
-          surname: formData.surname,
-          ssn: ssnDigits
+          surname: formData.surname
         })
       })
 
@@ -250,129 +235,68 @@ function RegisterContent() {
   // Handle resend code
   const handleResendCode = async () => {
     if (resendTimer > 0) return
-    await handleEmailSubmit()
-    setCurrentStep('verify')
+    setIsLoading(true)
+    setError(null)
+    try {
+      const ok = await sendVerificationCode()
+      if (ok) setCurrentStep('verify')
+    } catch (error) {
+      console.error('Error resending code:', error)
+      setError('Erro ao enviar código. Tente novamente.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  // Render Step 1: Email
-  const renderEmailStep = () => (
-    <div className="space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold text-white">Create an account or log in</h2>
-      </div>
-
-      <div className="space-y-4">
-        {error && (
-          <div className="bg-red-500/20 border border-red-500 text-red-200 px-4 py-2 rounded text-sm">
-            {error}
-          </div>
-        )}
-        <div>
-          <Label htmlFor="email" className="text-gray-400 text-sm">E-mail</Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="enter your email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="bg-[#1F2933] border-white/10 text-white placeholder:text-gray-500 mt-2"
-            onKeyPress={(e) => e.key === 'Enter' && handleEmailSubmit()}
-          />
-        </div>
-
-        <Button
-          onClick={handleEmailSubmit}
-          disabled={isLoading || !email}
-          className="w-full bg-[#0066FF] hover:bg-[#0052cc] text-white py-6 rounded-xl text-base font-bold"
-        >
-          {isLoading ? 'Sending...' : 'Create account'}
-        </Button>
-
-        <p className="text-xs text-gray-400 text-center">
-          Already have an account?{" "}
-          <Link
-            href="/login"
-            className="text-blue-400 hover:text-blue-300 transition-colors underline-offset-2 hover:underline"
-          >
-            Tap to log in
-          </Link>
-        </p>
-      </div>
-
-      {/* Encryption Info */}
-      <div className="mt-8 space-y-2">
-        <div className="flex items-start gap-2">
-          <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-0.5">
-            <Check className="w-3 h-3 text-white" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-white mb-2">Advanced end-to-end encryption</h3>
-            <p className="text-xs text-gray-400 leading-relaxed">
-              In today&apos;s digital world, privacy isn&apos;t optional - it&apos;s essential. That&apos;s why we implement advanced end-to-end encryption powered by state-of-the-art security technologies.
-            </p>
-            <p className="text-xs text-gray-400 leading-relaxed mt-2">
-              Unlike basic encryption methods, our system ensures that your data is locked at the source and only unlocked by its rightful recipient. Not even we can access it. Every message, file, or transaction is shielded with cutting-edge cryptographic protocols - the same level of protection trusted by global banks, governments, and cybersecurity leaders.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-
-  // Render Step 2: Info
+  // Render Step 1: Info
   const renderInfoStep = () => (
     <div className="space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold text-white">Your information</h2>
-      </div>
+      <h2 className="text-2xl font-bold text-white">Your information</h2>
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         {error && (
-          <div className="bg-red-500/20 border border-red-500 text-red-200 px-4 py-2 rounded text-sm">
+          <div className="bg-red-500/20 border border-red-500 text-red-200 px-4 py-3 rounded-lg text-sm">
             {error}
           </div>
         )}
-        <div>
-          <Label htmlFor="name" className="text-gray-400 text-sm">Name</Label>
+        <div className="space-y-2">
+          <Label htmlFor="name" className="text-gray-300 text-sm font-medium">Name</Label>
           <Input
             id="name"
             placeholder="enter your name"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="bg-[#1F2933] border-white/10 text-white placeholder:text-gray-500 mt-2"
+            className="bg-[#1F2937] border-gray-700 text-white placeholder:text-gray-500 h-12 rounded-lg"
           />
         </div>
 
-        <div>
-          <Label htmlFor="surname" className="text-gray-400 text-sm">Surname</Label>
+        <div className="space-y-2">
+          <Label htmlFor="surname" className="text-gray-300 text-sm font-medium">Surname</Label>
           <Input
             id="surname"
             placeholder="enter your last name"
             value={formData.surname}
             onChange={(e) => setFormData({ ...formData, surname: e.target.value })}
-            className="bg-[#1F2933] border-white/10 text-white placeholder:text-gray-500 mt-2"
+            className="bg-[#1F2937] border-gray-700 text-white placeholder:text-gray-500 h-12 rounded-lg"
           />
         </div>
 
-        <div>
-          <Label htmlFor="ssn" className="text-gray-400 text-sm">SSN</Label>
+        <div className="space-y-2">
+          <Label htmlFor="email" className="text-gray-300 text-sm font-medium">E-mail</Label>
           <Input
-            id="ssn"
-            placeholder="enter the number"
-            value={formData.ssn}
-            onChange={(e) => {
-              const digits = e.target.value.replace(/\D/g, '').slice(0, 9)
-              setFormData({ ...formData, ssn: digits })
-            }}
-            className="bg-[#1c1c1c] border-white/10 text-white mt-2"
+            id="email"
+            type="email"
+            placeholder="enter your email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            className="bg-[#1F2937] border-gray-700 text-white placeholder:text-gray-500 h-12 rounded-lg"
           />
-          <p className="text-xs text-gray-500 mt-1">9 digits required</p>
         </div>
 
         <Button
           onClick={handleInfoSubmit}
-          disabled={isLoading || !formData.name || !formData.surname || formData.ssn.length !== 9}
-          className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white py-6 rounded-xl text-base font-bold"
+          disabled={isLoading || !formData.name || !formData.surname || !formData.email}
+          className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white h-12 rounded-lg text-base font-semibold mt-6"
         >
           {isLoading ? 'Validating...' : 'Continue'}
         </Button>
@@ -637,10 +561,10 @@ function RegisterContent() {
             variant="ghost"
             size="sm"
             onClick={() => {
-              if (currentStep === 'email') {
+              if (currentStep === 'info') {
                 router.back()
               } else {
-                const steps: AuthStep[] = ['email', 'info', 'password', 'verify', 'encrypting', 'success']
+                const steps: AuthStep[] = ['info', 'password', 'verify', 'encrypting', 'success']
                 const currentIndex = steps.indexOf(currentStep)
                 if (currentIndex > 0) {
                   setCurrentStep(steps[currentIndex - 1])
@@ -652,7 +576,6 @@ function RegisterContent() {
             <ChevronLeft className="w-4 h-4" />
           </Button>
         </div>
-          {currentStep === 'email' && renderEmailStep()}
           {currentStep === 'info' && renderInfoStep()}
           {currentStep === 'password' && renderPasswordStep()}
           {currentStep === 'verify' && renderVerifyStep()}

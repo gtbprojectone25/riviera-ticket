@@ -9,7 +9,7 @@ type Ticket = {
 
 interface SelectedSeatsPanelProps {
   tickets: Ticket[];
-  onRemoveSeat: (id: string) => void;
+  onRemoveSeat: (id: string, seatId?: string) => void;
 }
 
 export function SelectedSeatsPanel({ tickets, onRemoveSeat }: SelectedSeatsPanelProps) {
@@ -33,7 +33,7 @@ export function SelectedSeatsPanel({ tickets, onRemoveSeat }: SelectedSeatsPanel
             </span>
             <button
               className="flex items-center justify-center w-6 h-6 rounded-full bg-[#2A2A2A] hover:bg-[#333] transition-colors border border-white/5"
-              onClick={() => onRemoveSeat(ticket.id)}
+              onClick={() => onRemoveSeat(ticket.id, ticket.assignedSeatId)}
               aria-label="Remover assento"
             >
               <X className="w-3 h-3 text-gray-400" />

@@ -131,13 +131,6 @@ export default function LocationPage() {
                 <div className="flex-1 flex items-start justify-center p-4 pt-6">
                     <div className="w-full max-w-sm space-y-6 relative rounded-xl p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
 
-                        <div className="w-full bg-[#0266FC] p-3 flex items-center justify-center rounded-lg">
-                            <Clock className="h-4 w-4 text-white shrink-0 mr-2" />
-                            <p className="text-white text-xs font-medium text-center">
-                                To guarantee your place, finish within 10:00 minutes.
-                            </p>
-                        </div>
-
                         <div className="flex items-center justify-between">
                             <h1 className="text-2xl font-bold text-white drop-shadow-lg">The Odyssey</h1>
                             <Badge variant="secondary" className="bg-gray-700/80 text-white border border-gray-600">
