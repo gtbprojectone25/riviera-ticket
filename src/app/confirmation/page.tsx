@@ -125,7 +125,7 @@ export default function ConfirmationPage() {
     return () => clearTimeout(timer)
   }, [orderId, ticketsForDisplay, selectedSeats, sessionData?.id, dbSession?.id])
 
-  // Proteção de rota
+  // Proteï¿½ï¿½o de rota
   useEffect(() => {
     if (ticketsForDisplay.length > 0) return
     const timer = setTimeout(() => {
@@ -337,10 +337,10 @@ export default function ConfirmationPage() {
           <CardContent className="p-4">
             <h4 className="text-yellow-400 font-medium mb-2">Important Information</h4>
             <ul className="text-gray-300 text-sm space-y-1">
-              <li>• Arrive at least 30 minutes before the show</li>
-              <li>• Bring a valid ID for verification</li>
-              <li>• No outside food or drinks allowed</li>
-              <li>• Cancellation allowed up to 2 hours before showtime</li>
+              <li>â€¢ Arrive at least 30 minutes before the show</li>
+              <li>â€¢ Bring a valid ID for verification</li>
+              <li>â€¢ No outside food or drinks allowed</li>
+              <li>â€¢ Cancellation allowed up to 2 hours before showtime</li>
             </ul>
           </CardContent>
         </Card>
