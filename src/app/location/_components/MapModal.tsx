@@ -2,7 +2,6 @@
 
 import { cinemas } from "@/data/cinemas";
 import { GoogleMap, Marker, useJsApiLoader, MarkerClustererF } from "@react-google-maps/api";
-import type { ClusterRenderer } from "@googlemaps/markerclusterer";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
 import { Button } from "@/components/ui/button";
@@ -19,7 +18,7 @@ export function MapModal({ open, onClose, center }: Props) {
   });
 
   // Custom cluster renderer to use a readable green badge instead of default blue
-  const clusterRenderer: ClusterRenderer = ({ count, position }) => {
+  const clusterRenderer: any = ({ count, position }: any) => {
     return new google.maps.Marker({
       position,
       icon: {
