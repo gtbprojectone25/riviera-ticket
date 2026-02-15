@@ -11,6 +11,9 @@ type Status = 'idle' | 'loading' | 'error' | 'success'
 export default function MyEventsPage() {
   const { token, isAuthenticated } = useAuth()
   const router = useRouter()
+  const allowDemoFallback =
+    process.env.NODE_ENV === 'development' &&
+    process.env.NEXT_PUBLIC_ENABLE_DEMO_TICKET_FALLBACK === 'true'
 
   const [events, setEvents] = useState<AccountEvent[]>([])
   const [status, setStatus] = useState<Status>('idle')
@@ -71,23 +74,40 @@ export default function MyEventsPage() {
         {error && (
           <p className="text-sm text-red-400">Error: {error}</p>
         )}
-        {status === 'success' && events.length === 0 && (
-          <p className="text-sm text-gray-400">No events yet. Showing a preview ticket below.</p>
+        {status === 'success' && events.length === 0 && !allowDemoFallback && (
+          <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-4 space-y-3">
+            <p className="text-sm text-gray-300">No tickets found.</p>
+            <button
+              type="button"
+              onClick={() => router.push('/pre-order')}
+              className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500"
+            >
+              Browse sessions
+            </button>
+          </div>
         )}
 
-        {(status === 'success' && events.length === 0
-          ? [{
-            id: 'demo-ticket',
-            movieTitle: 'The Odyssey',
-            sessionTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-            cinemaName: 'Riviera IMAX',
-            cinemaAddress: '123 Demo Ave',
-            seatLabels: ['B12', 'B13'],
-            status: 'reserved',
-            amount: 0,
-            type: 'STANDARD' as const,
-            barcode: undefined,
-          }]
+        {status === 'success' && events.length === 0 && allowDemoFallback && (
+          <p className="text-sm text-amber-300">
+            Demo mode enabled: showing sample ticket fallback.
+          </p>
+        )}
+
+        {(status === 'success' && events.length === 0 && allowDemoFallback
+          ? [
+            {
+              id: 'demo-ticket',
+              movieTitle: 'The Odyssey',
+              sessionTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+              cinemaName: 'Riviera IMAX',
+              cinemaAddress: '123 Demo Ave',
+              seatLabels: ['B12', 'B13'],
+              status: 'reserved',
+              amount: 0,
+              type: 'STANDARD' as const,
+              barcode: undefined,
+            },
+          ]
           : events
         ).map((event) => (
           <EventTicketShowcase key={event.id} event={event} />

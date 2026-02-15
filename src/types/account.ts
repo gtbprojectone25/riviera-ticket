@@ -12,16 +12,20 @@ export type AccountEvent = {
 }
 
 export type AccountPending = {
-  id: string
-  sessionId: string
+  orderId: string
+  cartId: string | null
+  sessionId: string | null
   totalAmount: number
   status: string
   createdAt: string
-  expiresAt: string
-  sessionTime: string
+  updatedAt: string | null
+  sessionTime: string | null
   movieTitle: string
   cinemaName: string
-  cinemaAddress?: string
+  cinemaAddress?: string | null
+  checkoutSessionId: string | null
+  paymentIntentStatus: string | null
+  paymentReference: string | null
 }
 
 export type UserProfile = {

@@ -3,8 +3,8 @@
  * Riviera Ticket - Painel Admin
  */
 
-import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum, index, jsonb } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum, index, uniqueIndex, jsonb } from 'drizzle-orm/pg-core'
+import { relations, sql } from 'drizzle-orm'
 import { users, sessions, carts, cinemas } from './schema'
 
 // ============================================
@@ -123,6 +123,7 @@ export const orders = pgTable('orders', {
   // Pagamento
   paymentMethod: text('payment_method'), // 'stripe', 'pix', etc
   paymentReference: text('payment_reference'), // stripe payment intent id
+  checkoutSessionId: text('checkout_session_id'),
   paidAt: timestamp('paid_at'),
   
   // Metadata
@@ -141,6 +142,10 @@ export const orders = pgTable('orders', {
   userIdIdx: index('idx_orders_user_id').on(table.userId),
   sessionIdIdx: index('idx_orders_session_id').on(table.sessionId),
   statusIdx: index('idx_orders_status').on(table.status),
+  checkoutSessionIdx: index('idx_orders_checkout_session_id').on(table.checkoutSessionId),
+  checkoutSessionUnique: uniqueIndex('uq_orders_checkout_session_id')
+    .on(table.checkoutSessionId)
+    .where(sql`${table.checkoutSessionId} is not null`),
   createdAtIdx: index('idx_orders_created_at').on(table.createdAt),
 }))
 
@@ -264,6 +269,13 @@ export const adminSessionsRelations = relations(adminSessions, ({ one }) => ({
   }),
 }))
 
+export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
+  admin: one(adminUsers, {
+    fields: [auditLogs.adminId],
+    references: [adminUsers.id],
+  }),
+}))
+
 export const ordersRelations = relations(orders, ({ one }) => ({
   user: one(users, { fields: [orders.userId], references: [users.id] }),
   cart: one(carts, { fields: [orders.cartId], references: [carts.id] }),
@@ -277,7 +289,24 @@ export const waitlistRelations = relations(waitlist, ({ one }) => ({
 }))
 
 export const promotionsRelations = relations(promotions, ({ many }) => ({
-  cinemas: many(promotionCinemas),
+  promotionCinemas: many(promotionCinemas, { relationName: 'promotionCinemasPromotion' }),
+}))
+
+export const promotionCinemasRelations = relations(promotionCinemas, ({ one }) => ({
+  promotion: one(promotions, {
+    fields: [promotionCinemas.promotionId],
+    references: [promotions.id],
+    relationName: 'promotionCinemasPromotion',
+  }),
+  cinema: one(cinemas, {
+    fields: [promotionCinemas.cinemaId],
+    references: [cinemas.id],
+    relationName: 'promotionCinemasCinema',
+  }),
+}))
+
+export const cinemasRelations = relations(cinemas, ({ many }) => ({
+  promotionCinemas: many(promotionCinemas, { relationName: 'promotionCinemasCinema' }),
 }))
 
 // ============================================

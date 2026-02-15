@@ -12,6 +12,7 @@ const releaseSchema = z.object({
 })
 
 type SeatLookup = {
+  requestId: string
   seatId: string
   dbId: string
 }
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
         .where(and(eq(seats.sessionId, parsed.sessionId), inArray(seats.id, uuidSeatIds)))
 
       rows.forEach((row) => {
-        foundSeats.push({ seatId: row.seatId, dbId: row.id })
+        foundSeats.push({ requestId: row.id, seatId: row.seatId, dbId: row.id })
       })
     }
 
@@ -45,12 +46,15 @@ export async function POST(request: NextRequest) {
         .where(and(eq(seats.sessionId, parsed.sessionId), inArray(seats.seatId, seatCodeIds)))
 
       rows.forEach((row) => {
-        foundSeats.push({ seatId: row.seatId, dbId: row.id })
+        foundSeats.push({ requestId: row.seatId, seatId: row.seatId, dbId: row.id })
       })
     }
 
-    const foundSeatIds = new Set(foundSeats.map((seat) => seat.seatId))
-    const missingSeatIds = parsed.seatIds.filter((id) => !foundSeatIds.has(id))
+    const dedupedByDbId = Array.from(
+      new Map(foundSeats.map((seat) => [seat.dbId, seat])).values(),
+    )
+    const foundRequestIds = new Set(foundSeats.map((seat) => seat.requestId))
+    const missingSeatIds = parsed.seatIds.filter((id) => !foundRequestIds.has(id))
 
     if (missingSeatIds.length > 0) {
       return NextResponse.json(
@@ -72,7 +76,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const dbSeatIds = foundSeats.map((seat) => seat.dbId)
+    const dbSeatIds = dedupedByDbId.map((seat) => seat.dbId)
 
     await db
       .delete(cartItems)
@@ -95,10 +99,6 @@ export async function POST(request: NextRequest) {
         heldUntil: null,
         heldBy: null,
         heldByCartId: null,
-        isAvailable: true,
-        isReserved: false,
-        reservedBy: null,
-        reservedUntil: null,
         updatedAt: now,
       })
       .where(
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
       .returning({ id: seats.id })
 
     const releasedIds = new Set(releasedSeats.map((seat) => seat.id))
-    const releasedSeatIds = foundSeats
+    const releasedSeatIds = dedupedByDbId
       .filter((seat) => releasedIds.has(seat.dbId))
       .map((seat) => seat.seatId)
 

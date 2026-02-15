@@ -9,6 +9,7 @@ import { paymentIntents, users } from '@/db/schema'
 import { desc, eq, and, gte, lte, sql } from 'drizzle-orm'
 import { requireAdmin } from '@/lib/admin-auth'
 import PDFDocument from 'pdfkit'
+import type { Readable } from 'stream'
 
 type OrderRow = {
   id: string
@@ -96,9 +97,10 @@ export async function GET(request: NextRequest) {
 
     // Criar PDF
     const doc = new PDFDocument({ margin: 50 })
+    const docStream = doc as unknown as Readable
     const chunks: Buffer[] = []
 
-    doc.on('data', (chunk) => chunks.push(chunk))
+    docStream.on('data', (chunk) => chunks.push(chunk as Buffer))
 
     // Header
     doc.fontSize(20).font('Helvetica-Bold').text('Relatório de Pedidos', { align: 'center' })
@@ -184,7 +186,7 @@ export async function GET(request: NextRequest) {
     doc.end()
 
     // Esperar o PDF terminar
-    await new Promise<void>((resolve) => doc.on('end', resolve))
+    await new Promise<void>((resolve) => docStream.on('end', resolve))
 
     const pdfBuffer = Buffer.concat(chunks)
 

@@ -2,16 +2,15 @@
 
 import React, { Suspense, useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, Clock } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
 
 // Componentes Visuais / UI
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { OdysseyLoading } from '@/components/ui/OdysseyLoading';
+import { ImaxSeatMap } from '@/components/seats/ImaxSeatMap';
 
 // Componentes do Mapa
-import { SeatLegend } from './SeatLegend';
-import { SeatMap } from './SeatMap';
 import { SelectedSeatsPanel } from './SelectedSeatsPanel';
 import { ApplyButton } from './ApplyButton';
 import { formatCurrency } from '@/lib/utils';
@@ -21,6 +20,7 @@ import { useBookingStore, type FinalizedTicket } from '@/stores/booking';
 import type { Ticket } from './types';
 import { useSessionSeats } from './useSessionSeats';
 import { useAuth } from '@/context/auth';
+import { useSeatSelectionManager } from './useSeatSelectionManager';
 
 export default function SeatSelectionPage() {
   return (
@@ -43,6 +43,8 @@ function SeatSelectionPageContent() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const isDev = process.env.NODE_ENV !== 'production';
+  const debugLayout = searchParams.get('debugLayout') === '1';
+  const debug = searchParams.get('debug') === '1';
 
   const {
     rows: seatRows,
@@ -96,8 +98,24 @@ function SeatSelectionPageContent() {
             });
         }
     });
-    return expandedTickets;
+    return expandedTickets.slice(0, 4);
   });
+
+  const allSeats = useMemo(() => seatRows.flatMap((r) => r.seats), [seatRows]);
+
+  const selectionManager = useSeatSelectionManager({
+    tickets: ticketsToAssign,
+    seats: allSeats,
+    cartId,
+    maxTotalSlots: 4,
+  });
+
+  const {
+    ticketSlots,
+    counts,
+    resolveToggleSeat,
+    seatUiStateById,
+  } = selectionManager;
 
   // 3. ProteÃ§Ã£o de Rota
   useEffect(() => {
@@ -109,7 +127,7 @@ function SeatSelectionPageContent() {
 
   // --- DADOS PARA O RESUMO ---
   const summaryTickets = useMemo(() => {
-    const grouped = ticketsToAssign.reduce<Record<string, { id: string; name: string; price: number; amount: number; description: string[] }>>((acc, t) => {
+    const grouped = ticketSlots.reduce<Record<string, { id: string; name: string; price: number; amount: number; description: string[] }>>((acc, t) => {
         const baseName = t.name.replace(/ #\d+$/, '');
         const key = t.type + t.price; 
 
@@ -127,7 +145,24 @@ function SeatSelectionPageContent() {
     }, {});
 
     return Object.values(grouped);
-  }, [ticketsToAssign]);
+  }, [ticketSlots]);
+
+  useEffect(() => {
+    if (ticketsToAssign.length <= 4) return
+    const removed = ticketsToAssign.slice(4).map((t) => t.assignedSeatId).filter(Boolean) as string[]
+    setTicketsToAssign((prev) => prev.slice(0, 4))
+    if (!selectedSessionId || !cartId || removed.length === 0) return
+    void fetch('/api/seats/release', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cartId,
+        sessionId: selectedSessionId,
+        seatIds: removed,
+        userId: user?.id ?? null,
+      }),
+    }).catch(() => undefined)
+  }, [cartId, selectedSessionId, ticketsToAssign, user?.id]);
 
   const handleHoldSeat = async (seatId: string, ticketId: string) => {
     if (!selectedSessionId) return;
@@ -200,45 +235,23 @@ function SeatSelectionPageContent() {
   };
 
   // LÃ³gica do Mapa
-  const handleSeatClick = (row: string, number: string | number, id: string) => {
-    const allSeats = seatRows.flatMap(r => r.seats);
-    const seat = allSeats.find(s => s.id === id);
-    if (!seat) return;
-
-    const isHeldByOther = seat.status === 'HELD' && seat.heldByCartId !== cartId;
-    const isAvailable = seat.status === 'AVAILABLE' || (seat.status === 'HELD' && !isHeldByOther);
-    if (isDev) {
-      console.debug('[seat-selection] click', {
-        seatId: id,
-        status: seat.status,
-        heldByCartId: seat.heldByCartId ?? null,
-        cartId,
-        isAvailable,
-      });
+  const handleSeatClick = (id: string) => {
+    const action = resolveToggleSeat(id);
+    if (action.kind === 'unselect') {
+      void handleRemoveSeat(action.ticketId, action.seatId);
+      return;
     }
-    if (!isAvailable) return;
-
-    let requiredType = seat.type === 'VIP' ? 'VIP' : 'STANDARD';
-    if (seat.type === 'WHEELCHAIR') requiredType = 'STANDARD'; 
-
-    const isAlreadySelected = ticketsToAssign.find(t => t.assignedSeatId === id);
-    
-    if (isAlreadySelected) {
-        void handleRemoveSeat(isAlreadySelected.id, id);
-        return;
+    if (action.kind === 'select') {
+      void handleHoldSeat(action.seatId, action.ticketId);
+      return;
     }
-
-    const availableTicket = ticketsToAssign.find(t => !t.assignedSeatId && t.type === requiredType);
-    
-    if (availableTicket) {
-      void handleHoldSeat(id, availableTicket.id);
-    } else {
-        console.log("Nenhum ticket disponÃ­vel para este tipo de assento");
+    if (isDev && action.kind === 'blocked') {
+      console.debug('[seat-selection] blocked by slot/backend rule', { seatId: id, reason: action.reason });
     }
   };
 
   const handleApply = () => {
-    const finalizedTickets: FinalizedTicket[] = ticketsToAssign.map((ticket) => ({
+    const finalizedTickets: FinalizedTicket[] = ticketSlots.map((ticket) => ({
       id: ticket.id,
       name: ticket.name,
       type: ticket.type,
@@ -250,28 +263,38 @@ function SeatSelectionPageContent() {
     router.push('/checkout');
   };
 
-  const selectedSeatIds = ticketsToAssign.filter(t => t.assignedSeatId).map(t => t.assignedSeatId!);
-  const allowedTypes = Array.from(new Set(ticketsToAssign.map(t => t.type)));
-  const isAllSelected = ticketsToAssign.length > 0 && ticketsToAssign.every(t => t.assignedSeatId);
+  const selectedSeatIds = ticketSlots.filter(t => t.assignedSeatId).map(t => t.assignedSeatId!);
+  const selectedSeatLabels = useMemo(() => {
+    if (selectedSeatIds.length === 0) return [];
+    const allSeats = seatRows.flatMap((r) => r.seats);
+    return selectedSeatIds
+      .map((id) => {
+        const seat = allSeats.find((s) => s.id === id);
+        if (!seat) return null;
+        return seat.seatId ?? seat.seat_id ?? `${seat.row}-${String(seat.number).padStart(2, '0')}`;
+      })
+      .filter((value): value is string => Boolean(value));
+  }, [selectedSeatIds, seatRows]);
+  const allowedTypes = Array.from(new Set(ticketSlots.map((t) => t.type)));
+  const isAllSelected = counts.totalSlots > 0 && counts.totalSelected === counts.totalSlots;
 
   useEffect(() => {
     if (!seatRows.length) return;
     const now = new Date();
     const allSeats = seatRows.flatMap(r => r.seats);
-    const unavailableSelected = ticketsToAssign.filter(t => {
+    const unavailableSelected = ticketSlots.filter(t => {
       if (!t.assignedSeatId) return false;
       const seat = allSeats.find(s => s.id === t.assignedSeatId);
       if (!seat) return false;
       if (seat.status === 'SOLD') return true;
       if (seat.status === 'HELD') {
         const heldActive = seat.heldUntil ? new Date(seat.heldUntil) > now : true;
-        return heldActive && seat.heldByCartId !== cartId;
+        return heldActive && (!seat.heldByCartId || seat.heldByCartId !== cartId);
       }
       return false;
     });
 
     if (unavailableSelected.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTicketsToAssign(prev =>
         prev.map(t =>
           unavailableSelected.find(u => u.id === t.id)
@@ -281,7 +304,7 @@ function SeatSelectionPageContent() {
       );
       setHoldError('Alguns assentos ficaram indisponíveis e foram removidos.');
     }
-  }, [seatRows, ticketsToAssign, cartId]);
+  }, [seatRows, ticketSlots, cartId]);
 
   const handleRegenerateSeats = async () => {
     if (!selectedSessionId) return;
@@ -310,17 +333,24 @@ function SeatSelectionPageContent() {
   if (!selectedCinema) return null;
 
   return (
-    <div className="min-h-screen text-white relative overflow-x-hidden bg-black/60">
+    <div className="min-h-screen text-white relative overflow-x-hidden">
       <OdysseyLoading isLoading={seatsLoading} />
-      <div className="relative z-10 flex flex-col items-center min-h-screen pt-6">
-        <div className="w-full max-w-md space-y-6 relative rounded-xl p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
+      <div className="relative z-10 flex flex-col items-center min-h-screen pt-6 px-3 md:px-6">
+        <div className="w-full max-w-[1200px] space-y-6 relative rounded-xl p-4 md:p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
             {/* Header */}
             <div className="space-y-1">
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold text-white">The Odyssey</h1>
-                    <Badge variant="secondary" className="bg-[#2A2A2A] hover:bg-[#333] text-gray-300 px-3 py-1 border-0 font-medium">
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge variant="secondary" className="bg-[#2A2A2A] hover:bg-[#333] text-gray-300 px-3 py-1 border-0 font-medium">
                         Pre-order
-                    </Badge>
+                      </Badge>
+                      <span className="max-w-[260px] truncate text-[11px] text-gray-400">
+                        {selectedSeatLabels.length > 0
+                          ? `Selected: ${selectedSeatLabels.join(', ')}`
+                          : 'Selected: none'}
+                      </span>
+                    </div>
                 </div>
 
                 <Button
@@ -379,23 +409,21 @@ function SeatSelectionPageContent() {
             
             {/* Legenda e Mapa */}
             <div className="space-y-2 pl-2 pr-2">
-                <SeatLegend />
-
                 {!selectedSessionId && (
                   <p className="text-xs text-red-400 px-2">
-                    Selecione uma sessÃ£o antes de escolher os assentos.
+                   Select a session before choosing your seats.
                   </p>
                 )}
 
                 {seatsLoading && (
                   <p className="text-xs text-gray-400 px-2">
-                    Carregando assentos...
+                    Loading seats...
                   </p>
                 )}
 
                 {seatsError && !seatsLoading && (
                   <div className="text-xs text-red-400 px-2 space-y-2">
-                    <p>Sessão inválida ou assentos não gerados.</p>
+                    <p>Invalid session or seats not generated.</p>
                     {process.env.NODE_ENV !== 'production' && selectedSessionId && (
                       <p className="text-[11px] text-gray-400">sessionId: {selectedSessionId} (len {selectedSessionId.length}) | error: {seatsError}</p>
                     )}
@@ -414,7 +442,7 @@ function SeatSelectionPageContent() {
                         )}
                       </div>
                     ) : (
-                      <p className="text-[11px] text-gray-300">Peça a um admin para regenerar os assentos desta sessão.</p>
+                      <p className="text-[11px] text-gray-300">Ask an administrator to make the slots available again for this session.</p>
                     )}
                   </div>
                 )}
@@ -427,26 +455,29 @@ function SeatSelectionPageContent() {
 
                 {!seatsLoading && !seatsError && seatRows.length > 0 && (
                   <div className="w-full mask-content-auto">
-                    <SeatMap
+                    <ImaxSeatMap
                       rows={seatRows}
-                      selectedSeats={selectedSeatIds}
-                      onSeatClick={handleSeatClick}
+                      selectedSeatIds={selectedSeatIds}
+                      onSeatToggle={handleSeatClick}
                       allowedTypes={allowedTypes}
-                      maxSelectable={ticketsToAssign.length}
+                      maxSelectable={counts.totalSlots}
+                      seatUiStates={seatUiStateById}
                       currentCartId={cartId}
+                      debugLayout={debugLayout}
+                      debug={debug}
                     />
                   </div>
                 )}
 
                 {!seatsLoading && !seatsError && selectedSessionId && seatRows.length === 0 && (
                   <p className="text-xs text-gray-400 px-2">
-                    Nenhum assento encontrado para esta sessÃ£o.
+                    No seats found for this session.
                   </p>
                 )}
             </div>
 
             {/* Painel de SeleÃ§Ã£o Inferior */}
-            <SelectedSeatsPanel tickets={ticketsToAssign} onRemoveSeat={handleRemoveSeat} />
+            <SelectedSeatsPanel tickets={ticketSlots} onRemoveSeat={handleRemoveSeat} />
 
             {/* BotÃ£o Apply */}
             <ApplyButton onApply={handleApply} isReady={isAllSelected} />
@@ -455,5 +486,3 @@ function SeatSelectionPageContent() {
     </div>
   );
 }
-
-

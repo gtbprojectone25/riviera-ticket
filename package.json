@@ -18,6 +18,8 @@
     "db:seed:cinemas": "tsx src/db/seed/seedCinemasAndAuditoriums.ts",
     "db:seed:odyssey-sessions": "tsx src/db/seed/seedOdysseySessionsAndSeats.ts",
     "db:seed:sample-ticket": "tsx src/db/seed/seedSamplePaidTicket.ts",
+    "db:normalize-seats": "tsx src/db/normalize-seats.ts",
+    "db:verify:ensure-seats": "tsx src/db/verify-ensure-seats-idempotent.ts",
     "setup": "node scripts/setup-db.js"
   },
   "dependencies": {

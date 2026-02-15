@@ -8,7 +8,7 @@ import {
   type AuditoriumLayout,
 } from '@/db/schema'
 import { eq } from 'drizzle-orm'
-import { generateSeatsForSession } from '@/server/seats/generateSeatsForSession'
+import { ensureSeatsForSession } from '@/server/seats/generateSeatsForSession'
 
 type BootstrapPayload = {
   cinemaId: string
@@ -343,7 +343,7 @@ export async function POST(request: NextRequest) {
       'session_create',
     )
 
-    const result = await generateSeatsForSession(session.id)
+    const result = await ensureSeatsForSession(session.id)
 
     return NextResponse.json({
       session,
@@ -357,3 +357,4 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+

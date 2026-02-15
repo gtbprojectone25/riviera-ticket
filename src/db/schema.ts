@@ -4,7 +4,7 @@
  */
 
 import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum, index, uniqueIndex, doublePrecision, jsonb } from 'drizzle-orm/pg-core'
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 
 // Enums
 export const seatTypeEnum = pgEnum('seat_type', ['STANDARD', 'VIP', 'PREMIUM', 'WHEELCHAIR', 'GAP'])
@@ -12,6 +12,7 @@ export const seatStatusEnum = pgEnum('seat_status', ['AVAILABLE', 'HELD', 'SOLD'
 export const ticketStatusEnum = pgEnum('ticket_status', ['RESERVED', 'CONFIRMED', 'CANCELLED'])
 export const cartStatusEnum = pgEnum('cart_status', ['ACTIVE', 'EXPIRED', 'COMPLETED'])
 export const paymentStatusEnum = pgEnum('payment_status', ['PENDING', 'SUCCEEDED', 'FAILED', 'CANCELLED'])
+export const checkoutPurchaseStatusEnum = pgEnum('checkout_purchase_status', ['PENDING', 'SUCCEEDED', 'FAILED', 'CLAIMED'])
 export const screenTypeEnum = pgEnum('screen_type', ['IMAX_70MM', 'STANDARD'])
 export const sessionSalesStatusEnum = pgEnum('session_sales_status', ['ACTIVE', 'PAUSED', 'CLOSED'])
 export const queueStatusEnum = pgEnum('queue_status', ['WAITING', 'READY', 'EXPIRED', 'COMPLETED'])
@@ -94,9 +95,10 @@ export const seats = pgTable('seats', {
   status: seatStatusEnum('status').notNull().default('AVAILABLE'),
   heldUntil: timestamp('held_until'),
   heldBy: uuid('held_by').references(() => users.id),
-  heldByCartId: uuid('held_by_cart_id'),
+  heldByCartId: uuid('held_by_cart_id').references(() => carts.id, { onDelete: 'set null' }),
   soldAt: timestamp('sold_at'),
-  soldCartId: uuid('sold_cart_id'),
+  // Keep sale trace immutable: sold seats should not lose cart linkage by cart deletion.
+  soldCartId: uuid('sold_cart_id').references(() => carts.id, { onDelete: 'restrict' }),
   // LEGACY FLAGS (do not use for logic; will be removed after migration)
   isAvailable: boolean('is_available').default(true).notNull(),
   isReserved: boolean('is_reserved').default(false).notNull(),
@@ -111,6 +113,7 @@ export const seats = pgTable('seats', {
   sessionIdIdx: index('idx_seats_session_id').on(table.sessionId),
   sessionSeatIdx: index('idx_seats_session_seat').on(table.sessionId, table.seatId),
   sessionSeatUnique: uniqueIndex('uq_seats_session_seat').on(table.sessionId, table.seatId),
+  sessionRowNumberUnique: uniqueIndex('uq_seats_session_row_number').on(table.sessionId, table.row, table.number),
   sessionStatusHeldIdx: index('idx_seats_session_status_held_until').on(table.sessionId, table.status, table.heldUntil),
   statusIdx: index('idx_seats_status').on(table.status),
   heldUntilIdx: index('idx_seats_held_until').on(table.heldUntil),
@@ -251,10 +254,11 @@ export const imageSlots = pgTable('image_slots', {
 export const tickets = pgTable('tickets', {
   id: uuid('id').primaryKey().defaultRandom(),
   sessionId: uuid('session_id').references(() => sessions.id, { onDelete: 'cascade' }).notNull(),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
   seatId: uuid('seat_id').references(() => seats.id, { onDelete: 'cascade' }).notNull(),
   cartId: uuid('cart_id').references(() => carts.id),
-  orderId: uuid('order_id'), // Referência para a tabela orders
+  // FK para orders(id) e validação de integridade estão na migration SQL (schema split entre schema.ts e admin-schema.ts).
+  orderId: uuid('order_id'),
   ticketType: seatTypeEnum('ticket_type').notNull(),
   price: integer('price').notNull(), // in cents
   status: ticketStatusEnum('status').notNull().default('RESERVED'),
@@ -281,6 +285,7 @@ export const paymentIntents = pgTable('payment_intents', {
   id: uuid('id').primaryKey().defaultRandom(),
   cartId: uuid('cart_id').references(() => carts.id, { onDelete: 'cascade' }).notNull(),
   userId: uuid('user_id').references(() => users.id),
+  checkoutSessionId: text('checkout_session_id'),
   stripePaymentIntentId: text('stripe_payment_intent_id').unique(),
   adyenPaymentId: text('adyen_payment_id'), // Adyen payment reference
   amountCents: integer('amount').notNull(), // in cents
@@ -289,7 +294,45 @@ export const paymentIntents = pgTable('payment_intents', {
   metadata: text('metadata'), // JSON string for additional data
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-})
+}, (table) => ({
+  checkoutSessionIdx: index('idx_payment_intents_checkout_session_id').on(table.checkoutSessionId),
+  checkoutSessionUnique: uniqueIndex('uq_payment_intents_checkout_session_id').on(table.checkoutSessionId),
+}))
+
+// Checkout purchase identity (guest-safe claim via checkout_session_id)
+export const checkoutPurchases = pgTable('checkout_purchases', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  checkoutSessionId: text('checkout_session_id').notNull().unique(),
+  cartId: uuid('cart_id').references(() => carts.id, { onDelete: 'cascade' }).notNull().unique(),
+  paymentIntentId: uuid('payment_intent_id').references(() => paymentIntents.id, { onDelete: 'set null' }),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  status: checkoutPurchaseStatusEnum('status').notNull().default('PENDING'),
+  claimedAt: timestamp('claimed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  checkoutSessionIdx: index('idx_checkout_purchases_checkout_session_id').on(table.checkoutSessionId),
+  cartIdx: index('idx_checkout_purchases_cart_id').on(table.cartId),
+  userIdx: index('idx_checkout_purchases_user_id').on(table.userId),
+  statusIdx: index('idx_checkout_purchases_status').on(table.status),
+}))
+
+// Processed Stripe events (webhook idempotency)
+export const processedStripeEvents = pgTable('processed_stripe_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  eventId: text('event_id').notNull().unique(),
+  eventType: text('event_type').notNull(),
+  paymentIntentId: text('payment_intent_id'),
+  status: text('status').notNull().default('PROCESSING'), // PROCESSING | PROCESSED | FAILED
+  lastError: text('last_error'),
+  processedAt: timestamp('processed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  eventIdIdx: index('idx_processed_stripe_events_event_id').on(table.eventId),
+  statusIdx: index('idx_processed_stripe_events_status').on(table.status),
+  paymentIntentIdIdx: index('idx_processed_stripe_events_payment_intent_id').on(table.paymentIntentId),
+}))
 
 // Queue counters (by scope)
 export const queueCounters = pgTable('queue_counters', {
@@ -303,6 +346,7 @@ export const queueCounters = pgTable('queue_counters', {
 export const queueEntries = pgTable('queue_entries', {
   id: uuid('id').primaryKey().defaultRandom(),
   scopeKey: text('scope_key').notNull(),
+  visitorToken: text('visitor_token').notNull(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
   cartId: uuid('cart_id').references(() => carts.id, { onDelete: 'set null' }),
   queueNumber: integer('queue_number').notNull(),
@@ -312,8 +356,16 @@ export const queueEntries = pgTable('queue_entries', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
   scopeNumberIdx: uniqueIndex('uq_queue_scope_number').on(table.scopeKey, table.queueNumber),
+  scopeVisitorActiveUnique: uniqueIndex('uq_queue_scope_visitor_active')
+    .on(table.scopeKey, table.visitorToken)
+    .where(sql`${table.status} in ('WAITING','READY')`),
+  scopeVisitorIdx: index('idx_queue_entries_scope_visitor').on(table.scopeKey, table.visitorToken),
   scopeIdx: index('idx_queue_scope').on(table.scopeKey),
+  visitorIdx: index('idx_queue_visitor_token').on(table.visitorToken),
+  scopeVisitorStatusIdx: index('idx_queue_scope_visitor_status').on(table.scopeKey, table.visitorToken, table.status),
   statusIdx: index('idx_queue_status').on(table.status),
+  scopeStatusExpiresIdx: index('idx_queue_scope_status_expires').on(table.scopeKey, table.status, table.expiresAt),
+  statusExpiresIdx: index('idx_queue_status_expires').on(table.status, table.expiresAt),
 }))
 
 // User sessions table (authentication)
@@ -433,6 +485,21 @@ export const paymentIntentsRelations = relations(paymentIntents, ({ one }) => ({
   }),
 }))
 
+export const checkoutPurchasesRelations = relations(checkoutPurchases, ({ one }) => ({
+  cart: one(carts, {
+    fields: [checkoutPurchases.cartId],
+    references: [carts.id],
+  }),
+  paymentIntent: one(paymentIntents, {
+    fields: [checkoutPurchases.paymentIntentId],
+    references: [paymentIntents.id],
+  }),
+  user: one(users, {
+    fields: [checkoutPurchases.userId],
+    references: [users.id],
+  }),
+}))
+
 export const userSessionsRelations = relations(userSessions, ({ one }) => ({
   user: one(users, {
     fields: [userSessions.userId],
@@ -476,6 +543,10 @@ export type Ticket = typeof tickets.$inferSelect
 export type NewTicket = typeof tickets.$inferInsert
 export type PaymentIntent = typeof paymentIntents.$inferSelect
 export type NewPaymentIntent = typeof paymentIntents.$inferInsert
+export type CheckoutPurchase = typeof checkoutPurchases.$inferSelect
+export type NewCheckoutPurchase = typeof checkoutPurchases.$inferInsert
+export type ProcessedStripeEvent = typeof processedStripeEvents.$inferSelect
+export type NewProcessedStripeEvent = typeof processedStripeEvents.$inferInsert
 export type UserSession = typeof userSessions.$inferSelect
 export type NewUserSession = typeof userSessions.$inferInsert
 export type Movie = typeof movies.$inferSelect

@@ -2,13 +2,13 @@
  * Seed de sessões de "The Odyssey" e assentos para todos os auditoriums.
  *
  * Usa o layout salvo em `auditoriums.layout` e a função
- * `generateSeatsForSession` para popular a tabela `seats`.
+ * `ensureSeatsForSession` para popular a tabela `seats`.
  */
 
 import { db } from '@/db'
 import { auditoriums, cinemas, sessions, seats } from '@/db/schema'
 import { and, eq } from 'drizzle-orm'
-import { generateSeatsForSession } from '@/server/seats/generateSeatsForSession'
+import { ensureSeatsForSession } from '@/server/seats/generateSeatsForSession'
 
 const MOVIE_TITLE = 'The Odyssey'
 const MOVIE_DURATION = 150 // minutos
@@ -50,7 +50,7 @@ export async function seedOdysseySessionsAndSeats() {
         .limit(1)
 
       if (!existingSeats[0]) {
-        const result = await generateSeatsForSession(existing.id)
+        const result = await ensureSeatsForSession(existing.id)
         console.log(
           `Created ${result.created} seats for existing session ${existing.id} in auditorium ${aud.name}`,
         )
@@ -87,7 +87,7 @@ export async function seedOdysseySessionsAndSeats() {
       })
       .returning()
 
-    const result = await generateSeatsForSession(session.id)
+    const result = await ensureSeatsForSession(session.id)
 
     console.log(
       `Created session ${session.id} and ${result.created} seats for auditorium ${aud.name}`,

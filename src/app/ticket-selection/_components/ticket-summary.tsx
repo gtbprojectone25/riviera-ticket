@@ -35,7 +35,7 @@ export function TicketSummary({ tickets }: TicketSummaryProps) {
       <CardContent className="p-4 space-y-4">
         <div className="flex items-center gap-3">
           <ShoppingCart className="h-5 w-5 text-white" />
-          <h4 className="text-base font-semibold text-white">Resumo</h4>
+          <h4 className="text-base font-semibold text-white">Resume</h4>
         </div>
 
         <div className="space-y-4">

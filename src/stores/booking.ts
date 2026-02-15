@@ -26,6 +26,7 @@ export type FinalizedTicket = {
 export type PaymentData = {
   orderId: string;
   paymentIntentId?: string;
+  checkoutSessionId?: string;
   totalAmount: number;
   paymentDate: string;
   status: "pending" | "succeeded" | "failed";

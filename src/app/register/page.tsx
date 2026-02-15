@@ -121,12 +121,12 @@ function RegisterContent() {
   // Step 3: Password submission
   const handlePasswordSubmit = async () => {
     if (!allRequirementsMet) {
-      setError('A senha deve atender a todos os requisitos')
+      setError('The password must meet all requirements.')
       return
     }
 
     if (formData.password !== formData.confirmPassword) {
-      setError('As senhas não coincidem')
+      setError('Passwords do not match')
       return
     }
 
@@ -146,14 +146,14 @@ function RegisterContent() {
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || 'Erro ao definir senha')
+        setError(data.error || 'Error setting password')
         return
       }
 
       setCurrentStep('verify')
     } catch (error) {
       console.error('Error setting password:', error)
-      setError('Erro ao definir senha. Tente novamente.')
+      setError('Error setting password. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -163,7 +163,7 @@ function RegisterContent() {
   const handleVerifySubmit = async () => {
     const code = verificationCode.join('')
     if (code.length !== 5) {
-      setError('Por favor, insira o código completo')
+      setError('Please enter the complete code')
       return
     }
 
@@ -179,21 +179,21 @@ function RegisterContent() {
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || 'Código inválido')
+        setError(data.error || 'Invalid code')
         return
       }
 
-      // Salvar token e dados do usuário
+      // Save token and user data
       if (data.token) {
-        localStorage.setItem('auth-token', data.token)
-        localStorage.setItem('user', JSON.stringify(data.user))
+        localStorage.setItem('riviera_token', data.token)
+        localStorage.setItem('riviera_user', JSON.stringify(data.user))
       }
 
       setCurrentStep('encrypting')
       simulateEncryption()
     } catch (error) {
       console.error('Error verifying code:', error)
-      setError('Erro ao verificar código. Tente novamente.')
+      setError('Error verifying code. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -211,7 +211,10 @@ function RegisterContent() {
           // Redirecionar para página de pagamento após 2 segundos
           setTimeout(() => {
             const returnUrl = searchParams.get('returnUrl') || '/payment'
-            router.push(returnUrl)
+            const safeReturn = returnUrl.startsWith('/') && !returnUrl.startsWith('//')
+              ? returnUrl
+              : '/payment'
+            router.push(safeReturn)
           }, 2000)
         }, 500)
       }
@@ -309,12 +312,16 @@ function RegisterContent() {
             <Check className="w-3 h-3 text-white" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white mb-2">Advanced end-to-end encryption</h3>
+            <h3 className="text-sm font-semibold text-white mb-2">Advanced End-to-End Encryption</h3>
             <p className="text-xs text-gray-400 leading-relaxed">
-              In today&apos;s digital world, privacy isn&apos;t optional - it&apos;s essential. That&apos;s why we implement advanced end-to-end encryption powered by state-of-the-art security technologies.
+              In today’s digital world, privacy is not optional - it’s essential. That’s why we use advanced end-to-end encryption, powered by cutting-edge security technologies.
             </p>
             <p className="text-xs text-gray-400 leading-relaxed mt-2">
-              Unlike basic encryption methods, our system ensures that your data is locked at the source and only unlocked by its rightful recipient. Not even we can access it. Every message, file, or transaction is shielded with cutting-edge cryptographic protocols - the same level of protection trusted by global banks, governments, and cybersecurity leaders.
+              Unlike basic encryption methods, our system locks your data at the source and ensures it can only be unlocked by the intended recipient.
+              Not even we can access it.
+              Every message, file, and transaction is protected using the same cryptographic protocols trusted by global banks, government agencies, and cybersecurity leaders.
+              Block 6 - Loading Status:
+              Encrypting data...
             </p>
           </div>
         </div>
@@ -328,7 +335,7 @@ function RegisterContent() {
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-bold text-white">Enter a secure password</h2>
         <p className="text-sm text-gray-400">
-          Your password must meet the security requirements, remember to write it down so you don&apos;t forget it.
+          Your password must meet the security requirements; remember to write it down so you don’t forget it.
         </p>
       </div>
 
@@ -411,12 +418,12 @@ function RegisterContent() {
             <Check className="w-3 h-3 text-white" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white mb-2">Advanced end-to-end encryption</h3>
+            <h3 className="text-sm font-semibold text-white mb-2">Advanced End-to-End Encryption</h3>
             <p className="text-xs text-gray-400 leading-relaxed">
-              In today&apos;s digital world, privacy isn&apos;t optional - it&apos;s essential. That&apos;s why we implement advanced end-to-end encryption powered by state-of-the-art security technologies.
+              In today’s digital world, privacy is not optional - it’s essential. That’s why we use advanced end-to-end encryption, powered by cutting-edge security technologies.
             </p>
             <p className="text-xs text-gray-400 leading-relaxed mt-2">
-              Unlike basic encryption methods, our system ensures that your data is locked at the source and only unlocked by its rightful recipient. Not even we can access it. Every message, file, or transaction is shielded with cutting-edge cryptographic protocols - the same level of protection trusted by global banks, governments, and cybersecurity leaders.
+              Unlike basic encryption methods, our system locks your data at the source and ensures it can only be unlocked by the intended recipient. Not even we can access it. Every message, file, and transaction is protected using the same cryptographic protocols trusted by global banks, government agencies, and cybersecurity leaders.
             </p>
           </div>
         </div>
@@ -503,7 +510,7 @@ function RegisterContent() {
         <div className="w-20 h-20 rounded-full bg-blue-600/20 flex items-center justify-center">
           <Lock className="w-10 h-10 text-blue-400" />
         </div>
-        <h2 className="text-2xl font-bold text-white">Criptografando dados...</h2>
+        <h2 className="text-2xl font-bold text-white">Encrypting data...</h2>
 
         {/* Progress Bar */}
         <div className="w-full max-w-xs">
@@ -517,10 +524,10 @@ function RegisterContent() {
 
         <div className="space-y-2">
           <p className="text-sm text-gray-400">
-            Estamos protegendo seus dados com segurança avançada.
+            We are protecting your data with advanced security.
           </p>
           <p className="text-sm text-gray-400">
-            Sua conta está sendo criada.
+            Your account is being created.
           </p>
         </div>
       </div>

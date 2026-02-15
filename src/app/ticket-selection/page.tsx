@@ -56,14 +56,14 @@ export default function TicketSelectionPage() {
       id: 'vip',
       name: 'VIP',
       price: 44900,
-      description: ['Valid only for the chosen session', 'Priority access'],
+      description: ['TICKET VIP Center-Optic Premium Seat','Priority Entry Lane', 'Spartan Helmet Lego Limited ', 'Collectible Commemorative Ticket','Official Launch Poster','Commander’s Insignia (Enamel Pin)','VIP Access Wristband'],
       amount: 0,
     },
     {
       id: 'standard',
       name: 'Standard',
       price: 34900,
-      description: ['Valid only for the chosen session', 'Online ticket with access via QR code'],
+      description: ['TICKET STANDART IMAX 70mm Seat', 'Digital Entry Pass (QR Code)'],
       amount: 0,
     },
   ])
@@ -131,12 +131,7 @@ export default function TicketSelectionPage() {
 
         const mapped: SessionTime[] = filtered.map((s, index) => {
           const start = new Date(s.startTime)
-          const end = new Date(s.endTime)
           const startLabel = start.toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          })
-          const endLabel = end.toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit',
           })
@@ -286,7 +281,7 @@ export default function TicketSelectionPage() {
   if (!selectedCinema) return null
 
   return (
-    <div className="min-h-screen text-white relative overflow-hidden bg-black/60">
+    <div className="min-h-screen text-white relative overflow-hidden ">
       <div className="relative z-10 flex flex-col items-center justify-center min-h-[calc(100vh-100px)] pt-8 ">
         <div className="w-full max-w-md rounded-xl mx-4 space-y-6 p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
           {/* Header */}
@@ -402,7 +397,7 @@ export default function TicketSelectionPage() {
               disabled={getTotalTickets() === 0 || sessionsLoading || sessionTimes.length === 0}
               onClick={handleNextStep}
             >
-              Escolher assentos
+              Choose seats
             </Button>
           </div>
 

@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { cinemas, auditoriums, movies, sessions } from '@/db/schema'
 import { eq } from 'drizzle-orm'
-import { generateSeatsForSession } from '@/server/seats/generateSeatsForSession'
+import { ensureSeatsForSession } from '@/server/seats/generateSeatsForSession'
 
 type CreateSessionPayload = {
   movieId: string
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       })
       .returning()
 
-    const result = await generateSeatsForSession(session.id)
+    const result = await ensureSeatsForSession(session.id)
 
     return NextResponse.json({
       session,
@@ -132,8 +132,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating session:', error)
     return NextResponse.json(
-      { error: 'Erro ao criar sessão' },
+      { error: 'Erro ao criar sessÃ£o' },
       { status: 500 },
     )
   }
 }
+

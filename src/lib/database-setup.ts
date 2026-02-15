@@ -6,6 +6,7 @@
  */
 
 import { db } from '@/db'
+import { ensureSeatsForSession } from '@/server/seats/generateSeatsForSession'
 import { 
   users, 
   sessions, 
@@ -54,51 +55,6 @@ export const sampleSessions = [
   }
 ]
 
-// Função para gerar assentos para uma sessão
-export function generateSeatsForSession(sessionId: string) {
-  const seats = []
-  const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
-  const seatsPerRow = 16
-
-  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
-    const row = rows[rowIndex]
-    
-    for (let seatNumber = 1; seatNumber <= seatsPerRow; seatNumber++) {
-      // Definir tipo de assento baseado na posição
-      let seatType: 'STANDARD' | 'VIP' | 'PREMIUM' = 'STANDARD'
-      let price = 2999 // Preço padrão
-      
-      // Fileiras E, F, G são VIP (meio da sala)
-      if (['E', 'F', 'G'].includes(row)) {
-        seatType = 'VIP'
-        price = 4999 // R$ 49.99
-      }
-      
-      // Últimas 2 fileiras são Premium
-      if (['K', 'L'].includes(row)) {
-        seatType = 'PREMIUM'
-        price = 3999 // R$ 39.99
-      }
-
-      seats.push({
-        id: crypto.randomUUID(),
-        sessionId,
-        row,
-        number: seatNumber,
-        seatId: `${row}${seatNumber.toString().padStart(2, '0')}`,
-        type: seatType,
-        price,
-        isAvailable: true,
-        isReserved: false,
-        reservedBy: null,
-        reservedUntil: null
-      })
-    }
-  }
-
-  return seats
-}
-
 // Função para popular o banco com dados de exemplo
 export async function seedDatabase() {
   try {
@@ -113,11 +69,14 @@ export async function seedDatabase() {
     const insertedSessions = await db.insert(sessions).values(sampleSessions).returning()
     console.log(`✅ ${insertedSessions.length} sessões inseridas`)
 
-    // Inserir assentos para cada sessão
+    // Inserir assentos para cada sessão somente via serviço canônico.
     for (const session of insertedSessions) {
-      const sessionSeats = generateSeatsForSession(session.id)
-      await db.insert(seats).values(sessionSeats)
-      console.log(`✅ ${sessionSeats.length} assentos inseridos para sessão ${session.startTime.toLocaleTimeString()}`)
+      try {
+        const result = await ensureSeatsForSession(session.id)
+        console.log(`✅ ${result.created} assentos garantidos para sessão ${session.startTime.toLocaleTimeString()}`)
+      } catch (error) {
+        console.warn(`⚠️ Sessão ${session.id} sem assentos gerados automaticamente:`, error)
+      }
     }
 
     console.log('🎉 Banco de dados populado com sucesso!')
@@ -176,9 +135,10 @@ export async function cleanupExpiredReservations() {
       await db
         .update(seats)
         .set({
-          isReserved: false,
-          reservedBy: null,
-          reservedUntil: null,
+          status: 'AVAILABLE',
+          heldBy: null,
+          heldByCartId: null,
+          heldUntil: null,
           updatedAt: now
         })
         // WHERE clause seria necessário aqui com IDs dos assentos
@@ -225,8 +185,8 @@ export async function getDatabaseStats() {
         users: totalUsers.length,
         carts: totalCarts.length,
         payments: totalPayments.length,
-        availableSeats: totalSeats.filter(seat => seat.isAvailable && !seat.isReserved).length,
-        reservedSeats: totalSeats.filter(seat => seat.isReserved).length
+        availableSeats: totalSeats.filter(seat => seat.status === 'AVAILABLE').length,
+        reservedSeats: totalSeats.filter(seat => seat.status === 'HELD').length
       }
     }
 

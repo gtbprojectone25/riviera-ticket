@@ -51,7 +51,7 @@ export function PurchaseTimerBanner({ className }: PurchaseTimerBannerProps) {
         )}
       />
       <span className="text-gray-300">
-        Para garantir seu lugar, finalize em{' '}
+       To guarantee your place, complete the registration at{' '}
         <span
           className={cn(
             'font-bold tabular-nums',
@@ -62,7 +62,7 @@ export function PurchaseTimerBanner({ className }: PurchaseTimerBannerProps) {
         >
           {timeDisplay}
         </span>
-        {' '}minutos.
+        {' '}minutes.
       </span>
     </div>
   )

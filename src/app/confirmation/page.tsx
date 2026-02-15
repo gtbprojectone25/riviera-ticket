@@ -1,381 +1,393 @@
-'use client'
+﻿'use client'
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { useRouter } from 'next/navigation'
-import { CheckCircle, Download, Share2, Calendar, Clock, Armchair, QrCode, MapPin } from 'lucide-react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { CheckCircle, Clock3,AlertTriangle } from 'lucide-react'
+
+import { useAuth } from '@/context/auth'
 import { useBookingStore } from '@/stores/booking'
 import { qrcodeService } from '@/lib/qrcode-service'
 import { formatCurrency } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+
+type FetchState = 'processing' | 'confirmed' | 'not_found' | 'error'
+
+type TicketApi = {
+  id: string
+  type: string
+  price: number
+  seatId: string
+}
+
+const MAX_FETCH_RETRIES = 12
+const FETCH_RETRY_DELAY_MS = 1500
 
 export default function ConfirmationPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen text-white flex items-center justify-center bg-black/70">
+          <div className="text-center space-y-2">
+            <Clock3 className="w-10 h-10 mx-auto animate-pulse text-blue-400" />
+            <p className="text-gray-300">Loading confirmation...</p>
+          </div>
+        </div>
+      }
+    >
+      <ConfirmationPageContent />
+    </Suspense>
+  )
+}
+
+function ConfirmationPageContent() {
   const router = useRouter()
-  
-  // Dados da store
-  const selectedCinema = useBookingStore((s) => s.selectedCinema)
-  const sessionData = useBookingStore((s) => s.sessionData)
-  const finalizedTickets = useBookingStore((s) => s.finalizedTickets)
+  const searchParams = useSearchParams()
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
+  const isDev = process.env.NODE_ENV !== 'production'
+
   const paymentData = useBookingStore((s) => s.paymentData)
-  const cartId = useBookingStore((s) => s.cartId)
   const resetBooking = useBookingStore((s) => s.resetBooking)
 
-  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [dbTickets, setDbTickets] = useState<typeof finalizedTickets>([])
-  const [dbSession, setDbSession] = useState<typeof sessionData | null>(null)
+  const checkoutSessionId = searchParams.get('checkout_session_id') || paymentData?.checkoutSessionId || null
 
-  const ticketsForDisplay = finalizedTickets.length > 0 ? finalizedTickets : dbTickets
+  const [fetchState, setFetchState] = useState<FetchState>('processing')
+  const [fetchMessage, setFetchMessage] = useState<string>('Awaiting ticket confirmation...')
+  const [retryCount, setRetryCount] = useState(0)
+  const [reloadNonce, setReloadNonce] = useState(0)
 
-  // Dados derivados
-  const totalAmount = useMemo(() => 
-    ticketsForDisplay.reduce((acc, t) => acc + t.price, 0), 
-    [ticketsForDisplay]
-  )
+  const [sessionInfo, setSessionInfo] = useState<{
+    id: string
+    movieTitle: string
+    startTime: string
+    endTime: string
+  } | null>(null)
+  const [tickets, setTickets] = useState<Array<{
+    id: string
+    type: string
+    price: number
+    assignedSeatId: string
+  }>>([])
 
-  const selectedSeats = useMemo(() => 
-    ticketsForDisplay
-      .map((t) => t.assignedSeatId)
-      .filter(Boolean) as string[],
-    [ticketsForDisplay]
-  )
+  const [, setQrCodeUrl] = useState<string | null>(null)
+  const [, setQrLoading] = useState(false)
 
-  const orderId = useMemo(() => 
-    paymentData?.orderId || cartId || `ORD-${Date.now()}`,
-    [paymentData, cartId]
+  const hasCheckoutSession = useMemo(() => Boolean(checkoutSessionId), [checkoutSessionId])
+
+  const orderId = useMemo(() => {
+    return paymentData?.orderId || checkoutSessionId || `ORD-${Date.now()}`
+  }, [paymentData, checkoutSessionId])
+
+  const totalAmount = useMemo(() => tickets.reduce((acc, t) => acc + t.price, 0), [tickets])
+
+  const selectedSeats = useMemo(
+    () => tickets.map((t) => t.assignedSeatId).filter(Boolean),
+    [tickets],
   )
 
   useEffect(() => {
-    if (finalizedTickets.length > 0) return
-    if (!cartId) return
+    if (authLoading || isAuthenticated) return
+    const returnTo = checkoutSessionId
+      ? `/confirmation?checkout_session_id=${encodeURIComponent(checkoutSessionId)}`
+      : '/confirmation'
+    router.replace(`/login?returnTo=${encodeURIComponent(returnTo)}`)
+  }, [authLoading, isAuthenticated, router, checkoutSessionId])
 
-    let isMounted = true
-    const loadTickets = async () => {
-      try {
-        const res = await fetch(`/api/tickets/by-cart?cartId=${cartId}`)
-        if (!res.ok) return
-        const data = await res.json()
+  useEffect(() => {
+    if (authLoading || !isAuthenticated) return
 
-        const mapped = (data?.tickets || []).map((t: { id: string; type: string; price: number; seatId: string }) => ({
-          id: t.id,
-          name: t.type === 'VIP' ? 'VIP Ticket' : 'Standard Ticket',
-          type: t.type,
-          price: t.price,
-          assignedSeatId: t.seatId,
-        }))
+    if (!hasCheckoutSession || !checkoutSessionId) {
+      setFetchState('not_found')
+      setFetchMessage('Checkout session not found. Please return to payment and try again.')
+      return
+    }
 
-        if (!isMounted) return
-        setDbTickets(mapped)
+    let active = true
 
-        if (data?.session) {
-          setDbSession({
-            id: data.session.id,
-            movieTitle: data.session.movieTitle,
-            startTime: data.session.startTime,
-            endTime: data.session.endTime,
+    const finalizeAndLoadTickets = async () => {
+      // Best-effort finalize to avoid stuck pending state
+      if (checkoutSessionId) {
+        void fetch('/api/payment/stripe/finalize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ checkoutSessionId }),
+        }).catch(() => {})
+      }
+
+      if (isDev) {
+        console.info('[confirmation] start fetch', { checkoutSessionId })
+      }
+
+      setFetchState('processing')
+      setFetchMessage('Awaiting ticket issuance...')
+      setRetryCount(0)
+
+      for (let attempt = 0; attempt <= MAX_FETCH_RETRIES; attempt += 1) {
+        if (!active) return
+
+        setRetryCount(attempt)
+
+        try {
+          const response = await fetch('/api/tickets/claim', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            cache: 'no-store',
+            credentials: 'include',
+            body: JSON.stringify({
+              checkout_session_id: checkoutSessionId,
+            }),
           })
+
+          if (response.status === 409) {
+            if (isDev) {
+              console.info('[confirmation] waiting webhook', { attempt: attempt + 1, checkoutSessionId })
+            }
+
+            if (attempt < MAX_FETCH_RETRIES) {
+              setFetchState('processing')
+              setFetchMessage(`Payment confirmed. Awaiting webhook (${attempt + 1}/${MAX_FETCH_RETRIES + 1})...`)
+              await new Promise((resolve) => setTimeout(resolve, FETCH_RETRY_DELAY_MS))
+              continue
+            }
+
+            setFetchState('error')
+            setFetchMessage('Payment confirmed, but tickets are still processing. Please try again shortly.')
+            return
+          }
+
+          if (response.status === 404) {
+            if (isDev) {
+              console.info('[confirmation] checkout not found', { checkoutSessionId })
+            }
+            setFetchState('not_found')
+            setFetchMessage('Purchase not found for this checkout_session_id.')
+            return
+          }
+
+          if (response.status === 403) {
+            if (isDev) {
+              console.info('[confirmation] forbidden checkout ownership', { checkoutSessionId })
+            }
+            setFetchState('error')
+            setFetchMessage('This purchase is associated with another account.')
+            return
+          }
+
+          if (!response.ok) {
+            if (isDev) {
+              console.warn('[confirmation] fetch failed', { status: response.status, checkoutSessionId })
+            }
+            setFetchState('error')
+            setFetchMessage('Failed to load tickets. Please try again.')
+            return
+          }
+
+          const data = await response.json()
+          const mappedTickets = (data?.tickets || []).map((t: TicketApi) => ({
+            id: t.id,
+            type: t.type,
+            price: t.price,
+            assignedSeatId: t.seatId,
+          }))
+
+          if (!active) return
+
+          if (mappedTickets.length === 0) {
+            if (isDev) {
+              console.info('[confirmation] no tickets after success', { checkoutSessionId })
+            }
+            setFetchState('not_found')
+            setFetchMessage('No tickets were found for this purchase.')
+            return
+          }
+
+          setTickets(mappedTickets)
+
+          if (data?.session) {
+            setSessionInfo({
+              id: data.session.id,
+              movieTitle: data.session.movieTitle,
+              startTime: data.session.startTime,
+              endTime: data.session.endTime,
+            })
+          }
+
+          setFetchState('confirmed')
+          setFetchMessage('Tickets confirmed successfully.')
+          if (isDev) {
+            console.info('[confirmation] confirmed', { ticketCount: mappedTickets.length, checkoutSessionId })
+          }
+          return
+        } catch {
+          if (isDev) {
+            console.error('[confirmation] unexpected fetch error', { checkoutSessionId })
+          }
+          if (!active) return
+          setFetchState('error')
+          setFetchMessage('Unexpected error while fetching tickets. Please try again.')
+          return
         }
-      } catch {
-        // ignore
       }
     }
 
-    void loadTickets()
+    void finalizeAndLoadTickets()
 
     return () => {
-      isMounted = false
+      active = false
     }
-  }, [finalizedTickets, cartId])
+  }, [authLoading, isAuthenticated, hasCheckoutSession, reloadNonce, isDev, checkoutSessionId])
 
-  // Gerar QR Code
   useEffect(() => {
-    const generateQR = async () => {
-      if (selectedSeats.length === 0) {
-        setIsLoading(false)
-        return
-      }
+    if (fetchState !== 'confirmed') {
+      setQrCodeUrl(null)
+      return
+    }
 
+    if (selectedSeats.length === 0) return
+
+    let active = true
+
+    const generateQR = async () => {
       try {
+        setQrLoading(true)
         const qrData = qrcodeService.generateTicketQRData({
           orderId,
-          ticketId: ticketsForDisplay[0]?.id || 'ticket-1',
+          ticketId: tickets[0]?.id || 'ticket-1',
           seatId: selectedSeats.join('-'),
-          sessionId: sessionData?.id || dbSession?.id || 'session-1',
+          sessionId: sessionInfo?.id || 'session-1',
         })
 
         const dataUrl = await qrcodeService.generateDataURL(qrData, {
           width: 200,
-          color: {
-            dark: '#000000',
-            light: '#FFFFFF',
-          },
+          color: { dark: '#000000', light: '#FFFFFF' },
         })
 
-        setQrCodeUrl(dataUrl)
-      } catch (error) {
-        console.error('Erro ao gerar QR Code:', error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    // Pequeno delay para simular carregamento
-    const timer = setTimeout(generateQR, 1000)
-    return () => clearTimeout(timer)
-  }, [orderId, ticketsForDisplay, selectedSeats, sessionData?.id, dbSession?.id])
-
-  // Prote��o de rota
-  useEffect(() => {
-    if (ticketsForDisplay.length > 0) return
-    const timer = setTimeout(() => {
-      if (ticketsForDisplay.length === 0) {
-        router.push('/')
-      }
-    }, 2000)
-    return () => clearTimeout(timer)
-  }, [ticketsForDisplay, router])
-
-  const handleDownloadTicket = useCallback(() => {
-    if (!qrCodeUrl) return
-
-    // Criar link de download
-    const link = document.createElement('a')
-    link.href = qrCodeUrl
-    link.download = `ticket-${orderId}.png`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }, [qrCodeUrl, orderId])
-
-  const handleShareTicket = useCallback(async () => {
-    const shareData = {
-      title: `${sessionData?.movieTitle || dbSession?.movieTitle || 'Die Odyssee'} - Ticket Confirmation`,
-      text: `My ticket for ${sessionData?.movieTitle || dbSession?.movieTitle || 'Die Odyssee'} at ${selectedCinema?.name || 'IMAX Cinema'}`,
-      url: window.location.href,
-    }
-
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData)
+        if (active) {
+          setQrCodeUrl(dataUrl)
+        }
       } catch {
-        // User cancelled or error
+        if (active) {
+          setQrCodeUrl(null)
+        }
+      } finally {
+        if (active) {
+          setQrLoading(false)
+        }
       }
-    } else {
-      await navigator.clipboard.writeText(window.location.href)
-      alert('Ticket link copied to clipboard!')
     }
-  }, [sessionData?.movieTitle, dbSession?.movieTitle, selectedCinema?.name])
 
-  const handleNewBooking = useCallback(() => {
-    resetBooking()
-    router.push('/')
-  }, [resetBooking, router])
+    void generateQR()
 
-  const formatDate = useCallback((dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    })
-  }, [])
+    return () => {
+      active = false
+    }
+  }, [fetchState, selectedSeats, orderId, tickets, sessionInfo])
 
-  const formatTime = useCallback((dateString: string) => {
-    return new Date(dateString).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }, [])
 
-  if (isLoading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen text-white flex items-center justify-center bg-black/70">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
-          <p className="text-gray-400">Processing your order...</p>
+        <div className="text-center space-y-2">
+          <Clock3 className="w-10 h-10 mx-auto animate-pulse text-blue-400" />
+          <p className="text-gray-300">Validating authentication...</p>
         </div>
       </div>
     )
   }
 
-  return (
-    <div className="min-h-screen text-white bg-black/60">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-800">
-        <div className="text-white font-semibold text-base">RIVIERA</div>
-        <div className="text-blue-400 font-semibold text-base">IMAX</div>
-      </div>
-
-      <div className="container mx-auto px-4 py-8 max-w-md">
-        {/* Success Icon */}
-        <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-            <CheckCircle className="w-12 h-12 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-white mb-2">Payment Successful!</h1>
-          <p className="text-gray-400">Your tickets have been confirmed</p>
-        </div>
-
-        {/* Order Summary */}
-        <Card className="bg-gray-900 border-gray-700 mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-white text-lg">Order Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-white font-medium text-lg">
-                  {sessionData?.movieTitle || dbSession?.movieTitle || 'Die Odyssee'}
-                </h3>
-                <p className="text-gray-400 text-sm">{selectedCinema?.name || 'IMAX Cinema'}</p>
-                {selectedCinema && (
-                  <p className="text-gray-500 text-xs flex items-center gap-1 mt-1">
-                    <MapPin className="w-3 h-3" />
-                    {selectedCinema.city}, {selectedCinema.state}
-                  </p>
-                )}
-              </div>
-              <Badge variant="secondary" className="bg-blue-600 text-white">
-                {selectedCinema?.format || 'IMAX'}
-              </Badge>
-            </div>
-            
-            <div className="grid grid-cols-1 gap-3 text-sm">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-gray-400" />
-                <span className="text-gray-400">
-                  {sessionData?.startTime || dbSession?.startTime
-                    ? formatDate(sessionData?.startTime || dbSession?.startTime || '')
-                    : 'April 16, 2026'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-gray-400" />
-                <span className="text-gray-400">
-                  {(sessionData?.startTime || dbSession?.startTime) && (sessionData?.endTime || dbSession?.endTime)
-                    ? `${formatTime(sessionData?.startTime || dbSession?.startTime || '')} - ${formatTime(sessionData?.endTime || dbSession?.endTime || '')}`
-                    : '18:00 - 21:00'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Armchair className="w-4 h-4 text-gray-400" />
-                <span className="text-gray-400">
-                  Seats: {selectedSeats.length > 0 ? selectedSeats.join(', ') : 'H8, H9'}
-                </span>
-                <Badge variant="outline" className="text-xs ml-auto">
-                  {ticketsForDisplay[0]?.type || 'VIP'}
-                </Badge>
-              </div>
-            </div>
-            
-            <div className="border-t border-gray-700 pt-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400">Order ID</span>
-                <span className="text-white font-mono text-sm">{orderId}</span>
-              </div>
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-gray-400">Total Paid</span>
-                <span className="text-green-400 text-xl font-bold">
-                  {formatCurrency(totalAmount)}
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* QR Code Ticket */}
-        <Card className="bg-gray-900 border-gray-700 mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-white text-lg flex items-center gap-2">
-              <QrCode className="w-5 h-5" />
-              Your Ticket
+  if (fetchState === 'processing') {
+    return (
+      <div className="min-h-screen text-white flex items-center justify-center bg-black/70 px-4">
+        <Card className="w-full max-w-md bg-gray-900 border-gray-700">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Clock3 className="w-5 h-5 text-blue-400" />
+              Processing purchase...
             </CardTitle>
           </CardHeader>
-          <CardContent className="text-center">
-            <div className="bg-white p-6 rounded-lg inline-block mb-4">
-              {qrCodeUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img 
-                  src={qrCodeUrl} 
-                  alt="Ticket QR Code" 
-                  className="w-40 h-40"
-                />
-              ) : (
-                <div className="w-40 h-40 bg-gray-200 flex items-center justify-center text-gray-500 font-mono text-xs">
-                  QR CODE
-                </div>
-              )}
-            </div>
-            <p className="text-gray-400 text-sm mb-4">
-              Show this QR code at the cinema entrance
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <Button 
-                variant="outline"
-                onClick={handleDownloadTicket}
-                className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
-                disabled={!qrCodeUrl}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Download
+          <CardContent className="space-y-3 text-sm text-gray-300">
+            <p>{fetchMessage}</p>
+            <p className="text-gray-500">Attempt {retryCount + 1}/{MAX_FETCH_RETRIES + 1}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (fetchState === 'not_found' || fetchState === 'error') {
+    return (
+      <div className="min-h-screen text-white flex items-center justify-center bg-black/70 px-4">
+        <Card className="w-full max-w-md bg-gray-900 border-gray-700">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-400" />
+              {fetchState === 'not_found' ? 'Purchase not found' : 'Confirmation failed'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-gray-300">{fetchMessage}</p>
+            <div className="grid grid-cols-1 gap-2">
+              <Button onClick={() => setReloadNonce((n) => n + 1)} className="bg-blue-600 hover:bg-blue-700 text-white">
+                Try again
               </Button>
-              <Button 
+              <Button
                 variant="outline"
-                onClick={handleShareTicket}
+                onClick={() => router.push('/account?tab=events&refresh=1')}
                 className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
               >
-                <Share2 className="w-4 h-4 mr-2" />
-                Share
+                View my tickets
               </Button>
             </div>
           </CardContent>
         </Card>
+      </div>
+    )
+  }
 
-        {/* Important Information */}
-        <Card className="bg-yellow-900/20 border-yellow-700 mb-6">
-          <CardContent className="p-4">
-            <h4 className="text-yellow-400 font-medium mb-2">Important Information</h4>
-            <ul className="text-gray-300 text-sm space-y-1">
-              <li>• Arrive at least 30 minutes before the show</li>
-              <li>• Bring a valid ID for verification</li>
-              <li>• No outside food or drinks allowed</li>
-              <li>• Cancellation allowed up to 2 hours before showtime</li>
-            </ul>
-          </CardContent>
-        </Card>
-
-        {/* Email Confirmation */}
-        <Card className="bg-gray-900 border-gray-700 mb-8">
-          <CardContent className="p-4 text-center">
-            <h4 className="text-white font-medium mb-2">Email Confirmation Sent</h4>
-            <p className="text-gray-400 text-sm">
-              A confirmation email has been sent to your registered email address.
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Action Buttons */}
-        <div className="space-y-3">
-          <Button 
-            onClick={handleNewBooking}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            Book Another Movie
-          </Button>
-          
-          <Button 
-            variant="outline"
-            onClick={() => router.push('/account?tab=events&refresh=1')}
-            className="w-full bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
-          >
-            View My Tickets
-          </Button>
+  return (
+    <div className="min-h-screen text-white ">
+      <div className="container mx-auto px-4 py-8 max-w-md space-y-6">
+        <div className="text-center">
+          <div className="w-20 h-20 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle className="w-12 h-12 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-white">Payment confirmed</h1>
+          <p className="text-gray-400">Your tickets have been successfully issued.</p>
         </div>
 
-        <p className="text-gray-500 text-xs text-center mt-6">
-          Thank you for choosing Riviera Cinema!
-        </p>
+        <Card className="bg-gray-900 border-gray-700">
+          <CardHeader>
+            <CardTitle className="text-white">Summary</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <p className="text-gray-300">Movie: {sessionInfo?.movieTitle || 'Session confirmed'}</p>
+            <p className="text-gray-300">Seats: {selectedSeats.join(', ')}</p>
+            <p className="text-gray-300">Order ID: {orderId}</p>
+            <p className="text-green-400 font-semibold">Total: {formatCurrency(totalAmount)}</p>
+          </CardContent>
+        </Card>
+
+
+        <div className="grid grid-cols-1 gap-2">
+          <Button
+            variant="outline"
+            onClick={() => router.push('/account?tab=events&refresh=1')}
+            className="bg-gray-800 border-gray-600 text-white hover:bg-gray-700"
+          >
+            View my tickets
+          </Button>
+          <Button
+            onClick={() => {
+              resetBooking()
+              router.push('/')
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            Back to home
+          </Button>
+        </div>
       </div>
     </div>
   )

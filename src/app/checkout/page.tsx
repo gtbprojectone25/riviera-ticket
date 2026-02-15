@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft } from 'lucide-react'
 import { useBookingStore } from '@/stores/booking'
-import { SeatMap } from '../seat-selection/SeatMap'
+import { ImaxSeatMap } from '@/components/seats/ImaxSeatMap'
 import { useSessionSeats } from '../seat-selection/useSessionSeats'
 import {
   PremiumTicketSummary,
@@ -53,8 +53,10 @@ export default function CheckoutPage() {
 
         const data = (await res.json()) as SessionApi
         setSession(data)
-      } catch {
-        // silencioso no checkout
+      } catch (error) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('[checkout] failed to load session metadata', { selectedSessionId, error })
+        }
       }
     }
 
@@ -108,7 +110,7 @@ export default function CheckoutPage() {
   if (!selectedCinema) return null
 
   return (
-    <div className="min-h-screen text-white relative overflow-x-hidden bg-black/60">
+    <div className="min-h-screen text-white relative overflow-x-hidden ">
 
 
       <div className="relative z-10 flex flex-col items-center min-h-screen pt-6">
@@ -206,13 +208,13 @@ export default function CheckoutPage() {
 
             {/* Map Visualization */}
             <div className="w-full bg-[#111] rounded-xl border border-white/5 p-3 min-h-[300px] flex items-center justify-center">
-              <SeatMap
+              <ImaxSeatMap
                 rows={seatRows}
-                selectedSeats={selectedSeatIds}
-                onSeatClick={() => {}}
+                selectedSeatIds={selectedSeatIds}
+                onSeatToggle={() => {}}
                 allowedTypes={[]}
                 maxSelectable={0}
-                readOnly={true}
+                debugLayout={false}
               />
             </div>
           </div>

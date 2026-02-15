@@ -42,13 +42,20 @@ export function useSessionSeats({ sessionId }: UseSessionSeatsOptions) {
         if (cancelled) return
         setRows(data)
         if (process.env.NODE_ENV !== 'production') {
-          const allSeats = Array.isArray(data) ? data.flatMap((r: { seats?: Array<{ status?: string }> }) => r.seats ?? []) : []
-          const counts = allSeats.reduce((acc: Record<string, number>, seat: { status?: string }) => {
+          const allSeats = Array.isArray(data)
+            ? data.flatMap((r: { seats?: Array<{ status?: string; type?: string }> }) => r.seats ?? [])
+            : []
+          const countsByStatus = allSeats.reduce((acc: Record<string, number>, seat: { status?: string }) => {
             const key = seat.status ?? 'UNKNOWN'
             acc[key] = (acc[key] ?? 0) + 1
             return acc
           }, {})
-          console.debug('[seat-selection] seats loaded', { total: allSeats.length, counts })
+          const countsByType = allSeats.reduce((acc: Record<string, number>, seat: { type?: string }) => {
+            const key = seat.type ?? 'UNKNOWN'
+            acc[key] = (acc[key] ?? 0) + 1
+            return acc
+          }, {})
+          console.debug('[seat-selection] seats loaded', { total: allSeats.length, countsByStatus, countsByType })
         }
         hasLoadedRef.current = true
       } catch (err) {
@@ -76,4 +83,3 @@ export function useSessionSeats({ sessionId }: UseSessionSeatsOptions) {
 
   return { rows, loading, error }
 }
-

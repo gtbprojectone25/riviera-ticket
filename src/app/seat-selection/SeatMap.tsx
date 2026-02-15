@@ -127,7 +127,7 @@ export function SeatMap({ rows, selectedSeats, onSeatClick, allowedTypes, readOn
         return { background: COLORS.unavailable, cursor: 'not-allowed' };
     }
 
-    if (status === 'HELD' && heldByCartId !== currentCartId) {
+    if (status === 'HELD' && (!heldByCartId || heldByCartId !== currentCartId)) {
         return { background: COLORS.held, cursor: 'not-allowed' };
     }
 
@@ -247,7 +247,7 @@ export function SeatMap({ rows, selectedSeats, onSeatClick, allowedTypes, readOn
                                         allowedTypes.includes(seat.type) ||
                                         (seat.type === 'WHEELCHAIR' && allowedTypes.includes('STANDARD'));
 
-                                      const isHeldByOther = seat.status === 'HELD' && seat.heldByCartId !== currentCartId;
+                                      const isHeldByOther = seat.status === 'HELD' && (!seat.heldByCartId || seat.heldByCartId !== currentCartId);
                                       const isAvailable = seat.status === 'AVAILABLE' || (seat.status === 'HELD' && !isHeldByOther);
                                       const style = getSeatStyle(seat.type, seat.status, isSelected, isTypeAllowed, seat.heldByCartId);
 

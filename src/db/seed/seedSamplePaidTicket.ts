@@ -35,7 +35,7 @@ async function ensureUser() {
 
 async function pickSeat() {
   const availableRes: any = await db.execute(
-    sql`select * from "seats" where "is_available" = true limit 1`,
+    sql`select * from "seats" where "status" = 'AVAILABLE' limit 1`,
   )
   const available = availableRes.rows?.[0]
   if (available) return available
@@ -81,10 +81,12 @@ async function seedSamplePaidTicket() {
 
   await db.execute(sql`
     update "seats"
-    set "is_available" = false,
-        "is_reserved" = false,
-        "reserved_by" = ${user.id},
-        "reserved_until" = null
+    set "status" = 'SOLD',
+        "sold_at" = now(),
+        "held_until" = null,
+        "held_by" = null,
+        "held_by_cart_id" = null,
+        "updated_at" = now()
     where "id" = ${seat.id}
   `)
 

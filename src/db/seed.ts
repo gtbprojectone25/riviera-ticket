@@ -5,7 +5,7 @@
 
 import { db } from './index'
 import { sessions, movies, users } from './schema'
-import { createSeatsForSession } from './queries'
+import { ensureSeatsForSession } from '@/server/seats/generateSeatsForSession'
 import { hashPassword } from '@/lib/password'
 
 async function seedDatabase() {
@@ -137,10 +137,14 @@ async function seedDatabase() {
     if (createdSessions.length > 0) {
       console.log(`✅ Created ${createdSessions.length} movie sessions`)
 
-      // Create seats for each session
+      // Create seats only through the canonical ensureSeatsForSession service.
       for (const session of createdSessions) {
-        const seats = await createSeatsForSession(session.id)
-        console.log(`✅ Created ${seats.length} seats for session ${session.id}`)
+        try {
+          const result = await ensureSeatsForSession(session.id)
+          console.log(`✅ Ensured ${result.created} seats for session ${session.id}`)
+        } catch (error) {
+          console.warn(`⚠️ Could not ensure seats for session ${session.id}:`, error)
+        }
       }
     } else {
       console.log('ℹ️  Sessions already exist')

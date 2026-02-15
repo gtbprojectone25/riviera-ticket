@@ -80,8 +80,9 @@ export function PurchaseWarningModal({
                 className="w-[92vw] max-w-[360px] bg-gray-800/80 border-gray-800/60 backdrop-blur-md rounded-2xl p-0 shadow-xl flex flex-col items-center justify-center mx-auto"
                 style={{ minWidth: 0, maxHeight: '90vh', overflow: 'visible' }}
             >
+                
                 <DialogTitle className="sr-only">
-                    Aviso de Compra - Limite de Ingressos
+                    Purchase Notice - Ticket Limit
                 </DialogTitle>
                 <div className="p-5 w-full flex flex-col items-center justify-center text-center">
                     <div className="flex justify-center mb-2">
@@ -89,7 +90,7 @@ export function PurchaseWarningModal({
                     </div>
                     <div>
                         <p className="text-gray-200 text-sm leading-relaxed pt-1 mt-3 mb-3">
-                            Para garantir que todos tenham a chance de assistir, apenas 4 ingressos foram disponibilizados a cada sessão. Caso você não finalize seu pedido em até 10 minutos, terá que entrar na fila novamente.
+                            To ensure everyone has a fair chance to attend, only 4 tickets are made available per session. Therefore, if you do not complete your order...
                         </p>
                         <div className="space-y-1">
                             <Progress
@@ -97,7 +98,7 @@ export function PurchaseWarningModal({
                                 className="w-full h-[5px] bg-gray-800"
                             />
                             <p className="text-xs text-gray-400">
-                                Você será redirecionado em {timeLeft} segundo{timeLeft !== 1 ? 's' : ''}...
+                                You will be redirected in {timeLeft} seconds{timeLeft !== 1 ? 's' : ''}...
                             </p>
                         </div>
                     </div>

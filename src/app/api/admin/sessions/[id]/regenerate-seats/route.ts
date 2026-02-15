@@ -3,7 +3,7 @@ import { db } from '@/db'
 import { sessions, seats, tickets } from '@/db/schema'
 import { requireRole } from '@/lib/admin-auth'
 import { eq } from 'drizzle-orm'
-import { generateSeatsForSession } from '@/server/seats/generateSeatsForSession'
+import { ensureSeatsForSession } from '@/server/seats/generateSeatsForSession'
 
 type RouteContext = {
   params: Promise<{ id: string }>
@@ -40,7 +40,7 @@ export async function POST(_: NextRequest, context: RouteContext) {
 
     await db.delete(seats).where(eq(seats.sessionId, id))
 
-    const result = await generateSeatsForSession(id)
+    const result = await ensureSeatsForSession(id)
 
     return NextResponse.json({ success: true, created: result.created })
   } catch (error) {
@@ -54,3 +54,4 @@ export async function POST(_: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
   }
 }
+

@@ -36,7 +36,7 @@ export function LocationAutocomplete() {
         className="bg-black text-white"
       />
       <Button onClick={handleSearch} className="w-full">
-        Buscar
+        Search
       </Button>
       {results.length > 0 && (
         <div className="bg-black border border-gray-700 rounded-lg mt-2">
