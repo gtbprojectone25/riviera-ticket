@@ -4,6 +4,7 @@ import { db } from '@/db'
 import { carts, cartItems, seats } from '@/db/schema'
 import { and, eq, inArray } from 'drizzle-orm'
 import { holdSeats } from '@/db/queries'
+import type { HoldSeatsResult } from '@/lib/seat-reservation'
 
 const holdSchema = z.object({
   cartId: z.string().uuid().nullable().optional(),
@@ -14,6 +15,7 @@ const holdSchema = z.object({
 })
 
 type SeatLookup = {
+  requestId: string
   seatId: string
   dbId: string
   price: number
@@ -49,7 +51,7 @@ export async function POST(request: NextRequest) {
         .where(and(eq(seats.sessionId, parsed.sessionId), inArray(seats.id, uuidSeatIds)))
 
       rows.forEach((row) => {
-        foundSeats.push({ seatId: row.seatId, dbId: row.id, price: row.price })
+        foundSeats.push({ requestId: row.id, seatId: row.seatId, dbId: row.id, price: row.price })
       })
     }
 
@@ -60,15 +62,18 @@ export async function POST(request: NextRequest) {
         .where(and(eq(seats.sessionId, parsed.sessionId), inArray(seats.seatId, seatCodeIds)))
 
       rows.forEach((row) => {
-        foundSeats.push({ seatId: row.seatId, dbId: row.id, price: row.price })
+        foundSeats.push({ requestId: row.seatId, seatId: row.seatId, dbId: row.id, price: row.price })
       })
     }
 
-    const foundSeatIds = new Set(foundSeats.map((seat) => seat.seatId))
+    const dedupedByDbId = Array.from(
+      new Map(foundSeats.map((seat) => [seat.dbId, seat])).values(),
+    )
+    const foundRequestIds = new Set(foundSeats.map((seat) => seat.requestId))
     if (isDev) {
-      console.debug('[seats/hold] lookup', { totalRequested: parsed.seatIds.length, found: foundSeats.length })
+      console.debug('[seats/hold] lookup', { totalRequested: parsed.seatIds.length, found: dedupedByDbId.length })
     }
-    const missingSeatIds = parsed.seatIds.filter((id) => !foundSeatIds.has(id))
+    const missingSeatIds = parsed.seatIds.filter((id) => !foundRequestIds.has(id))
 
     if (missingSeatIds.length > 0) {
       if (isDev) {
@@ -80,127 +85,118 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const totalAmount = foundSeats.reduce((sum, seat) => sum + seat.price, 0)
-    const now = new Date()
-    const heldUntil = new Date(now.getTime() + ttlMinutes * 60 * 1000)
+    const totalAmount = dedupedByDbId.reduce((sum, seat) => sum + seat.price, 0)
+    const runHold = async (tx: typeof db) => {
+      const now = new Date()
+      const heldUntil = new Date(now.getTime() + ttlMinutes * 60 * 1000)
 
-    let cartId = parsed.cartId
-    if (!cartId) {
-      const [cart] = await db
-        .insert(carts)
-        .values({
-          sessionId: parsed.sessionId,
-          userId: parsed.userId ?? null,
-          totalAmount,
-          status: 'ACTIVE',
-          expiresAt: heldUntil,
-        })
-        .returning()
+      let cartId = parsed.cartId
+      if (!cartId) {
+        const [cart] = await tx
+          .insert(carts)
+          .values({
+            sessionId: parsed.sessionId,
+            userId: parsed.userId ?? null,
+            totalAmount,
+            status: 'ACTIVE',
+            expiresAt: heldUntil,
+          })
+          .returning()
 
-      cartId = cart.id
-    }
-
-    const [existingCart] = await db
-      .select({ id: carts.id, sessionId: carts.sessionId, status: carts.status })
-      .from(carts)
-      .where(eq(carts.id, cartId))
-      .limit(1)
-
-    if (!existingCart) {
-      if (isDev) {
-        console.debug('[seats/hold] cart not found', { cartId })
+        cartId = cart.id
       }
-      return NextResponse.json(
-        { ok: false, error: 'CART_NOT_FOUND' },
-        { status: 404 },
-      )
-    }
 
-    if (existingCart.status !== 'ACTIVE') {
-      if (isDev) {
-        console.debug('[seats/hold] cart not active', { cartId, status: existingCart.status })
+      const [existingCart] = await tx
+        .select({ id: carts.id, sessionId: carts.sessionId, status: carts.status })
+        .from(carts)
+        .where(eq(carts.id, cartId))
+        .limit(1)
+
+      if (!existingCart) {
+        throw new Error('CART_NOT_FOUND')
       }
-      return NextResponse.json(
-        { ok: false, error: 'CART_NOT_ACTIVE' },
-        { status: 200 },
-      )
-    }
-    if (existingCart.sessionId !== parsed.sessionId) {
-      if (isDev) {
-        console.debug('[seats/hold] cart session mismatch', { cartId, cartSessionId: existingCart.sessionId, sessionId: parsed.sessionId })
+
+      if (existingCart.status !== 'ACTIVE') {
+        throw new Error('CART_NOT_ACTIVE')
       }
-      return NextResponse.json(
-        { ok: false, error: 'CART_SESSION_MISMATCH' },
-        { status: 200 },
-      )
+      if (existingCart.sessionId !== parsed.sessionId) {
+        throw new Error('CART_SESSION_MISMATCH')
+      }
+
+      const existingItems = await tx
+        .select({ seatId: cartItems.seatId })
+        .from(cartItems)
+        .where(eq(cartItems.cartId, cartId))
+
+      const existingSeatIds = new Set(existingItems.map((item) => item.seatId))
+      const itemsToInsert = dedupedByDbId
+        .filter((seat) => !existingSeatIds.has(seat.dbId))
+        .map((seat) => ({
+          cartId: cartId as string,
+          seatId: seat.dbId,
+          price: seat.price,
+        }))
+
+      if (itemsToInsert.length > 0) {
+        await tx.insert(cartItems).values(itemsToInsert)
+      }
+
+      const result = await holdSeats(cartId, dedupedByDbId.map((seat) => seat.dbId), ttlMinutes, tx)
+      return { cartId, hold: result }
     }
 
-    const existingItems = await db
-      .select({ seatId: cartItems.seatId })
-      .from(cartItems)
-      .where(eq(cartItems.cartId, cartId))
-
-    const existingSeatIds = new Set(existingItems.map((item) => item.seatId))
-    const itemsToInsert = foundSeats
-      .filter((seat) => !existingSeatIds.has(seat.dbId))
-      .map((seat) => ({
-        cartId: cartId as string,
-        seatId: seat.dbId,
-        price: seat.price,
-      }))
-
-    if (itemsToInsert.length > 0) {
-      // Avoid ON CONFLICT because the DB may lack the composite unique; we already filtered existing seatIds.
-      await db.insert(cartItems).values(itemsToInsert)
-    }
-
-    let holdResult
-    try {
-      holdResult = await holdSeats(cartId, foundSeats.map((seat) => seat.dbId), ttlMinutes, db as unknown as typeof db)
-    } catch (error) {
+    const holdResult = await db
+      .transaction(async (tx) => runHold(tx as unknown as typeof db))
+      .catch(async (error: unknown) => {
+        const message = error instanceof Error ? error.message : ''
+        if (message.includes('No transactions support in neon-http driver')) {
+          return runHold(db)
+        }
+        throw error
+      })
+      .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : ''
       if (message === 'CART_NOT_FOUND') {
-        return NextResponse.json(
-          { ok: false, error: 'CART_NOT_FOUND' },
-          { status: 404 },
-        )
+        return { ok: false as const, error: 'CART_NOT_FOUND', status: 404 }
       }
       if (message === 'CART_NOT_ACTIVE') {
-        return NextResponse.json(
-          { ok: false, error: 'CART_NOT_ACTIVE' },
-          { status: 200 },
-        )
+        return { ok: false as const, error: 'CART_NOT_ACTIVE', status: 409 }
+      }
+      if (message === 'CART_SESSION_MISMATCH') {
+        return { ok: false as const, error: 'CART_SESSION_MISMATCH', status: 409 }
       }
       if (message === 'NO_SEATS') {
-        return NextResponse.json(
-          { ok: false, error: 'NO_SEATS' },
-          { status: 400 },
-        )
+        return { ok: false as const, error: 'NO_SEATS', status: 400 }
       }
       if (message === 'SEAT_OCCUPIED') {
-        return NextResponse.json(
-          { ok: false, error: 'SEAT_OCCUPIED', failedSeatIds: parsed.seatIds },
-          { status: 200 },
-        )
+        return { ok: false as const, error: 'SEAT_OCCUPIED', status: 409 }
       }
       throw error
+      })
+
+    if ('ok' in holdResult && holdResult.ok === false) {
+      return NextResponse.json(
+        { ok: false, error: holdResult.error, failedSeatIds: parsed.seatIds },
+        { status: holdResult.status },
+      )
     }
 
-    const heldIds = new Set(holdResult.heldSeatIds)
-    const heldSeatIds = foundSeats
+    const successHold = holdResult as { cartId: string; hold: HoldSeatsResult }
+    const heldIds = new Set(successHold.hold.heldSeatIds)
+    const heldSeatIds = dedupedByDbId
       .filter((seat) => heldIds.has(seat.dbId))
       .map((seat) => seat.seatId)
 
     if (isDev) {
-      console.debug('[seats/hold] success', { heldSeatIds, cartId })
+      console.debug('[seats/hold] success', { heldSeatIds, cartId: successHold.cartId })
     }
 
     return NextResponse.json({
       ok: true,
-      cartId,
+      cartId: successHold.cartId,
       heldSeatIds,
       failedSeatIds: [],
-      heldUntil: holdResult.heldUntil.toISOString(),
+      heldUntil: (successHold.hold.heldUntil ?? new Date()).toISOString(),
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -216,5 +212,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
-

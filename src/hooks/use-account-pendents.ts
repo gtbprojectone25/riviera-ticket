@@ -22,7 +22,7 @@ export function useAccountPendents(
       try {
         setStatus('loading')
         setError(null)
-        const res = await fetch('/api/account/pendents', {
+        const res = await fetch('/api/account/pending-payments', {
           headers: {
             Authorization: `Bearer ${token}`,
           },

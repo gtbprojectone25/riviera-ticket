@@ -41,8 +41,8 @@ export function QueueGate({ scopeKey, nextHref, onContinue }: QueueGateProps) {
         if (!res.ok) throw new Error('Falha ao entrar na fila')
         const data = await res.json()
         setEntryId(data.queueEntryId)
-        setQueueNumber(data.queueNumber)
-        setStatus(data.status)
+        if (typeof data.queueNumber === 'number') setQueueNumber(data.queueNumber)
+        if (data.status) setStatus(data.status)
         if (typeof window !== 'undefined') {
           window.localStorage.setItem(storageKey, data.queueEntryId)
         }
@@ -64,12 +64,18 @@ export function QueueGate({ scopeKey, nextHref, onContinue }: QueueGateProps) {
       try {
         const res = await fetch(`/api/queue/status?entryId=${entryId}`)
         if (!res.ok) return
-        const data = await res.json()
+        let data: { status?: QueueStatus; queueNumber?: number; progress?: number } = {}
+        try {
+          data = (await res.json()) as typeof data
+        } catch {
+          return
+        }
         if (!active) return
-        setStatus(data.status)
-        setQueueNumber(data.queueNumber)
+        if (data.status) setStatus(data.status)
+        if (typeof data.queueNumber === 'number') setQueueNumber(data.queueNumber)
         if (typeof data.progress === 'number') {
-          setProgress((prev) => (data.progress > prev ? data.progress : prev))
+          const nextProgress = data.progress
+          setProgress((prev) => (nextProgress > prev ? nextProgress : prev))
         }
       } catch {
         // ignore transient errors

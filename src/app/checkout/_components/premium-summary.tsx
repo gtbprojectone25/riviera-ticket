@@ -78,13 +78,13 @@ export function PremiumTicketSummary({ tickets }: PremiumTicketSummaryProps) {
 export function FeatureCards() {
   const features = [
     {
-      text: "Sua compra é validada diretamente pelo sistema IMAX. Todo o processo é protegido por transações seguras, com suporte dedicado disponível até o dia da sua sessão."
+      text: "Your purchase is validated directly through the IMAX system. The entire process is protected by secure transactions, with dedicated support available up to the date of your screening."
     },
     {
-      text: "Ao concluir o pagamento, sua reserva é confirmada e você garante lugar em uma das apenas 26 salas no mundo que exibem este filme em IMAX 70mm. Uma oportunidade única que já está esgotada em cidades como Londres, Nova York e Melbourne."
+      text: "Once payment is complete, your reservation is confirmed and you secure a seat in one of only 26 theatres worldwide screening the film in IMAX 70mm.A one-of-a-kind opportunity - already sold out in cities like London, New York, and Melbourne."
     },
     {
-      text: "Receba seus ingressos digitais imediatamente no seu e-mail. Além disso, você pode acompanhar todas as atualizações da sua sessão com praticidade pelo RevieraTickets."
+      text: "Receive your digital tickets immediately via email. You can also easily track all session updates through your RivieraTickets account."
     }
   ]
 
@@ -127,11 +127,11 @@ export function BuyerGuarantee() {
       </div>
       
       <div className="space-y-2 pl-7">
-        <p className="text-xs text-gray-400">• Secure transactions backed by full service customer care</p>
+        <p className="text-xs text-gray-400">• All transactions are securely processed and supported by full-service customer care</p>
         <p className="text-xs text-gray-400">• Full compensation for events that are canceled and not rescheduled</p>
-        <p className="text-xs text-gray-400">• Valid tickets delivered in time for the event or your money back</p>
+        <p className="text-xs text-gray-400">• Valid tickets delivered on time - or your money back</p>
         <p className="text-xs text-gray-400">
-          • <span className="text-gray-500 underline cursor-pointer hover:text-gray-300">Learn more about our Buyer Guarantee</span>
+          • <span className="text-gray-500 underline cursor-pointer hover:text-gray-300">Learn more about Buyer Guarantee</span>
         </p>
       </div>
     </div>

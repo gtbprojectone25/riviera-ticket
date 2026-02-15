@@ -7,9 +7,9 @@ import {
   cinemas as cinemasTable,
   auditoriums,
   sessions,
-  seats,
 } from './schema'
 import { cinemas as cinemaData } from '@/data/cinemas'
+import { ensureSeatsForSession } from '@/server/seats/generateSeatsForSession'
 
 type SeatType = 'STANDARD' | 'VIP' | 'WHEELCHAIR' | 'GAP'
 
@@ -142,34 +142,10 @@ export async function seedIMAX() {
       })
       .returning()
 
-    // Criar seats para a sessão
-    const seatRows = genericLayout.map((s) => {
-      const seatId = `${s.row}${s.number}`
-      const price =
-        s.type === 'VIP'
-          ? vipPrice
-          : s.type === 'STANDARD' || s.type === 'WHEELCHAIR'
-            ? basePrice
-            : 0
-
-      return {
-        sessionId: session.id,
-        row: s.row,
-        number: s.number,
-        seatId,
-        isAvailable: s.type !== 'GAP',
-        isReserved: false,
-        reservedBy: null,
-        reservedUntil: null,
-        type: s.type,
-        price,
-      }
-    })
-
-    await db.insert(seats).values(seatRows)
+    const result = await ensureSeatsForSession(session.id)
 
     console.log(
-      `Seeded cinema ${cinema.name}, auditorium ${auditorium.name}, session ${session.id}, seats: ${seatRows.length}`,
+      `Seeded cinema ${cinema.name}, auditorium ${auditorium.name}, session ${session.id}, ensured seats: ${result.created}`,
     )
   }
 

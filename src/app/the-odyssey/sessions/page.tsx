@@ -37,17 +37,17 @@ export default function TheOdysseySessionsPage() {
         const res = await fetch('/api/sessions', { signal: controller.signal })
         if (!res.ok) {
           const data = await res.json().catch(() => ({}))
-          throw new Error(data.error || 'Erro ao carregar sessões')
+          throw new Error(data.error || 'Error loading sessions')
         }
         const data = (await res.json()) as Session[]
         const filtered = data.filter(
-          (s) => s.movieTitle === 'The Odyssey' || s.movieTitle === 'Die Odyssee',
+          (s) => s.movieTitle === 'The Odyssey' || s.movieTitle === 'The Odyssee',
         )
         setSessions(filtered)
       } catch (err) {
         if (controller.signal.aborted) return
         const msg =
-          err instanceof Error ? err.message : 'Erro ao carregar sessões'
+          err instanceof Error ? err.message : 'Error loading sessions'
         setError(msg)
       } finally {
         if (!controller.signal.aborted) {

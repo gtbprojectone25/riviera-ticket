@@ -14,14 +14,14 @@ type Props = {
 
 export function MapModal({ open, onClose, center }: Props) {
   const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY! ,
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!,
   });
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg p-0 bg-black">
   <VisuallyHidden>
-    <DialogTitle>Mapa de Cinemas IMAX</DialogTitle>
+    <DialogTitle>IMAX cinema map</DialogTitle>
   </VisuallyHidden>
 
   <div className="relative w-full h-[400px] rounded-lg overflow-hidden">
@@ -54,7 +54,7 @@ export function MapModal({ open, onClose, center }: Props) {
   </div>
 
   <Button className="mt-4 w-full" onClick={onClose}>
-    Fechar
+    Close
   </Button>
 </DialogContent>
     </Dialog>

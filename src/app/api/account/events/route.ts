@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { carts, cinemas, sessions, seats, tickets, userSessions, users } from '@/db/schema'
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { carts, checkoutPurchases, cinemas, sessions, seats, tickets, userSessions, users } from '@/db/schema'
+import { orders } from '@/db/admin-schema'
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
 import type { AccountEvent } from '@/types/account'
 
 async function getUserFromRequest(request: NextRequest) {
@@ -35,11 +36,81 @@ async function getUserFromRequest(request: NextRequest) {
   return user
 }
 
+function isMissingCheckoutSchemaError(error: unknown) {
+  const code = (error as { code?: string })?.code
+  const message = error instanceof Error ? error.message : String(error)
+  return code === '42703' || code === '42P01' || /checkout_purchases|checkout_session_id/i.test(message)
+}
+
 export async function GET(request: NextRequest) {
   try {
+    const isDev = process.env.NODE_ENV !== 'production'
     const user = await getUserFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    try {
+      const userCheckoutCarts = await db
+        .select({ cartId: checkoutPurchases.cartId })
+        .from(checkoutPurchases)
+        .where(
+          and(
+            eq(checkoutPurchases.userId, user.id),
+            inArray(checkoutPurchases.status, ['SUCCEEDED', 'CLAIMED']),
+          ),
+        )
+
+      if (userCheckoutCarts.length > 0) {
+        const cartIds = userCheckoutCarts.map((entry) => entry.cartId)
+        await db
+          .update(tickets)
+          .set({ userId: user.id, updatedAt: new Date() })
+          .where(
+            and(
+              inArray(tickets.cartId, cartIds),
+              isNull(tickets.userId),
+            ),
+          )
+      }
+    } catch (error) {
+      if (!isMissingCheckoutSchemaError(error)) {
+        throw error
+      }
+      if (isDev) {
+        console.warn('[account/events] checkout_purchases unavailable; fallbacking to orders only', {
+          userId: user.id,
+        })
+      }
+    }
+
+    const userOrderCarts = await db
+      .select({ cartId: orders.cartId })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.userId, user.id),
+          inArray(orders.status, ['PAID', 'CONFIRMED']),
+          isNull(orders.refundedAt),
+        ),
+      )
+
+    if (userOrderCarts.length > 0) {
+      const cartIds = userOrderCarts
+        .map((entry) => entry.cartId)
+        .filter((cartId): cartId is string => Boolean(cartId))
+
+      if (cartIds.length > 0) {
+        await db
+          .update(tickets)
+          .set({ userId: user.id, updatedAt: new Date() })
+          .where(
+            and(
+              inArray(tickets.cartId, cartIds),
+              isNull(tickets.userId),
+            ),
+          )
+      }
     }
 
     const rows = await db
@@ -60,8 +131,8 @@ export async function GET(request: NextRequest) {
         cartStatus: carts.status,
       })
       .from(tickets)
-      .innerJoin(seats, eq(tickets.seatId, seats.id))
-      .innerJoin(sessions, eq(tickets.sessionId, sessions.id))
+      .leftJoin(seats, eq(tickets.seatId, seats.id))
+      .leftJoin(sessions, eq(tickets.sessionId, sessions.id))
       .leftJoin(carts, eq(tickets.cartId, carts.id))
       .leftJoin(cinemas, eq(sessions.cinemaId, cinemas.id))
       .where(
@@ -71,6 +142,13 @@ export async function GET(request: NextRequest) {
         ),
       )
       .orderBy(desc(tickets.purchaseDate))
+
+    if (isDev) {
+      console.info('[account/events] loaded', {
+        userId: user.id,
+        tickets: rows.length,
+      })
+    }
 
     const eventsByKey = new Map<string, AccountEvent & { _seatSet: Set<string> }>()
 
@@ -107,7 +185,6 @@ export async function GET(request: NextRequest) {
           existing.barcode = row.barcodeBlurred
         }
         if (row.ticketPrice) {
-          // If cartTotal is missing, accumulate by ticket price; otherwise keep cart total
           if (!existing.amount || existing.amount === 0) {
             existing.amount = row.cartTotal ?? row.ticketPrice
           } else if (!row.cartTotal) {
@@ -117,7 +194,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Remove _seatSet (usado apenas internamente para deduplicação)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const events = Array.from(eventsByKey.values()).map(({ _seatSet, ...event }) => event)
     return NextResponse.json(events)

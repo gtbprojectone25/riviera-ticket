@@ -55,7 +55,7 @@ export function ExtensionModal() {
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogTitle className="sr-only">
-          Tempo esgotado - Prorrogação disponível
+          Time expired - Extension available
         </DialogTitle>
 
         <div className="p-6 flex flex-col items-center text-center">
@@ -72,24 +72,24 @@ export function ExtensionModal() {
 
           {/* Title */}
           <h2 className="text-xl font-bold text-white mb-2">
-            Tempo esgotado!
+            Time expired!
           </h2>
 
           {/* Description */}
           <p className="text-gray-400 text-sm leading-relaxed mb-6">
-            Seu tempo de reserva expirou. Deseja continuar com a compra?
-            Você pode adicionar mais 3 minutos para finalizar.
+            Your reservation time has expired. Do you want to continue with the purchase?
+            You can add 3 more minutes to complete.
           </p>
 
           {/* Countdown display */}
           <div className="flex items-center gap-2 mb-4 text-gray-300">
             <Clock className="w-4 h-4 text-gray-500" />
             <span className="text-sm">
-              Expira em{' '}
+              Expires in{' '}
               <span className="font-bold tabular-nums text-amber-400">
                 {popupCountdown}
               </span>
-              {' '}segundo{popupCountdown !== 1 ? 's' : ''}
+              {' '}seconds
             </span>
           </div>
 
@@ -107,12 +107,12 @@ export function ExtensionModal() {
             className="w-full h-14 bg-linear-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold text-base rounded-xl shadow-lg shadow-blue-500/25 transition-all duration-200 hover:scale-105 active:scale-95"
           >
             <Clock className="w-5 h-5 mr-2" />
-            Adicionar 3 minutos
+            Add 3 minutes
           </Button>
 
           {/* Warning text */}
           <p className="text-xs text-gray-500 mt-4">
-            Esta é sua única chance de prorrogação
+            This is your only chance to extend
           </p>
         </div>
       </DialogContent>

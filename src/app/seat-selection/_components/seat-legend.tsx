@@ -12,11 +12,11 @@ const SeatLegend = () => {
           <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
             <div className="flex items-center space-x-3">
               <div className="h-5 w-5 rounded-md bg-[#4AA7F5]"></div>
-              <span className="text-sm text-gray-300">Available Standard</span>
+              <span className="text-sm text-gray-300">Available (Standard)</span>
             </div>
             <div className="flex items-center space-x-3">
               <div className="h-5 w-5 rounded-md bg-[#7658F6]"></div>
-              <span className="text-sm text-gray-300">Available VIP</span>
+              <span className="text-sm text-gray-300">Available (VIP)</span>
             </div>
             <div className="flex items-center space-x-3">
               <div className="h-5 w-5 rounded-md bg-[#FF7513]"></div>
@@ -30,7 +30,7 @@ const SeatLegend = () => {
             </div>
             <div className="flex items-center space-x-3">
               <div className="h-5 w-5 rounded-md bg-[#0648B9]"></div>
-              <span className="text-sm text-gray-300">Wheelchair</span>
+              <span className="text-sm text-gray-300">Wheelchair Accessible</span>
             </div>
           </div>
         </details>

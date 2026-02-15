@@ -1,4 +1,4 @@
-/**
+﻿/**
  * API: POST /api/admin/sessions/bulk
  * Acoes em lote para sessoes
  */
@@ -11,7 +11,7 @@ import { writeAuditLog } from '@/lib/audit-log'
 import { findSessionConflict } from '@/db/queries'
 import { inArray, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { generateSeatsForSession } from '@/server/seats/generateSeatsForSession'
+import { ensureSeatsForSession } from '@/server/seats/generateSeatsForSession'
 
 const bulkSchema = z.object({
   action: z.enum(['DUPLICATE', 'PAUSE', 'CLOSE']),
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
         })
         .returning()
 
-      await generateSeatsForSession(created.id)
+      await ensureSeatsForSession(created.id)
 
       await writeAuditLog({
         adminId: admin.id,
@@ -202,3 +202,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
   }
 }
+

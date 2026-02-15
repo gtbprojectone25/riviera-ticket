@@ -5,11 +5,11 @@
 
 import { eq, and, gte, gt, lte, lt, ne, desc, asc, or, inArray, isNull, sql } from 'drizzle-orm'
 import { db } from './index'
+import { ensureSeatsForSession } from '@/server/seats/generateSeatsForSession'
 import type { 
   NewUser, 
   NewSession, 
   NewPriceRule,
-  NewSeat, 
   NewCart, 
   NewTicket,
   NewPaymentIntent,
@@ -26,7 +26,6 @@ import {
   cartItems,
   tickets,
   paymentIntents,
-  queueCounters,
   queueEntries,
 } from './schema'
 
@@ -443,26 +442,13 @@ export async function getSeatsBySession(sessionId: string) {
 }
 
 export async function createSeatsForSession(sessionId: string) {
-  const seatsData: NewSeat[] = []
-  const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
-  
-  rows.forEach(row => {
-    for (let number = 1; number <= 20; number++) {
-      const seatId = `${row}${number}`
-      const isVIP = ['D', 'E', 'F'].includes(row) && number >= 6 && number <= 15
-      
-      seatsData.push({
-        sessionId,
-        row,
-        number,
-        seatId,
-        type: isVIP ? 'VIP' : 'STANDARD',
-        price: isVIP ? 44900 : 34900, // in cents ($449.00 VIP, $349.00 Standard)
-      })
-    }
-  })
-  
-  return await db.insert(seats).values(seatsData).returning()
+  await ensureSeatsForSession(sessionId)
+
+  return await db
+    .select()
+    .from(seats)
+    .where(eq(seats.sessionId, sessionId))
+    .orderBy(asc(seats.row), asc(seats.number))
 }
 
 export async function reserveSeat(seatId: string, userId: string, expiresAt: Date) {
@@ -514,10 +500,24 @@ async function holdSeatsInTx(
     throw new Error('NO_SEATS')
   }
 
+  // Primeiro libera holds expirados no mesmo lote de assentos dentro da transação.
+  // Isso evita corrida entre "expirar" e "reservar".
+  await releaseExpiredHolds(tx, {
+    sessionId: cart.sessionId,
+    seatIds: uniqueSeatIds,
+  })
+
   const holdConditions = [
     eq(seats.status, 'AVAILABLE'),
-    and(eq(seats.status, 'HELD'), lte(seats.heldUntil, now)),
-    and(eq(seats.status, 'HELD'), eq(seats.heldByCartId, cart.id)),
+    and(
+      eq(seats.status, 'HELD'),
+      lte(seats.heldUntil, now),
+    ),
+    and(
+      eq(seats.status, 'HELD'),
+      eq(seats.heldByCartId, cart.id),
+      gt(seats.heldUntil, now),
+    ),
   ]
 
   const heldSeats = await tx
@@ -560,9 +560,17 @@ export async function holdSeats(
   tx?: DbInstance,
 ): Promise<HoldSeatsResult> {
   if (!tx) {
-    return await db.transaction(async (transaction) =>
-      holdSeats(cartId, seatIds, ttlMinutes, transaction)
-    )
+    try {
+      return await db.transaction(async (transaction) =>
+        holdSeats(cartId, seatIds, ttlMinutes, transaction),
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      if (!message.includes('No transactions support in neon-http driver')) {
+        throw error
+      }
+      return await holdSeats(cartId, seatIds, ttlMinutes, db)
+    }
   }
 
   const [cart] = await tx
@@ -582,10 +590,25 @@ export async function holdSeats(
   return await holdSeatsInTx(tx, cart, seatIds, ttlMinutes)
 }
 
-export async function releaseExpiredReservations() {
+export async function releaseExpiredHolds(
+  tx: DbInstance = db,
+  filters?: { sessionId?: string; seatIds?: string[] },
+) {
   const now = new Date()
-  
-  return await db
+  const conditions = [
+    eq(seats.status, 'HELD'),
+    or(lte(seats.heldUntil, now), isNull(seats.heldUntil)),
+  ]
+
+  if (filters?.sessionId) {
+    conditions.push(eq(seats.sessionId, filters.sessionId))
+  }
+
+  if (filters?.seatIds && filters.seatIds.length > 0) {
+    conditions.push(inArray(seats.id, filters.seatIds))
+  }
+
+  return await tx
     .update(seats)
     .set({
       status: 'AVAILABLE',
@@ -594,10 +617,12 @@ export async function releaseExpiredReservations() {
       heldByCartId: null,
       updatedAt: now,
     })
-    .where(
-      and(eq(seats.status, 'HELD'), lte(seats.heldUntil, now))
-    )
+    .where(and(...conditions))
     .returning()
+}
+
+export async function releaseExpiredReservations() {
+  return await releaseExpiredHolds()
 }
 
 // Cart operations
@@ -694,12 +719,35 @@ export async function updateCartTotal(cartId: string) {
 }
 
 export async function expireCart(cartId: string) {
+  const now = new Date()
+
   const [cart] = await db
     .update(carts)
-    .set({ status: 'EXPIRED', updatedAt: new Date() })
+    .set({ status: 'EXPIRED', updatedAt: now })
     .where(eq(carts.id, cartId))
     .returning()
-  
+
+  if (!cart) {
+    return null
+  }
+
+  // Carrinho expirado deve liberar holds imediatamente.
+  await db
+    .update(seats)
+    .set({
+      status: 'AVAILABLE',
+      heldUntil: null,
+      heldBy: null,
+      heldByCartId: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(seats.status, 'HELD'),
+        eq(seats.heldByCartId, cartId),
+      ),
+    )
+
   return cart
 }
 
@@ -794,48 +842,27 @@ export async function consumeSeatsAndCreateTickets(
     }
   }
 
-  let resolvedUserId = params.userId ?? null
+  const resolvedUserId = params.userId ?? null
   let resolvedEmail = params.guestEmail ?? null
 
-  if (!resolvedUserId) {
-    const fallbackEmail = resolvedEmail || `guest+${params.cartId}@checkout.local`
-    resolvedEmail = fallbackEmail
-
-    const [existingUser] = await tx
-      .select()
-      .from(users)
-      .where(eq(users.email, fallbackEmail))
-      .limit(1)
-
-    if (existingUser) {
-      resolvedUserId = existingUser.id
-    } else {
-      const [guestUser] = await tx
-        .insert(users)
-        .values({
-          email: fallbackEmail,
-          name: 'Guest',
-          surname: 'Checkout',
-          emailVerified: false,
-        })
-        .returning()
-
-      resolvedUserId = guestUser.id
-    }
+  if (!resolvedEmail) {
+    resolvedEmail = null
   }
 
-  if (!resolvedUserId) {
-    throw new Error('USER_REQUIRED')
-  }
+  const holdOwnerCondition = resolvedUserId
+    ? or(
+      eq(seats.heldByCartId, params.cartId),
+      and(isNull(seats.heldByCartId), eq(seats.heldBy, resolvedUserId)),
+    )
+    : eq(seats.heldByCartId, params.cartId)
 
+  // Permit converting:
+  // - seats HELD by this cart (even if held_until expired) -> SOLD
+  // - seats AVAILABLE -> SOLD
   const holdConditions = or(
     and(
       eq(seats.status, 'HELD'),
-      gt(seats.heldUntil, now),
-      or(
-        eq(seats.heldByCartId, params.cartId),
-        and(isNull(seats.heldByCartId), eq(seats.heldBy, resolvedUserId)),
-      ),
+      holdOwnerCondition,
     ),
     eq(seats.status, 'AVAILABLE'),
   )
@@ -863,25 +890,55 @@ export async function consumeSeatsAndCreateTickets(
     const soldSeatIds = new Set(soldSeats.map((seat) => seat.id))
     const missingSeatIds = seatIds.filter((seatId) => !soldSeatIds.has(seatId))
 
-    const alreadySold = await tx
-      .select({ id: seats.id })
+    const missingSeats = await tx
+      .select({
+        id: seats.id,
+        status: seats.status,
+        soldCartId: seats.soldCartId,
+        heldByCartId: seats.heldByCartId,
+        heldUntil: seats.heldUntil,
+      })
       .from(seats)
-      .where(
-        and(
-          inArray(seats.id, missingSeatIds),
-          eq(seats.status, 'SOLD'),
-          eq(seats.soldCartId, params.cartId),
-        ),
-      )
+      .where(inArray(seats.id, missingSeatIds))
 
-    if (alreadySold.length !== missingSeatIds.length) {
-      throw new Error('SEAT_CONFLICT')
+    const alreadySoldBySameCart = missingSeats.filter(
+      (s) => s.status === 'SOLD' && s.soldCartId === params.cartId,
+    )
+
+    if (alreadySoldBySameCart.length === missingSeatIds.length) {
+      // Idempotent re-run; proceed.
+    } else {
+      const soldByOther = missingSeats.filter(
+        (s) => s.status === 'SOLD' && s.soldCartId !== null && s.soldCartId !== params.cartId,
+      )
+      if (soldByOther.length > 0) {
+        const error = new Error('SEAT_CONFLICT') as Error & { code?: string; details?: unknown }
+        error.code = 'SEAT_CONFLICT'
+        error.details = { seats: soldByOther.map((s) => s.id) }
+        throw error
+      }
+
+      const heldByOthers = missingSeats.filter(
+        (s) => s.status === 'HELD' && s.heldByCartId !== null && s.heldByCartId !== params.cartId,
+      )
+      if (heldByOthers.length > 0) {
+        const error = new Error('SEAT_CONFLICT') as Error & { code?: string; details?: unknown }
+        error.code = 'SEAT_CONFLICT'
+        error.details = { seats: heldByOthers.map((s) => s.id) }
+        throw error
+      }
+
+      // Unknown mismatch
+      const error = new Error('SEAT_CONFLICT') as Error & { code?: string; details?: unknown }
+      error.code = 'SEAT_CONFLICT'
+      error.details = { seats: missingSeatIds }
+      throw error
     }
   }
 
   const ticketsData: NewTicket[] = items.map((item) => ({
     sessionId: item.seat.sessionId,
-    userId: resolvedUserId,
+    userId: resolvedUserId ?? null,
     seatId: item.seat.id,
     cartId: params.cartId,
     ticketType: item.seat.type,
@@ -1030,13 +1087,13 @@ export async function cleanupExpiredCarts() {
       )
     )
   
-  // Release reserved seats and expire carts
+  // Expire carts and release holds linked to each expired cart.
   for (const cart of expiredCarts) {
     await expireCart(cart.id)
   }
   
-  // Release expired seat reservations
-  await releaseExpiredReservations()
+  // Also release holds that expired by held_until timestamp.
+  await releaseExpiredHolds()
   
   return expiredCarts.length
 }
@@ -1082,17 +1139,134 @@ export async function getSessionStatistics(sessionId: string) {
 type QueueAllocateResult = {
   entryId: string
   queueNumber: number
+  initialQueueNumber: number
+  peopleInQueue: number
   status: 'WAITING' | 'READY' | 'EXPIRED' | 'COMPLETED'
   expiresAt: Date
 }
 
+type QueueStatusResult = {
+  status: 'WAITING' | 'READY' | 'EXPIRED' | 'COMPLETED'
+  queueNumber: number
+  scopeKey: string
+  visitorToken: string
+  peopleInQueue: number
+  initialQueueNumber: number
+  expiresAt: Date | null
+  createdAt: Date
+  progress: number
+}
+
+const QUEUE_TTL_MINUTES = 10
+const QUEUE_RETENTION_HOURS = 24
+const ACTIVE_QUEUE_TEXT_STATUSES = ['WAITING', 'READY', 'NOTIFIED']
+// Current project enum uses READY as "your turn" status.
+const QUEUE_READY_STATUS: QueueAllocateResult['status'] = 'READY'
+
+function activeQueueStatusCondition() {
+  return sql`(${queueEntries.status})::text in (${sql.raw(ACTIVE_QUEUE_TEXT_STATUSES.map((s) => `'${s}'`).join(','))})`
+}
+
+function devQueueLog(event: string, data: Record<string, unknown>) {
+  if (process.env.NODE_ENV === 'production') return
+  console.info(`[queue] ${event}`, data)
+}
+
+async function expireQueueEntries(scopeKey?: string) {
+  const now = new Date()
+  const conditions = [
+    activeQueueStatusCondition(),
+    lte(queueEntries.expiresAt, now),
+  ]
+
+  if (scopeKey) {
+    conditions.push(eq(queueEntries.scopeKey, scopeKey))
+  }
+
+  await db
+    .update(queueEntries)
+    .set({ status: 'EXPIRED', updatedAt: now })
+    .where(and(...conditions))
+}
+
+async function cleanupOldQueueEntries(scopeKey?: string) {
+  const now = new Date()
+  const cutoff = new Date(now.getTime() - QUEUE_RETENTION_HOURS * 60 * 60 * 1000)
+  const conditions = [
+    inArray(queueEntries.status, ['EXPIRED', 'COMPLETED']),
+    lt(queueEntries.updatedAt, cutoff),
+  ]
+
+  if (scopeKey) {
+    conditions.push(eq(queueEntries.scopeKey, scopeKey))
+  }
+
+  await db
+    .delete(queueEntries)
+    .where(and(...conditions))
+}
+
+async function getActiveQueueCount(scopeKey: string, now: Date) {
+  const [row] = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(queueEntries)
+    .where(
+      and(
+        eq(queueEntries.scopeKey, scopeKey),
+        activeQueueStatusCondition(),
+        or(isNull(queueEntries.expiresAt), gt(queueEntries.expiresAt, now)),
+      ),
+    )
+    .limit(1)
+
+  return Number(row?.count ?? 0)
+}
+
 export async function allocateQueueNumber(params: {
   scopeKey: string
+  visitorToken: string
   userId?: string | null
   cartId?: string | null
 }): Promise<QueueAllocateResult> {
   const now = new Date()
-  const expiresAt = new Date(now.getTime() + 10 * 60 * 1000)
+  const expiresAt = new Date(now.getTime() + QUEUE_TTL_MINUTES * 60 * 1000)
+  await expireQueueEntries(params.scopeKey)
+  await cleanupOldQueueEntries(params.scopeKey)
+
+  const [existingEntry] = await db
+    .select()
+    .from(queueEntries)
+    .where(
+      and(
+        eq(queueEntries.scopeKey, params.scopeKey),
+        eq(queueEntries.visitorToken, params.visitorToken),
+        activeQueueStatusCondition(),
+        or(isNull(queueEntries.expiresAt), gt(queueEntries.expiresAt, now)),
+      ),
+    )
+    .orderBy(desc(queueEntries.createdAt))
+    .limit(1)
+
+  if (existingEntry) {
+    const peopleInQueue = await getActiveQueueCount(params.scopeKey, now)
+    devQueueLog('join.reuse-active-entry', {
+      scopeKey: params.scopeKey,
+      visitorToken: params.visitorToken,
+      queueNumber: existingEntry.queueNumber,
+      peopleInQueue,
+    })
+
+    return {
+      entryId: existingEntry.id,
+      queueNumber: existingEntry.queueNumber,
+      initialQueueNumber: existingEntry.queueNumber,
+      peopleInQueue,
+      status: existingEntry.status,
+      expiresAt: existingEntry.expiresAt ?? expiresAt,
+    }
+  }
 
   const counterResult = await db.execute(sql<{ next_number: number }>`
     INSERT INTO queue_counters (scope_key, next_number, created_at, updated_at)
@@ -1106,29 +1280,84 @@ export async function allocateQueueNumber(params: {
   const nextNumber = Number(counterRow?.next_number ?? 1)
   const queueNumber = Math.max(1, nextNumber - 1)
 
-  const [entry] = await db
-    .insert(queueEntries)
-    .values({
-      scopeKey: params.scopeKey,
-      userId: params.userId ?? null,
-      cartId: params.cartId ?? null,
-      queueNumber,
-      status: 'WAITING',
-      expiresAt,
-      updatedAt: now,
-    })
-    .returning()
+  try {
+    const [entry] = await db
+      .insert(queueEntries)
+      .values({
+        scopeKey: params.scopeKey,
+        visitorToken: params.visitorToken,
+        userId: params.userId ?? null,
+        cartId: params.cartId ?? null,
+        queueNumber,
+        status: 'WAITING',
+        expiresAt,
+        updatedAt: now,
+      })
+      .returning()
 
-  return {
-    entryId: entry.id,
-    queueNumber,
-    status: entry.status,
-    expiresAt: entry.expiresAt ?? expiresAt,
+    const peopleInQueue = await getActiveQueueCount(params.scopeKey, now)
+    devQueueLog('join.allocated-new-number', {
+      scopeKey: params.scopeKey,
+      visitorToken: params.visitorToken,
+      queueNumber,
+      peopleInQueue,
+    })
+
+    return {
+      entryId: entry.id,
+      queueNumber,
+      initialQueueNumber: queueNumber,
+      peopleInQueue,
+      status: entry.status,
+      expiresAt: entry.expiresAt ?? expiresAt,
+    }
+  } catch (error) {
+    const pgError = error as { code?: string } | undefined
+    if (pgError?.code !== '23505') {
+      throw error
+    }
+
+    const [raceEntry] = await db
+      .select()
+      .from(queueEntries)
+      .where(
+        and(
+          eq(queueEntries.scopeKey, params.scopeKey),
+          eq(queueEntries.visitorToken, params.visitorToken),
+          activeQueueStatusCondition(),
+          or(isNull(queueEntries.expiresAt), gt(queueEntries.expiresAt, now)),
+        ),
+      )
+      .orderBy(desc(queueEntries.createdAt))
+      .limit(1)
+
+    if (!raceEntry) {
+      throw error
+    }
+
+    const peopleInQueue = await getActiveQueueCount(params.scopeKey, now)
+    devQueueLog('join.recovered-after-unique-race', {
+      scopeKey: params.scopeKey,
+      visitorToken: params.visitorToken,
+      queueNumber: raceEntry.queueNumber,
+      peopleInQueue,
+    })
+
+    return {
+      entryId: raceEntry.id,
+      queueNumber: raceEntry.queueNumber,
+      initialQueueNumber: raceEntry.queueNumber,
+      peopleInQueue,
+      status: raceEntry.status,
+      expiresAt: raceEntry.expiresAt ?? expiresAt,
+    }
   }
 }
 
-export async function getQueueStatus(entryId: string) {
+export async function getQueueStatus(entryId: string): Promise<QueueStatusResult | null> {
   const now = new Date()
+  await expireQueueEntries()
+
   const [entry] = await db
     .select()
     .from(queueEntries)
@@ -1148,26 +1377,92 @@ export async function getQueueStatus(entryId: string) {
         .where(eq(queueEntries.id, entryId))
       status = 'EXPIRED'
     }
-  } else if (status === 'WAITING') {
-    const elapsedMs = now.getTime() - createdAt.getTime()
-    if (elapsedMs >= 6000) {
+  } else if (status !== 'COMPLETED') {
+    const [positionRow] = await db
+      .select({
+        position: sql<number>`count(*)`,
+      })
+      .from(queueEntries)
+      .where(
+        and(
+          eq(queueEntries.scopeKey, entry.scopeKey),
+          activeQueueStatusCondition(),
+          or(isNull(queueEntries.expiresAt), gt(queueEntries.expiresAt, now)),
+          lte(queueEntries.queueNumber, entry.queueNumber),
+        ),
+      )
+      .limit(1)
+
+    const queuePosition = Math.max(1, Number(positionRow?.position ?? entry.queueNumber))
+    const nextStatus: QueueAllocateResult['status'] = queuePosition <= 1 ? QUEUE_READY_STATUS : 'WAITING'
+
+    if (status !== nextStatus) {
       await db
         .update(queueEntries)
-        .set({ status: 'READY', updatedAt: now })
+        .set({ status: nextStatus, updatedAt: now })
         .where(eq(queueEntries.id, entryId))
-      status = 'READY'
+      status = nextStatus
     }
   }
 
-  const elapsedMs = Math.max(0, now.getTime() - createdAt.getTime())
-  const progress = status === 'READY'
-    ? 100
-    : Math.min(90, Math.round((elapsedMs / 6000) * 90))
+  const [peopleRow] = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(queueEntries)
+    .where(
+      and(
+        eq(queueEntries.scopeKey, entry.scopeKey),
+        activeQueueStatusCondition(),
+        or(isNull(queueEntries.expiresAt), gt(queueEntries.expiresAt, now)),
+      ),
+    )
+    .limit(1)
 
-  return {
+  const [positionRow] = await db
+    .select({
+      count: sql<number>`count(*)`,
+    })
+    .from(queueEntries)
+    .where(
+      and(
+        eq(queueEntries.scopeKey, entry.scopeKey),
+        activeQueueStatusCondition(),
+        or(isNull(queueEntries.expiresAt), gt(queueEntries.expiresAt, now)),
+        lte(queueEntries.queueNumber, entry.queueNumber),
+      ),
+    )
+    .limit(1)
+
+  const peopleInQueue = Math.max(1, Number(peopleRow?.count ?? 1))
+  const queueNumber = status === 'EXPIRED' ? entry.queueNumber : Math.max(1, Number(positionRow?.count ?? entry.queueNumber))
+  const base = Math.max(1, entry.queueNumber)
+  const progressRatio = status === QUEUE_READY_STATUS
+    ? 1
+    : Math.min(1, Math.max(0, 1 - (queueNumber - 1) / Math.max(1, base - 1)))
+  const progress = Math.round(progressRatio * 100)
+
+  const result = {
     status,
-    queueNumber: entry.queueNumber,
+    queueNumber,
     scopeKey: entry.scopeKey,
+    visitorToken: entry.visitorToken,
+    peopleInQueue,
+    initialQueueNumber: entry.queueNumber,
+    expiresAt: entry.expiresAt,
+    createdAt,
     progress,
   }
+
+  devQueueLog('status.response', {
+    entryId,
+    scopeKey: result.scopeKey,
+    status: result.status,
+    queueNumber: result.queueNumber,
+    peopleInQueue: result.peopleInQueue,
+    progress: result.progress,
+  })
+
+  return result
 }
+

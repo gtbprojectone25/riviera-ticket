@@ -247,3 +247,39 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 ---
 
 **Desenvolvido com ❤️ seguindo exatamente os designs do Figma fornecidos**
+## Queue Operations (Neon)
+
+### Apply migrations
+Run from project root (`riviera-ticket/riviera-ticket`):
+
+```bash
+npm run db:migrate
+```
+
+### Validate `visitor_token` column
+
+```sql
+SELECT column_name
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'queue_entries'
+  AND column_name = 'visitor_token';
+```
+
+### Queue healthcheck endpoint
+
+```http
+GET /api/queue/health
+```
+
+Expected:
+- `200`: DB connection is OK and `visitor_token` exists
+- `503`: queue is temporarily unavailable (friendly error payload)
+
+### Manual queue smoke test
+1. New visitor: call `POST /api/queue/join` and confirm `200`.
+2. Refresh same browser: call `POST /api/queue/join` again and confirm same active entry is reused.
+3. Two browsers: call `POST /api/queue/join` concurrently and confirm different queue numbers.
+4. Poll `GET /api/queue/status?entryId=...`: progress should increase as position decreases.
+5. UI CTA should switch from `Waiting for your turn�` to `Get your ticket`.
+6. Clicking `Get your ticket` should navigate to pre-order flow.

@@ -1,174 +1,365 @@
-'use client'
+﻿'use client'
 
-import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { OdysseyLoading } from '@/components/ui/OdysseyLoading'
-import { QueueGate } from '@/components/QueueGate'
-import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+type QueueStatus = 'WAITING' | 'READY' | 'EXPIRED' | 'COMPLETED'
+
+const SCOPE_KEY = 'the-odyssey-global'
+const STORAGE_KEY = `queue-entry-${SCOPE_KEY}`
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
+}
+
+function formatNumberEnUS(value: number): string {
+  return new Intl.NumberFormat('en-US').format(value)
+}
 
 export function HeroSection() {
   const [isLoading, setIsLoading] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const router = useRouter()
+  const [entryId, setEntryId] = useState<string | null>(null)
+  const [queueNumber, setQueueNumber] = useState<number | null>(null)
+  const [initialQueueNumber, setInitialQueueNumber] = useState<number | null>(null)
+  const [peopleInQueue, setPeopleInQueue] = useState<number | null>(null)
+  const [status, setStatus] = useState<QueueStatus | null>(null)
+  const [isQueueLoading, setIsQueueLoading] = useState(true)
+  const [queueError, setQueueError] = useState<string | null>(null)
 
-  const targetProgressRef = useRef<number | null>(null)
+  const router = useRouter()
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const updateQueueState = useCallback((data: {
+    queueNumber?: number
+    initialQueueNumber?: number
+    peopleInQueue?: number
+    status?: QueueStatus
+  }) => {
+    const nextQueue = typeof data.queueNumber === 'number' ? data.queueNumber : null
+    if (nextQueue !== null) {
+      setQueueNumber(nextQueue)
+    }
+
+    const nextInitial = typeof data.initialQueueNumber === 'number' ? data.initialQueueNumber : nextQueue
+    if (nextInitial !== null) {
+      setInitialQueueNumber((prev) => (prev === null ? nextInitial : Math.max(prev, nextInitial)))
+    }
+
+    const nextPeople = typeof data.peopleInQueue === 'number'
+      ? data.peopleInQueue
+      : (nextQueue ?? data.initialQueueNumber ?? null)
+
+    if (nextPeople !== null) {
+      setPeopleInQueue(nextPeople)
+    }
+
+    if (data.status) {
+      setStatus(data.status)
+    }
+  }, [])
+
+  const joinQueue = useCallback(async () => {
+    const res = await fetch('/api/queue/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scopeKey: SCOPE_KEY }),
+    })
+
+    const payload = await res.json().catch(() => ({})) as {
+      queueEntryId?: string
+      queueNumber?: number
+      initialQueueNumber?: number
+      peopleInQueue?: number
+      status?: QueueStatus
+      message?: string
+      error?: string
+    }
+
+    if (!res.ok || !payload.queueEntryId) {
+      throw new Error(payload.message ?? payload.error ?? 'Queue temporarily unavailable. Please try again.')
+    }
+
+    setEntryId(payload.queueEntryId)
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(STORAGE_KEY, payload.queueEntryId)
+    }
+
+    updateQueueState({
+      queueNumber: payload.queueNumber,
+      initialQueueNumber: payload.initialQueueNumber,
+      peopleInQueue: payload.peopleInQueue,
+      status: payload.status,
+    })
+  }, [updateQueueState])
 
   useEffect(() => {
-    let rafId = 0
-    const min = 55
-    const max = 75
-    const target =
-      targetProgressRef.current ??
-      (Math.floor(Math.random() * (max - min + 1)) + min)
-    targetProgressRef.current = target
+    let disposed = false
 
-    const durationMs = 7000
-    const start = performance.now()
+    const bootstrap = async () => {
+      setIsQueueLoading(true)
+      setQueueError(null)
+      try {
+        const cached = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null
+        if (cached) {
+          if (!disposed) {
+            setEntryId(cached)
+          }
+          return
+        }
 
-    const tick = (now: number) => {
-      const elapsed = now - start
-      const next = Math.min(target, (elapsed / durationMs) * target)
-      setProgress(next)
-      if (next < target) {
-        rafId = requestAnimationFrame(tick)
+        await joinQueue()
+      } catch {
+        if (!disposed) {
+          setQueueError('Queue temporarily unavailable. Please try again.')
+        }
+      } finally {
+        if (!disposed) {
+          setIsQueueLoading(false)
+        }
       }
     }
 
-    rafId = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafId)
-  }, [])
+    void bootstrap()
+
+    return () => {
+      disposed = true
+    }
+  }, [joinQueue])
+
+  useEffect(() => {
+    if (!entryId) return
+
+    let disposed = false
+
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(`/api/queue/status?entryId=${entryId}`, { cache: 'no-store' })
+        let data: {
+          queueNumber?: number
+          initialQueueNumber?: number
+          peopleInQueue?: number
+          status?: QueueStatus
+          error?: string
+          message?: string
+        } = {}
+        const contentType = res.headers.get('content-type') || ''
+        if (contentType.includes('application/json')) {
+          try {
+            data = (await res.json()) as typeof data
+          } catch {
+            data = {}
+          }
+        } else {
+          // resposta não-json (ex.: "PRO FEATURE ONLY")
+          data = {}
+        }
+
+        if (!res.ok) {
+          if (res.status === 404 || res.status === 403) {
+            if (typeof window !== 'undefined') {
+              window.localStorage.removeItem(STORAGE_KEY)
+            }
+            if (!disposed) {
+              setEntryId(null)
+              setQueueNumber(null)
+              setInitialQueueNumber(null)
+              setPeopleInQueue(null)
+              setStatus(null)
+            }
+            return
+          }
+          throw new Error(data.message ?? data.error ?? 'Queue temporarily unavailable. Please try again.')
+        }
+
+        if (typeof data.queueNumber !== 'number') {
+          throw new Error('Queue response invalid')
+        }
+
+        if (disposed) return
+        if (data.status === 'EXPIRED') {
+          if (typeof window !== 'undefined') {
+            window.localStorage.removeItem(STORAGE_KEY)
+          }
+          setEntryId(null)
+          setQueueNumber(null)
+          setInitialQueueNumber(null)
+          setPeopleInQueue(null)
+          setStatus(null)
+          setQueueError('Queue expired. Please re-enter.')
+          if (pollTimerRef.current) {
+            clearInterval(pollTimerRef.current)
+            pollTimerRef.current = null
+          }
+          return
+        }
+
+        updateQueueState({
+          queueNumber: data.queueNumber,
+          initialQueueNumber: data.initialQueueNumber,
+          peopleInQueue: data.peopleInQueue,
+          status: data.status,
+        })
+        setQueueError(null)
+      } catch {
+        if (!disposed) {
+          setQueueError('Queue temporarily unavailable. Please try again.')
+          if (pollTimerRef.current) {
+            clearInterval(pollTimerRef.current)
+            pollTimerRef.current = null
+          }
+        }
+      }
+    }
+
+    void fetchStatus()
+    pollTimerRef.current = setInterval(fetchStatus, 3000)
+
+    return () => {
+      disposed = true
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current)
+      }
+    }
+  }, [entryId, updateQueueState])
 
   const handleNavigateToPreOrder = () => {
     if (isLoading) return
     setIsLoading(true)
     setTimeout(() => {
       router.push('/pre-order')
-    }, 7000) 
+    }, 700)
   }
 
+  const handleRetryQueue = async () => {
+    setQueueError(null)
+    setIsQueueLoading(true)
+    try {
+      await joinQueue()
+    } catch {
+      setQueueError('Queue temporarily unavailable. Please try again.')
+    } finally {
+      setIsQueueLoading(false)
+    }
+  }
+
+  const safeQueueNumber = queueNumber ?? 1
+  const safeInitial = initialQueueNumber ?? peopleInQueue ?? safeQueueNumber
+  const base = Math.max(1, safeInitial)
+  const progressRatio = queueNumber === null
+    ? 0
+    : clamp(1 - (safeQueueNumber - 1) / Math.max(1, base - 1), 0, 1)
+
+  const positionLabel = queueNumber !== null ? formatNumberEnUS(safeQueueNumber) : '--'
+  const peopleLabel = formatNumberEnUS(Math.max(1, peopleInQueue ?? safeInitial ?? 1))
+
+  const queueReady = status === 'READY' || (queueNumber !== null && queueNumber <= 1)
+  const canContinue = queueReady && !isQueueLoading && !queueError
+  const showQueueMetrics = Boolean(entryId && queueNumber !== null)
+
   return (
-    <div className="min-h-screen text-white relative overflow-y-auto flex gap-4 ">
+    <section className="relative mx-auto w-full max-w-[470px] overflow-hidden rounded-xl border-0 bg-black/40 shadow-[0_15px_40px_rgba(0,0,0,0.4)]">
       <OdysseyLoading isLoading={isLoading} />
 
-      <div className="container mx-auto px-4 py-4 relative z-10">
-        <div className="max-w-md mx-auto">
-          <div className="rounded-3xl p-4 space-y-4 bg-linear-to-b from-slate-950/90 via-slate-950/70 to-blue-950/50">
-            {/* Movie Poster */}
-            <div 
-              className="relative aspect-2/3 rounded-2xl overflow-hidden mt-0 cursor-pointer transition-transform"
-              onClick={handleNavigateToPreOrder}
-            >
-              <Image
-                src="/aquiles-capa.png"
-                alt="The Odyssey"
-                fill
-                className="object-cover"
-                priority
-              />
+      <Image
+        src="/aquiles-capa.png"
+        alt="The Odyssey"
+        fill
+        priority
+        className="object-cover object-[center_18%]"
+      />
 
-              {/* Black fade gradient overlay */}
-              <div className="absolute bottom-0 left-0 right-0 h-[65%] bg-linear-to-t from-black to-transparent" />
+      <div className="absolute inset-0 bg-linear-to-b from-black/30 via-black/45 to-black/72" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(46,155,233,0.18),transparent_42%)]" />
 
-              <style>{`
-                @keyframes badge-fade-up {
-                  from { opacity: 0; transform: translateY(6px); }
-                  to { opacity: 1; transform: translateY(0); }
-                }
-              `}</style>
+      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-[470px] flex-col px-4 pb-4 pt-9 sm:px-5 sm:pt-10">
+        <div className="text-center mt-10 sm:mt-16">
+          <p className="text-[10px] uppercase tracking-[0.35em] text-white/60 ">A film by Christopher Nolan</p>
+          <h1 className="mt-2 text-[2.05rem] font-semibold tracking-[0.34em] text-[#1E4E73] sm:text-5xl">THE ODYSSEY</h1>
+        </div>
 
-              {/* Titles */}
-              <div className="absolute top-6 left-0 right-0 flex flex-col items-center text-center px-4 z-20">
-                <span className="text-xs tracking-[0.35em] text-white/70 uppercase">
-                  A film by Christopher Nolan
-                </span>
-                <h1 className="mt-3 text-2xl font-semibold tracking-[0.35em] text-blue-200">
-                  THE ODYSSEY
-                </h1>
-              </div>
+        <div className="mt-8 text-center sm:mt-10">
+          <p className="text-sm font-semibold uppercase tracking-[0.42em] text-[#db3636] sm:text-base">DEFY THE GODS</p>
+          <p className="text-3xl font-extrabold uppercase tracking-[0.45em] text-[#1E4E73] sm:text-2xl">07.17.26</p>
+        </div>
 
-              {/* Tagline + Date */}
-              <div className="absolute bottom-20 left-0 right-0 flex flex-col items-center text-center px-4 z-20">
-                <span className="text-xs tracking-[0.4em] text-red-500 uppercase">
-                  Defy the Gods
-                </span>
-                <span className="mt-2 text-base font-semibold tracking-[0.25em] text-white">
-                  07.17.26
-                </span>
-              </div>
-
-              {/* Badges */}
-            <div className="absolute bottom-4 left-0 right-0 z-20">
-              <div className="mx-auto flex w-full max-w-[300px] items-center justify-center gap-1.5 px-3 flex-nowrap">
-              <Badge
-                variant="secondary"
-                className="bg-white text-black text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap"
-                style={{ animation: 'badge-fade-up 450ms ease-out 80ms both' }}
-              >
-                Pré-order
-              </Badge>
-              <Badge
-                variant="secondary"
-                className="bg-gray-900/80 backdrop-blur-sm text-white text-[10px] sm:text-xs px-2 py-0.5 rounded-full whitespace-nowrap"
-                style={{ animation: 'badge-fade-up 450ms ease-out 140ms both' }}
-              >
-                2026
-              </Badge>
-              <Badge
-                variant="secondary"
-                className="bg-gray-900/80 backdrop-blur-sm text-white text-[10px] sm:text-xs px-2 py-0.5 rounded-full whitespace-nowrap"
-                style={{ animation: 'badge-fade-up 450ms ease-out 200ms both' }}
-              >
-                Ação | Fantasia
-              </Badge>
-              <Badge
-                variant="secondary"
-                className="bg-gray-900/80 backdrop-blur-sm text-white text-[10px] sm:text-xs px-2 py-0.5 rounded-full whitespace-nowrap"
-                style={{ animation: 'badge-fade-up 450ms ease-out 260ms both' }}
-              >
-                +18
-              </Badge>
-            </div>
-            </div>
+        <div className="mt-auto space-y-3 pb-1">
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Badge variant="secondary" className="rounded-full bg-white px-4 py-1 text-xs font-medium text-black">
+              Pre-order
+            </Badge>
+            <Badge variant="secondary" className="rounded-full border border-white/25 bg-black/35 px-4 py-1 text-xs text-white backdrop-blur-sm">
+              2026
+            </Badge>
+            <Badge variant="secondary" className="rounded-full border border-white/25 bg-black/35 px-4 py-1 text-xs text-white backdrop-blur-sm">
+              Action | Fantasy
+            </Badge>
+            <Badge variant="secondary" className="rounded-full border border-white/25 bg-slate-300/25 px-4 py-1 text-xs text-white backdrop-blur-sm">
+              +18
+            </Badge>
           </div>
 
-            {/* Queue Status Card */}
-            <Card 
-              className="bg-linear-to-br from-slate-900 via-blue-950/30 to-slate-950 overflow-hidden rounded-2xl shadow-xl cursor-pointer transition-transform hover:scale-[1.02]"
-              onClick={handleNavigateToPreOrder}
-            >
-              <CardContent className="p-5 space-y-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-white font-bold text-lg mb-1">Você está na fila</h3>
-                    <p className="text-gray-500 text-xs">Tamanho da fila</p>
-                  </div>
-                  <div className="text-blue-500 font-bold text-2xl">IMAX</div>
-                </div>
+          <div className="mx-auto w-[90%] max-w-[900px] rounded-2xl border border-white/10 bg-black/40 p-4 shadow-[0_10px_35px_rgba(0,0,0,0.38)] backdrop-blur-xl sm:p-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white sm:text-2xl">You are in the queue</h3>
+              <span className="text-3xl font-bold tracking-wide text-white sm:text-4xl">IMAX</span>
+            </div>
 
-                <div className="w-full bg-gray-800/50 rounded-full h-1.5">
-                  <div
-                    className="bg-blue-500 h-1.5 rounded-full"
-                    style={{ width: `${progress}%`, transition: 'width 0.1s linear' }}
-                  />
-                </div>
+            <div className="mt-4 h-[3px] w-full overflow-hidden rounded-full bg-white/25">
+              <div
+                className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                style={{ width: `${progressRatio * 100}%` }}
+              />
+            </div>
 
-                <p className="text-gray-400 text-sm leading-relaxed">
-                  Os ingressos podem esgotar a qualquer momento,<br />
-                  não saia desta página.
+            {isQueueLoading && (
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="h-[92px] animate-pulse rounded-xl border border-white/10 bg-white/10" />
+                <div className="h-[92px] animate-pulse rounded-xl border border-white/10 bg-white/10" />
+              </div>
+            )}
+
+            {!isQueueLoading && queueError && (
+              <div className="mt-4 space-y-3">
+                <p className="rounded-xl border border-red-200/25 bg-red-500/10 px-3 py-2 text-sm text-red-100">
+                  Queue temporarily unavailable. Please try again.
                 </p>
-              </CardContent>
-            </Card>
+                <Button onClick={handleRetryQueue} className="h-10 w-full rounded-xl bg-white/15 text-white hover:bg-white/25">
+                  Retry queue
+                </Button>
+              </div>
+            )}
 
-            <QueueGate
-              scopeKey="the-odyssey-global"
-              nextHref="/pre-order"
-              onContinue={handleNavigateToPreOrder}
-            />
+            {!isQueueLoading && showQueueMetrics && (
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-white/10 bg-white/10 p-4 text-center backdrop-blur-sm">
+                  <p className="text-3xl font-bold leading-none text-white sm:text-4xl">{positionLabel}</p>
+                  <p className="mt-2 text-[11px] text-white/80 sm:text-xs">Your position</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/10 p-4 text-center backdrop-blur-sm">
+                  <p className="text-3xl font-bold leading-none text-white sm:text-4xl">{peopleLabel}</p>
+                  <p className="mt-2 text-[11px] text-white/80 sm:text-xs">People in queue</p>
+                </div>
+              </div>
+            )}
+
+            {!isQueueLoading && !queueError && showQueueMetrics && (
+              <div className="mt-4">
+                <Button
+                  onClick={handleNavigateToPreOrder}
+                  disabled={!canContinue}
+                  className="h-10 w-full rounded-xl bg-white/15 text-white hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {canContinue ? 'Get your ticket' : 'Waiting for your turn...'}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </div>
+    </section>
   )
 }

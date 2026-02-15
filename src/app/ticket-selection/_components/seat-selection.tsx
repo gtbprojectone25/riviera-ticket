@@ -35,14 +35,17 @@ export function SeatSelection({
       
       for (let seat = 1; seat <= seatsPerRow; seat++) {
         const seatId = `${row}${seat}`
-        const seatData = availableSeats.find(s => s.seatId === seatId)
+        const normalizedSeatId = `${row}-${seat.toString().padStart(2, '0')}`
+        const seatData = availableSeats.find(
+          (s) => s.seatId === seatId || s.seatId === normalizedSeatId,
+        )
         
         // VIP seats are in rows D, E, F and center seats
         const isVIP = ['D', 'E', 'F'].includes(row) && seat >= 6 && seat <= 15
         
         seatRow.push({
           seatId,
-          available: seatData ? seatData.isAvailable : false,
+          available: seatData ? seatData.status === 'AVAILABLE' : false,
           type: isVIP ? 'VIP' : 'STANDARD',
           price: isVIP ? 44900 : 34900 // $449.00 for VIP, $349.00 for Standard
         })

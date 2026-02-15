@@ -1,4 +1,4 @@
-/**
+﻿/**
  * API: GET/POST /api/admin/sessions
  * Listar e criar sessoes (admin)
  */
@@ -11,7 +11,7 @@ import { writeAuditLog } from '@/lib/audit-log'
 import { findSessionConflict } from '@/db/queries'
 import { z } from 'zod'
 import { and, eq, desc, sql } from 'drizzle-orm'
-import { generateSeatsForSession } from '@/server/seats/generateSeatsForSession'
+import { ensureSeatsForSession } from '@/server/seats/generateSeatsForSession'
 
 const sessionSchema = z.object({
   movieId: z.string().uuid('movieId invalido'),
@@ -187,7 +187,7 @@ export async function POST(request: NextRequest) {
       })
       .returning()
 
-    await generateSeatsForSession(session.id)
+    await ensureSeatsForSession(session.id)
 
     const { ipAddress, userAgent } = getClientMeta(request)
     await writeAuditLog({
@@ -212,3 +212,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
   }
 }
+

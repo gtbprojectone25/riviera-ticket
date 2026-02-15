@@ -137,6 +137,7 @@ export async function createOrderFromPayment(
           userId: cart.userId,
           sessionId: cart.sessionId,
           cartId: cart.id,
+          checkoutSessionId: payment.checkoutSessionId,
           orderNumber,
           subtotal: cart.totalAmount,
           discount: 0,
@@ -178,14 +179,17 @@ export async function createOrderFromPayment(
       }
 
       // 8. Marcar assentos como vendidos (não mais reservados)
+      const now = new Date()
       await tx
         .update(seats)
         .set({
-          isAvailable: false,
-          isReserved: false, // Não mais reservado, agora é vendido
-          reservedBy: null,
-          reservedUntil: null,
-          updatedAt: new Date(),
+          status: 'SOLD',
+          soldAt: now,
+          soldCartId: cart.id,
+          heldUntil: null,
+          heldBy: null,
+          heldByCartId: null,
+          updatedAt: now,
         })
         .where(inArray(seats.id, items.map(i => i.seat.id)))
 
@@ -275,10 +279,12 @@ export async function cancelOrder(
         await tx
           .update(seats)
           .set({
-            isAvailable: true,
-            isReserved: false,
-            reservedBy: null,
-            reservedUntil: null,
+            status: 'AVAILABLE',
+            heldUntil: null,
+            heldBy: null,
+            heldByCartId: null,
+            soldAt: null,
+            soldCartId: null,
             updatedAt: new Date(),
           })
           .where(inArray(seats.id, seatIds))

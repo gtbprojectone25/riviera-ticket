@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { releaseExpiredReservations } from '@/db/queries'
+import { cleanupExpiredCarts, releaseExpiredHolds } from '@/db/queries'
 
 const CRON_SECRET = process.env.CRON_SECRET
 
@@ -30,14 +30,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Executar limpeza
-    const releasedSeats = await releaseExpiredReservations()
+    // Executar limpeza de carrinhos expirados (também libera holds por cart)
+    const expiredCartsCount = await cleanupExpiredCarts()
+
+    // Executar limpeza de holds expirados por held_until
+    const releasedSeats = await releaseExpiredHolds()
 
     if (releasedSeats.length === 0) {
       return NextResponse.json({
         success: true,
         message: 'Nenhum assento expirado para liberar',
         releasedCount: 0,
+        expiredCartsCount,
         timestamp: new Date().toISOString(),
       })
     }
@@ -46,6 +50,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: `Liberados ${releasedSeats.length} assentos expirados`,
       releasedCount: releasedSeats.length,
+      expiredCartsCount,
       timestamp: new Date().toISOString(),
     })
   } catch (error) {

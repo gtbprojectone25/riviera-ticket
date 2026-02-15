@@ -1,46 +1,35 @@
-/**
- * Drizzle configuration file
- * Defines database connection and migration settings
- */
-
-import type { Config } from 'drizzle-kit'
+﻿import type { Config } from 'drizzle-kit'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 
-// Função para carregar .env.local manualmente
+const env = process.env as unknown as Record<string, string | undefined>
+
 function loadEnvLocal() {
   try {
     const envPath = join(process.cwd(), '.env.local')
     const envContent = readFileSync(envPath, 'utf8')
-    
-    envContent.split('\n').forEach(line => {
+
+    envContent.split('\n').forEach((line) => {
       const [key, ...valueParts] = line.split('=')
       if (key && valueParts.length > 0) {
         const value = valueParts.join('=').replace(/^["']|["']$/g, '')
-        if (key.trim() && !key.startsWith('#')) {
-          process.env[key.trim()] = value.trim()
+        const trimmedKey = key.trim()
+        if (trimmedKey && !trimmedKey.startsWith('#')) {
+          env[trimmedKey] = value.trim()
         }
       }
     })
   } catch {
-    console.warn('⚠️  Arquivo .env.local não encontrado ou não pode ser lido')
+    console.warn('Warning: .env.local not found or unreadable')
   }
 }
 
-// Carregar variáveis de ambiente
 loadEnvLocal()
 
-const databaseUrl = process.env.DATABASE_URL
+const databaseUrl = env.ADMIN_DATABASE_URL || env.DATABASE_URL
 
 if (!databaseUrl || databaseUrl.includes('YOUR_PASSWORD') || databaseUrl.includes('seu_usuario')) {
-  console.error('❌ DATABASE_URL não configurada corretamente!')
-  console.error('\n🎯 CONFIGURAÇÃO RÁPIDA:')
-  console.error('1. Acesse: https://neon.tech')
-  console.error('2. Crie conta gratuita')
-  console.error('3. Crie projeto "riviera-ticket"')
-  console.error('4. Copie a Connection String')
-  console.error('5. Cole no arquivo .env.local')
-  console.error('\n📖 Veja: NEON-SETUP.md para instruções detalhadas')
+  console.error('ADMIN_DATABASE_URL or DATABASE_URL is not configured correctly')
   process.exit(1)
 }
 

@@ -1,28 +1,14 @@
 ﻿import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { seats, tickets } from '@/db/schema'
-import { and, eq, sql } from 'drizzle-orm'
-import { generateSeatsForSession } from '@/server/seats/generateSeatsForSession'
+import { seats, sessions } from '@/db/schema'
+import { eq } from 'drizzle-orm'
+import { ensureSeatsForSession } from '@/server/seats/generateSeatsForSession'
+import { toSeatStateRows } from '@/server/seats/seatStateDTO'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-type SeatStatus = 'AVAILABLE' | 'HELD' | 'SOLD'
-
-type SeatResponse = {
-  id: string
-  row: string
-  number: number
-  type: string
-  status: SeatStatus
-  heldUntil?: string | null
-  heldByCartId?: string | null
-}
-
-type RowResponse = {
-  label: string
-  seats: SeatResponse[]
-}
+type RowResponse = ReturnType<typeof toSeatStateRows>[number]
 
 type CachedSeats = {
   rows: RowResponse[]
@@ -42,13 +28,13 @@ export async function GET(
     const raw = (await params).sessionId as string
     const id = decodeURIComponent(raw ?? '').trim()
     const { searchParams } = new URL(request.url)
-    const ensure = searchParams.get('ensure') === 'true'
+    const forceEnsure = searchParams.get('ensure') === 'true'
     const isDev = process.env.NODE_ENV === 'development'
 
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
 
     if (isDev) {
-      console.warn('[seats]', { raw, id, len: id.length, ensure, url: request.url })
+      console.warn('[seats]', { raw, id, len: id.length, forceEnsure, url: request.url })
     }
 
     if (!isUuid) {
@@ -73,29 +59,19 @@ export async function GET(
 
     let dbSeats = await fetchSeats()
 
-    if (ensure && dbSeats.length === 0) {
-      // verify session exists before generating seats
+    if (dbSeats.length === 0 || forceEnsure) {
       const [sessionExists] = await db
-        .select({ id: seats.sessionId })
-        .from(seats)
-        .where(eq(seats.sessionId, id))
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(eq(sessions.id, id))
         .limit(1)
 
       if (!sessionExists) {
-        // check session existence via a lightweight query
-        const sessionCheck = await db
-          .select({ id: sql`id` })
-          .from(sql`sessions`)
-          .where(eq(sql`id`, id as any))
-          .limit(1) as Array<{ id: string }>
-
-        if (!sessionCheck || sessionCheck.length === 0) {
-          return NextResponse.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 })
-        }
+        return NextResponse.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 })
       }
 
       try {
-        const result = await generateSeatsForSession(id)
+        const result = await ensureSeatsForSession(id)
         if (isDev) {
           console.debug('[seats] auto-generate seats', { id, created: result.created, skipped: result.skipped })
         }
@@ -110,84 +86,7 @@ export async function GET(
       }
     }
 
-    // Fallbacks: tickets confirmados tornam o assento SOLD, tickets reservados o tornam HELD
-    const soldTickets = await db
-      .select({ seatId: tickets.seatId })
-      .from(tickets)
-      .where(and(eq(tickets.sessionId, id), eq(tickets.status, 'CONFIRMED')))
-
-    const reservedTickets = await db
-      .select({
-        seatId: tickets.seatId,
-        cartId: tickets.cartId,
-        expiresAt: tickets.expiresAt,
-      })
-      .from(tickets)
-      .where(and(eq(tickets.sessionId, id), eq(tickets.status, 'RESERVED')))
-
-    const soldSeatIds = new Set(soldTickets.map((t) => t.seatId))
-    const reservedBySeatId = new Map(reservedTickets.map((t) => [t.seatId, t]))
-
-    const seatMap = new Map<string, SeatResponse[]>()
-    const now = new Date()
-
-    for (const seat of dbSeats) {
-      const rowLabel = seat.row
-      if (!seatMap.has(rowLabel)) {
-        seatMap.set(rowLabel, [])
-      }
-
-      const reservedTicket = reservedBySeatId.get(seat.id)
-      const reservedActive = Boolean(
-        reservedTicket &&
-          (!reservedTicket.expiresAt || reservedTicket.expiresAt > now),
-      )
-
-      const isSold =
-        seat.status === 'SOLD' ||
-        Boolean(seat.soldAt) ||
-        Boolean(seat.soldCartId) ||
-        soldSeatIds.has(seat.id)
-
-      const isHeldActive =
-        seat.status === 'HELD' &&
-        seat.heldUntil &&
-        seat.heldUntil > now &&
-        Boolean(seat.heldByCartId)
-
-      const status: SeatStatus = isSold
-        ? 'SOLD'
-        : reservedActive || isHeldActive
-          ? 'HELD'
-          : 'AVAILABLE'
-
-      const heldUntil = reservedActive
-        ? reservedTicket?.expiresAt ?? seat.heldUntil
-        : seat.heldUntil
-
-      const heldByCartId = reservedActive
-        ? reservedTicket?.cartId ?? seat.heldByCartId ?? null
-        : seat.heldByCartId ?? null
-
-      seatMap.get(rowLabel)!.push({
-        id: seat.seatId,
-        row: seat.row,
-        number: seat.number,
-        type: seat.type,
-        status,
-        heldUntil: heldUntil ? heldUntil.toISOString() : null,
-        heldByCartId,
-      })
-    }
-
-    const rows: RowResponse[] = Array.from(seatMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([label, rowSeats]) => ({
-        label,
-        seats: rowSeats.sort(
-          (a, b) => Number(a.number) - Number(b.number),
-        ),
-      }))
+    const rows: RowResponse[] = toSeatStateRows(dbSeats)
 
     seatCache.set(id, { rows, at: Date.now() })
 
@@ -218,3 +117,4 @@ export async function GET(
     )
   }
 }
+

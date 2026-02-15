@@ -27,17 +27,18 @@ export interface Session {
 }
 
 export interface Seat {
-  id: string
+  id: string // public seat identifier (e.g. A-01)
   sessionId: string
   row: string
   number: number
-  seatId: string // e.g., "A1", "B12"
-  isAvailable: boolean
-  isReserved: boolean
-  reservedBy?: string
-  reservedUntil?: Date
+  seatId: string // legacy alias
+  status: 'AVAILABLE' | 'HELD' | 'SOLD'
+  heldUntil?: string | null
+  heldByCartId?: string | null
+  soldAt?: string | null
+  soldCartId?: string | null
   price: number
-  type: 'STANDARD' | 'VIP' | 'PREMIUM'
+  type: 'STANDARD' | 'VIP' | 'PREMIUM' | 'WHEELCHAIR'
 }
 
 export interface Ticket {

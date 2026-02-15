@@ -1,0 +1,8 @@
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "json.schemaDownload.enable": false,
+  "workbench.trustedDomains": [
+    "https://static.ampcode.com"
+  ]
+}

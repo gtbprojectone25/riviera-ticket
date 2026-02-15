@@ -124,7 +124,19 @@ class WebhookService {
   private async postWithTimeout(url: string, body: Record<string, unknown> | CadastroPayload | NotificacaoPayload) {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), this.timeoutMs)
+
+    const allowInsecure =
+      process.env.NODE_ENV !== 'production' && process.env.ALLOW_INSECURE_WEBHOOKS === 'true'
+    const isHttps = url.startsWith('https://')
+    let previousTlsSetting: string | undefined
+
     try {
+      // Permitir self-signed apenas em dev e somente durante esta chamada
+      if (allowInsecure && isHttps) {
+        previousTlsSetting = process.env.NODE_TLS_REJECT_UNAUTHORIZED
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+      }
+
       return await fetch(url, {
         method: 'POST',
         headers: {
@@ -135,6 +147,14 @@ class WebhookService {
       })
     } finally {
       clearTimeout(timer)
+      // Restaurar validação TLS global
+      if (allowInsecure && isHttps) {
+        if (previousTlsSetting === undefined) {
+          delete process.env.NODE_TLS_REJECT_UNAUTHORIZED
+        } else {
+          process.env.NODE_TLS_REJECT_UNAUTHORIZED = previousTlsSetting
+        }
+      }
     }
   }
 }

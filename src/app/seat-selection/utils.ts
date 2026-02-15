@@ -47,6 +47,7 @@ export const generateSeats = (): Seat[] => {
         number: i,
         type: seatType,
         status: status,
+        seatId: ''
       });
     }
   });

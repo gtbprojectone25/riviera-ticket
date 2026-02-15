@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
 
@@ -11,13 +11,55 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen text-white flex items-center justify-center">
+          <span className="text-sm text-gray-400">Loading...</span>
+        </div>
+      }
+    >
+      <LoginPageContent />
+    </Suspense>
+  )
+}
+
+function LoginPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { login } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const getSafeReturnTo = () => {
+    const raw = searchParams.get('returnTo')
+    if (!raw) return '/account'
+    if (raw.includes('\r') || raw.includes('\n') || raw.includes('\\')) return '/account'
+    if (raw.startsWith('//')) return '/account'
+
+    const base = 'https://riviera.local'
+    try {
+      const parsed = new URL(raw, base)
+      if (parsed.origin !== base) return '/account'
+      if (!parsed.pathname.startsWith('/')) return '/account'
+
+      if (parsed.pathname === '/confirmation') {
+        const checkoutSessionId = parsed.searchParams.get('checkout_session_id')
+        const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+        if (!checkoutSessionId || !uuidRegex.test(checkoutSessionId)) {
+          return '/confirmation'
+        }
+        return `/confirmation?checkout_session_id=${encodeURIComponent(checkoutSessionId)}`
+      }
+
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`
+    } catch {
+      return '/account'
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -36,7 +78,7 @@ export default function LoginPage() {
     try {
       setLoading(true)
       await login(email, password)
-      router.push('/account')
+      router.replace(getSafeReturnTo())
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Invalid credentials'
@@ -104,7 +146,10 @@ export default function LoginPage() {
 
             <p className="text-center text-sm text-gray-400">
               Don’t have an account?{' '}
-              <Link href="/register" className="text-blue-400 hover:underline">
+              <Link
+                href={`/register?returnUrl=${encodeURIComponent(getSafeReturnTo())}`}
+                className="text-blue-400 hover:underline"
+              >
                 Tap to create account
               </Link>
             </p>
@@ -133,4 +178,3 @@ export default function LoginPage() {
     </div>
   )
 }
-

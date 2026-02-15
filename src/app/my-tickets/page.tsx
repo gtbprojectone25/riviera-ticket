@@ -32,7 +32,7 @@ export default function MyTicketsPage() {
       <div className="min-h-screen text-white flex items-center justify-center bg-black/70">
         <div className="text-center">
           <Ticket className="w-12 h-12 text-blue-400 mx-auto mb-4 animate-pulse" />
-          <p className="text-gray-400">Carregando...</p>
+          <p className="text-gray-400">loading...</p>
         </div>
       </div>
     )

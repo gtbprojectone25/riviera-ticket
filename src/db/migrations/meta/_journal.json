@@ -71,6 +71,41 @@
       "when": 1765264539706,
       "tag": "0010_add_price_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1765264549706,
+      "tag": "0022_seat_state_integrity_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1765264559706,
+      "tag": "0023_tickets_user_id_nullable",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1765264569706,
+      "tag": "0024_sync_legacy_seat_flags_from_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1765264579706,
+      "tag": "0025_enforce_canonical_seat_state_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1765264589706,
+      "tag": "0026_reconcile_checkout_fks_and_indexes",
+      "breakpoints": true
     }
   ]
 }

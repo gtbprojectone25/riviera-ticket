@@ -1,8 +1,8 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ChevronLeft, LogOut, RefreshCw } from 'lucide-react'
+import {  LogOut, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/context/auth'
 import { useAccountEvents } from '@/hooks/use-account-events'
 import { useAccountPendents } from '@/hooks/use-account-pendents'
@@ -45,6 +45,7 @@ function AccountPageContent() {
   })
   const [savingProfile, setSavingProfile] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
+  const [resumingOrderId, setResumingOrderId] = useState<string | null>(null)
   const [profileMessage, setProfileMessage] = useState<string | null>(null)
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
 
@@ -208,6 +209,25 @@ function AccountPageContent() {
     </div>
   )
 
+  const uniquePendents = useMemo(() => {
+    const seen = new Map<string, (typeof pendents)[number]>()
+    for (const p of pendents) {
+      const key =
+        p.cartId ||
+        p.orderId ||
+        p.checkoutSessionId ||
+        p.paymentReference ||
+        (p.sessionId && p.sessionTime ? `${p.sessionId}-${p.sessionTime}` : undefined) ||
+        `${p.movieTitle}-${p.sessionTime ?? ''}-${p.totalAmount ?? ''}`
+
+      if (!key) continue
+      if (!seen.has(key)) {
+        seen.set(key, p)
+      }
+    }
+    return Array.from(seen.values())
+  }, [pendents])
+
   const renderPendants = () => (
     <div className="relative z-10">
       {pendentsStatus === 'loading' && (
@@ -220,12 +240,11 @@ function AccountPageContent() {
         <p className="text-sm text-gray-400">No pending purchases.</p>
       )}
 
-      {pendents.map((pending) => (
+      {uniquePendents.map((pending) => (
         <div
-          key={pending.id}
+          key={pending.orderId}
           className="bg-linear-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl overflow-hidden border border-gray-700 shadow-2xl mb-6"
         >
-          {/* Poster - same proportions as hero-section */}
           <div className="relative aspect-2/3 max-w-md mx-auto mt-4 rounded-2xl overflow-hidden cursor-pointer">
             <Image
               src="/aquiles-capa.png"
@@ -243,13 +262,15 @@ function AccountPageContent() {
               <div>
                 <p className="text-gray-400 text-sm mb-1">Session</p>
                 <p className="text-white font-bold text-lg">{pending.movieTitle}</p>
-                <p className="text-gray-500 text-xs mt-1">
-                  {new Date(pending.sessionTime).toLocaleDateString()} ·{' '}
-                  {new Date(pending.sessionTime).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </p>
+                {pending.sessionTime && (
+                  <p className="text-gray-500 text-xs mt-1">
+                    {new Date(pending.sessionTime).toLocaleDateString()} ·{' '}
+                    {new Date(pending.sessionTime).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-gray-400 text-sm mb-1">Total</p>
@@ -266,6 +287,38 @@ function AccountPageContent() {
                 <p className="text-gray-500 text-xs mt-1">{pending.cinemaAddress}</p>
               )}
             </div>
+
+            <div className="pt-4 border-top border-gray-700">
+              <Button
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                disabled={resumingOrderId === pending.orderId}
+                onClick={async () => {
+                  try {
+                    if (!token) return
+                    setResumingOrderId(pending.orderId)
+                    const res = await fetch('/api/payments/resume', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                      },
+                      body: JSON.stringify({ orderId: pending.orderId }),
+                    })
+                    if (!res.ok) {
+                      const payload = await res.json().catch(() => ({}))
+                      throw new Error(payload.error || 'Failed to resume payment')
+                    }
+                    router.push(`/payment?resumeOrderId=${encodeURIComponent(pending.orderId)}`)
+                  } catch (error) {
+                    console.error('Failed to resume payment:', error)
+                  } finally {
+                    setResumingOrderId(null)
+                  }
+                }}
+              >
+                {resumingOrderId === pending.orderId ? 'Resuming...' : 'Resume payment'}
+              </Button>
+            </div>
           </div>
         </div>
       ))}
@@ -273,20 +326,26 @@ function AccountPageContent() {
   )
 
   const renderEvents = () => {
-    const demoEvent = {
-      id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', // UUID de exemplo (seria o cartId real)
-      movieTitle: 'The Odyssey',
-      sessionTime: new Date('2026-07-16T19:45:00').toISOString(), // 16/07/2026 às 19:45 (7:45 PM)
-      cinemaName: 'AMC Lincoln Square',
-      cinemaAddress: 'New York, NY, USA',
-      seatLabels: ['B12', 'B13'],
-      status: 'reserved',
-      amount: 0,
-      type: 'STANDARD' as const,
-      barcode: undefined,
-    }
+    const allowDemoFallback =
+      process.env.NODE_ENV === 'development' &&
+      process.env.NEXT_PUBLIC_ENABLE_DEMO_TICKET_FALLBACK === 'true'
 
-    const list = eventsStatus === 'success' && events.length === 0 ? [demoEvent] : events
+    const demoEvent = allowDemoFallback
+      ? {
+          id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+          movieTitle: 'The Odyssey',
+          sessionTime: new Date('2026-07-16T19:45:00').toISOString(),
+          cinemaName: 'AMC Lincoln Square',
+          cinemaAddress: 'New York, NY, USA',
+          seatLabels: ['B12', 'B13'],
+          status: 'reserved',
+          amount: 0,
+          type: 'STANDARD' as const,
+          barcode: undefined,
+        }
+      : null
+
+    const list = eventsStatus === 'success' && events.length === 0 && demoEvent ? [demoEvent] : events
 
     return (
       <div className="relative z-10 pt-2 space-y-touch-4">
@@ -296,8 +355,20 @@ function AccountPageContent() {
         {eventsError && (
           <p className="text-sm text-red-400">Error: {eventsError}</p>
         )}
-        {eventsStatus === 'success' && events.length === 0 && (
-          <p className="text-sm text-gray-400">You don&apos;t have confirmed events yet. Showing a preview ticket below.</p>
+        {eventsStatus === 'success' && events.length === 0 && !allowDemoFallback && (
+          <div className="rounded-xl border border-white/10 bg-zinc-900/50 p-4 space-y-3">
+            <p className="text-sm text-gray-300">No tickets found.</p>
+            <button
+              type="button"
+              onClick={() => router.push('/pre-order')}
+              className="inline-flex items-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500"
+            >
+              Browse sessions
+            </button>
+          </div>
+        )}
+        {eventsStatus === 'success' && events.length === 0 && allowDemoFallback && (
+          <p className="text-sm text-gray-400">Demo mode enabled. Showing a preview ticket.</p>
         )}
         {list.map((event) => (
           <div key={event.id} className="space-y-touch-3">
@@ -318,7 +389,7 @@ function AccountPageContent() {
         )}
         {profileError && (
           <p className="text-sm text-amber-300">
-            Unable to load profile from server. Using your login info—update and save to refresh.
+            Unable to load profile from server. Using your login infoâ€”update and save to refresh.
           </p>
         )}
 
@@ -406,7 +477,7 @@ function AccountPageContent() {
                 setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))
               }
               className="bg-[#1F2933] border-gray-700 text-white placeholder:text-gray-500"
-              placeholder="••••••••"
+              placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
             />
           </div>
 
@@ -422,7 +493,7 @@ function AccountPageContent() {
                 setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))
               }
               className="bg-[#1F2933] border-gray-700 text-white placeholder:text-gray-500"
-              placeholder="••••••••"
+              placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
             />
           </div>
 
@@ -441,7 +512,7 @@ function AccountPageContent() {
                 }))
               }
               className="bg-[#1F2933] border-gray-700 text-white placeholder:text-gray-500"
-              placeholder="••••••••"
+              placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
             />
           </div>
 
@@ -494,15 +565,8 @@ function AccountPageContent() {
           {/* Header */}
           <div className="flex items-center justify-between gap-4 border-b border-gray-800 pb-4">
             <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.back()}
-                className="text-white hover:bg-gray-800"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span className="ml-1">To go back</span>
-              </Button>
+             
+              <span className="text-white font-bold text-lg">Welcome,</span>
               <div className="text-white font-bold text-lg">
                 {user ? `${user.name} ${user.surname}` : 'My Account'}
               </div>
@@ -535,4 +599,7 @@ function AccountPageContent() {
     </div>
   )
 }
+
+
+
 

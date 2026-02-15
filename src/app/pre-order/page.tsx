@@ -11,9 +11,9 @@ export default function PreOrderPage() {
   const [showWarningModal, setShowWarningModal] = useState(false)
 
   const notices = [
-    'Para garantir seus ingressos, selecione a sessão disponível na sua região. Escolha a data, o horário e o cinema desejado.',
-    'Decida quantos ingressos deseja reservar. Lembre-se: o limite é de até 4 ingressos por pessoa.',
-    'Adicione os ingressos ao carrinho e conclua o pagamento. Após a confirmação, você poderá acompanhar todas as atualizações na sua conta oficial do Riviera.',
+    'To secure your tickets, select an available screening in your area. Choose the date, time, and theatre of your choice.',
+    'Decide how many tickets you’d like to reserve. Please note: the limit is up to 4 tickets per guest.',
+    'Add the tickets to your cart and complete payment. Once confirmed, you’ll be able to track all updates through your official Riviera account.',
   ]
 
   const handleContinueClick = () => {
@@ -25,7 +25,7 @@ export default function PreOrderPage() {
   }
 
   return (
-    <div className="min-h-screen text-white relative overflow-hidden flex flex-col bg-black/60">
+    <div className="min-h-screen text-white relative overflow-hidden flex flex-col">
       <div className="relative z-10 flex-1 flex flex-col">
         <div className="mx-auto w-full max-w-sm px-2 py-6 flex flex-col">
           {/* CARD ÚNICO COM POSTER + CARDS + BOTÃO */}
@@ -45,10 +45,8 @@ export default function PreOrderPage() {
               {/* Título + badge no topo */}
               <div className="absolute top-4 left-4 right-4 flex items-start justify-between">
                 <div className="space-y-1">
-                  <span className="text-xs font-semibold text-white/80 uppercase tracking-wide">
-                    A film by Christopher Nolan
-                  </span>
-                  <h1 className="text-3xl font-bold text-white drop-shadow-lg leading-tight">
+                  
+                  <h1 className="text-3xl font-bold text-[#dbdbdb] drop-shadow-lg leading-tight">
                     The Odyssey
                   </h1>
                 </div>
@@ -63,7 +61,7 @@ export default function PreOrderPage() {
                   {notices.map((notice, index) => (
                     <Card
                       key={index}
-                      className="bg-[#05070b]/95 border-0 rounded-xl shadow-lg"
+                      className="bg-[rgba(66,65,65,0.1)] backdrop-blur-md border-0 rounded-xl shadow-lg"
                     >
                       <CardContent className="p-3">
                         <div className="flex gap-3 items-start">
@@ -76,7 +74,7 @@ export default function PreOrderPage() {
                               className="object-contain"
                             />
                           </div>
-                          <p className="text-gray-100 text-xs leading-relaxed">
+                          <p className="text-gray-100 text-xs leading-relaxed ">
                             {notice}
                           </p>
                         </div>
@@ -89,7 +87,7 @@ export default function PreOrderPage() {
                   onClick={handleContinueClick}
                   className="w-full bg-[#0f62fe] hover:bg-[#0c52d1] text-white h-12 text-sm font-semibold rounded-xl shadow-[0_10px_30px_rgba(15,98,254,0.35)] cursor-pointer"
                 >
-                  Continuar
+                  Continue
                 </Button>
               </div>
             </div>

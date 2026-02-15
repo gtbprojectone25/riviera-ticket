@@ -5,6 +5,7 @@ import { holdSeats, releaseExpiredReservations } from '@/db/queries'
 import { sessions, seats, carts, cartItems } from '@/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { z } from 'zod'
+import { toSeatStateDTO } from '@/server/seats/seatStateDTO'
 
 type SeatRow = typeof seats.$inferSelect
 export type SelectedSeat = {
@@ -23,36 +24,20 @@ const reserveSeatSchema = z.object({
 
 export async function getAvailableSeats(sessionId: string) {
   try {
-    // Buscar todos os assentos da sessão
     const allSeats = (await db
       .select()
       .from(seats)
       .where(eq(seats.sessionId, sessionId))) as SeatRow[]
 
-    // Mapear assentos com status de disponibilidade
-    const now = new Date()
-    const availableSeats = allSeats.map((seat: SeatRow) => {
-      const status = seat.status
-      const isHeld = status === 'HELD' && seat.heldUntil && seat.heldUntil > now
-      const isSold = status === 'SOLD'
-      const isAvailable = !isHeld && !isSold
-
-      return ({
-        id: seat.id,
-        sessionId,
-        row: seat.row,
-        number: seat.number,
-        seatId: seat.seatId,
-        isAvailable,
-        isReserved: isHeld,
-        price: seat.price,
-        type: seat.type
-      })
-    })
+    const seatStates = allSeats.map((seat) => ({
+      ...toSeatStateDTO(seat),
+      sessionId,
+      price: seat.price,
+    }))
 
     return {
       success: true,
-      seats: availableSeats
+      seats: seatStates,
     }
 
   } catch (error) {
@@ -175,6 +160,7 @@ export async function createCart(userId: string | null, sessionId: string, selec
 
           const [, row, numStr] = match
           const seatNumber = Number(numStr)
+          const normalizedSeatId = `${row.toUpperCase()}${seatNumber}`
           const paddedSeatId = `${row.toUpperCase()}${seatNumber.toString().padStart(2, '0')}`
 
           const [dbSeat] = await tx
@@ -183,16 +169,27 @@ export async function createCart(userId: string | null, sessionId: string, selec
             .where(
               and(
                 eq(seats.sessionId, sessionId),
-                eq(seats.seatId, paddedSeatId)
+                eq(seats.seatId, normalizedSeatId)
               )
             )
             .limit(1)
 
-          if (!dbSeat) {
-            throw new Error(`Assento nao encontrado no banco: ${paddedSeatId}`)
+          const resolvedSeat = dbSeat ?? (await tx
+            .select()
+            .from(seats)
+            .where(
+              and(
+                eq(seats.sessionId, sessionId),
+                eq(seats.seatId, paddedSeatId)
+              )
+            )
+            .limit(1))[0]
+
+          if (!resolvedSeat) {
+            throw new Error(`Assento nao encontrado no banco: ${normalizedSeatId}`)
           }
 
-          dbSeatId = dbSeat.id
+          dbSeatId = resolvedSeat.id
         }
 
         resolvedSeats.push({

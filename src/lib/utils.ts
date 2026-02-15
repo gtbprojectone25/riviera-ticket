@@ -23,6 +23,15 @@ export function formatCurrency(amount: number): string {
 }
 
 /**
+ * Format number with pt-BR separators
+ * @param value - Integer/decimal number
+ * @returns Formatted number (e.g. 2610 -> "2.610")
+ */
+export function formatNumberPtBR(value: number): string {
+  return new Intl.NumberFormat('pt-BR').format(value)
+}
+
+/**
  * Generate a random string for IDs
  * @param length - Length of the string
  * @returns Random string

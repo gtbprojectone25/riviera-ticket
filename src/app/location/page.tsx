@@ -12,13 +12,28 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { Clock } from 'lucide-react'
 
 import { cinemas as cinemasData, type Cinema } from "@/data/cinemas"
 import { useBookingStore } from '@/stores/booking'
 import { MapModal } from "@/app/location/_components/MapModal"
 
 type Status = 'idle' | 'loading' | 'success' | 'empty' | 'error'
+type CinemaSearchApiItem = {
+    id: string
+    name: string
+    city: string
+    state: string
+    country?: string
+    isIMAX?: boolean
+    format?: string
+    formats?: string[]
+    address?: string
+    zipCode?: string
+    latitude?: number
+    lat?: number
+    longitude?: number
+    lng?: number
+}
 
 export default function LocationPage() {
     const router = useRouter()
@@ -79,8 +94,8 @@ export default function LocationPage() {
             const response = await fetch(`/api/cinemas/search?${params.toString()}`)
 
             if (response.ok) {
-                const data = await response.json()
-                list = (data?.cinemas || []).map((c: any) => ({
+                const data = await response.json() as { cinemas?: CinemaSearchApiItem[] }
+                list = (data.cinemas ?? []).map((c) => ({
                     id: c.id,
                     name: c.name,
                     city: c.city,
@@ -126,7 +141,7 @@ export default function LocationPage() {
     }
 
     return (
-        <div className="min-h-screen text-white relative overflow-hidden bg-black/60">
+        <div className="min-h-screen text-white relative overflow-hidden">
             <div className="relative z-10 flex flex-col min-h-screen">
                 <div className="flex-1 flex items-start justify-center p-4 pt-6">
                     <div className="w-full max-w-sm space-y-6 relative rounded-xl p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
@@ -181,7 +196,7 @@ export default function LocationPage() {
                             className="w-full bg-gray-800 hover:bg-gray-700 text-white border border-gray-600"
                             disabled={loading}
                         >
-                            {loading ? "Loading..." : "Buscar localização mais próxima"}
+                            {loading ? "Loading..." : "Find nearest location"} 
                         </Button>
 
                         <Button
