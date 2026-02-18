@@ -1,5 +1,5 @@
 // API Route: POST /api/auth/register-continue
-// Salva informaÃ§Ãµes do usuÃ¡rio (name, surname) apÃ³s o email
+// Salva informações do usuário (name, surname) após o email
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
@@ -11,15 +11,15 @@ export async function POST(request: NextRequest) {
   try {
     const { email, name, surname } = await request.json()
 
-    // ValidaÃ§Ãµes
+    // Validações
     if (!email || !name || !surname) {
       return NextResponse.json(
-        { error: 'Todos os campos sÃ£o obrigatÃ³rios' },
+        { error: 'Todos os campos são obrigatórios' },
         { status: 400 }
       )
     }
 
-    // Salvar ou atualizar usuÃ¡rio parcial
+    // Salvar ou atualizar usuário parcial
     const [existingEmailUser] = await db
       .select()
       .from(users)
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       .limit(1)
 
     if (existingEmailUser) {
-      // Atualizar usuÃ¡rio existente
+      // Atualizar usuário existente
       await db
         .update(users)
         .set({
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
         })
         .where(eq(users.id, existingEmailUser.id))
     } else {
-      // Criar novo usuÃ¡rio
+      // Criar novo usuário
       await db.insert(users).values({
         email,
         name,
@@ -52,17 +52,17 @@ export async function POST(request: NextRequest) {
       name,
       surname
     }).catch(error => {
-      console.error('Erro ao enviar webhook de cadastro (nÃ£o bloqueia o fluxo):', error)
+      console.error('Erro ao enviar webhook de cadastro (não bloqueia o fluxo):', error)
     })
 
     return NextResponse.json({
       success: true,
-      message: 'InformaÃ§Ãµes salvas com sucesso'
+      message: 'Informações salvas com sucesso'
     })
   } catch (error) {
     console.error('Error in register-continue:', error)
     return NextResponse.json(
-      { error: 'Erro ao processar solicitaÃ§Ã£o' },
+      { error: 'Erro ao processar solicitação' },
       { status: 500 }
     )
   }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/auth'
 import { useRouter } from 'next/navigation'
-import { EventTicketShowcase } from '@/components/tickets/EventTicketShowcase'
+import { MultiTicketShowcase } from '@/components/tickets/EventTicketShowcase'
 import type { AccountEvent } from '@/types/account'
 
 type Status = 'idle' | 'loading' | 'error' | 'success'
@@ -63,9 +63,27 @@ export default function MyEventsPage() {
     )
   }
 
+  const demoTicket: AccountEvent = {
+    id: 'demo-ticket',
+    movieTitle: 'The Odyssey',
+    sessionTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+    cinemaName: 'Riviera IMAX',
+    cinemaAddress: '123 Demo Ave',
+    seatLabels: ['B12'],
+    status: 'reserved',
+    amount: 0,
+    type: 'STANDARD' as const,
+    barcode: undefined,
+  }
+
+  const list =
+    status === 'success' && events.length === 0 && allowDemoFallback
+      ? [demoTicket]
+      : events
+
   return (
     <div className="min-h-screen bg-black text-white px-4 py-8">
-      <div className="max-w-3xl mx-auto space-y-4">
+      <div className="max-w-3xl mx-auto space-y-6">
         <h1 className="text-2xl font-bold">My Events</h1>
 
         {status === 'loading' && (
@@ -93,25 +111,7 @@ export default function MyEventsPage() {
           </p>
         )}
 
-        {(status === 'success' && events.length === 0 && allowDemoFallback
-          ? [
-            {
-              id: 'demo-ticket',
-              movieTitle: 'The Odyssey',
-              sessionTime: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-              cinemaName: 'Riviera IMAX',
-              cinemaAddress: '123 Demo Ave',
-              seatLabels: ['B12', 'B13'],
-              status: 'reserved',
-              amount: 0,
-              type: 'STANDARD' as const,
-              barcode: undefined,
-            },
-          ]
-          : events
-        ).map((event) => (
-          <EventTicketShowcase key={event.id} event={event} />
-        ))}
+        {list.length > 0 && <MultiTicketShowcase events={list} />}
       </div>
     </div>
   )
