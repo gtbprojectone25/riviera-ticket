@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
@@ -32,6 +32,65 @@ type SessionApi = {
   endTime: string
   cinemaId: string | null
   cinemaName: string
+}
+
+const CINEMA_IMAGES: Record<string, string[]> = {
+  amclincolnsquare: ['/cinemas/AMC Lincoln Square_01.jpg', '/cinemas/AMC Lincoln Square_02.jpg'],
+  amcmetreon16: ['/cinemas/AMC Metreon 16_02.jpg', '/cinemas/AMC Metreon 16_03.jpg'],
+  autonationimaxmuseumofdiscoveryscience: [
+    '/cinemas/Autonation IMAX, Museum of Discovery & Science_01.jpg',
+    '/cinemas/Autonation IMAX, Museum of Discovery & Science_02.jpg',
+  ],
+  bfiimax: ['/cinemas/BFI IMAX_01 .png', '/cinemas/BFI IMAX_02.jpg'],
+  celebrationcinemagrandrapidsnorthimax: [
+    '/cinemas/Celebration! Cinema Grand Rapids North & IMAX_01.png',
+    '/cinemas/Celebration! Cinema Grand Rapids North & IMAX_02.jpg',
+  ],
+  cinemarkdallasimax: ['/cinemas/Cinemark Dallas IMAX_01.jpg', '/cinemas/Cinemark Dallas IMAX_02.jpg'],
+  cineplexcinemaslangley: ['/cinemas/Cineplex Cinemas Langley_01.jpg', '/cinemas/Cineplex Cinemas Langley_02.jpg'],
+  cineplexcinemasmississaugimax: [
+    '/cinemas/Cineplex Cinemas Mississauga & IMAX_01.png',
+    '/cinemas/Cineplex Cinemas Mississauga & IMAX_02.png',
+  ],
+  esquireimaxtheatre: ['/cinemas/Esquire IMAX Theatre_02.jpg'],
+  harkinsarizonamills18imax: [
+    '/cinemas/Harkins Arizona Mills 18 & IMAX_01.jpg',
+    '/cinemas/Harkins Arizona Mills 18 & IMAX_02.jpeg',
+  ],
+  imaxtheatreatindianastatemuseum: ['/cinemas/IMAX Theatre at Indiana State Museum_01.jpg'],
+  imaxmelbournemuseum: ['/cinemas/IMAX, Melbourne Museum_02.jpg'],
+  regaledwardsontariopalaceimax: [
+    '/cinemas/Regal Edwards Ontario Palace & IMAX_01.jpg',
+    '/cinemas/Regal Edwards Ontario Palace & IMAX_02.jpg',
+  ],
+  regalhaciendacrossings: ['/cinemas/Regal Hacienda Crossings_02.jpg'],
+  regalirvinespectrum: ['/cinemas/Regal Irvine Spectrum_01.jpg'],
+  regalmallofgeorgiaimax: ['/cinemas/Regal Mall of Georgia & IMAX_01.jpg', '/cinemas/Regal Mall of Georgia & IMAX_02.jpg'],
+  regaloprymills: ['/cinemas/Regal Opry Mills_01.jpg', '/cinemas/Regal Opry Mills_02.jpg'],
+}
+
+function normalizeCinemaName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function getCinemaImages(name: string): string[] {
+  const key = normalizeCinemaName(name)
+  if (CINEMA_IMAGES[key]?.length) return CINEMA_IMAGES[key]!
+
+  // Fallback: best prefix match (handles sufixos como "Stadium" vs "IMAX")
+  let best: string[] | null = null
+  let bestScore = 0
+  Object.entries(CINEMA_IMAGES).forEach(([k, imgs]) => {
+    const maxLen = Math.min(k.length, key.length)
+    let prefix = 0
+    while (prefix < maxLen && k[prefix] === key[prefix]) prefix += 1
+    if (prefix > bestScore && prefix >= 8) {
+      bestScore = prefix
+      best = imgs
+    }
+  })
+
+  return best ?? ['/sala-cinema.png']
 }
 
 export default function TicketSelectionPage() {
@@ -67,6 +126,23 @@ export default function TicketSelectionPage() {
       amount: 0,
     },
   ])
+
+  const cinemaImages = useMemo(
+    () => (selectedCinema ? getCinemaImages(selectedCinema.name) : ['/sala-cinema.png']),
+    [selectedCinema],
+  )
+  const [currentImage, setCurrentImage] = useState(0)
+
+  useEffect(() => {
+    setCurrentImage(0)
+  }, [cinemaImages])
+  useEffect(() => {
+    if (cinemaImages.length < 2) return
+    const id = setInterval(() => {
+      setCurrentImage((prev) => (prev + 1) % cinemaImages.length)
+    }, 2000)
+    return () => clearInterval(id)
+  }, [cinemaImages])
 
   useEffect(() => {
     if (process.env.NODE_ENV === 'development' && selectedSessionId && selectedSessionId.length !== 36) {
@@ -309,8 +385,9 @@ export default function TicketSelectionPage() {
           {/* Cinema Image */}
           <div className="relative w-full aspect-3/4 rounded-xl overflow-hidden bg-black/50">
             <Image
-              src="/sala-cinema.png"
-              alt="The Odyssey Cinema Pre-order"
+              key={cinemaImages[currentImage]}
+              src={cinemaImages[currentImage]}
+              alt={selectedCinema.name}
               fill
               sizes="(max-width: 768px) 100vw, 480px"
               className="object-cover"
@@ -318,6 +395,19 @@ export default function TicketSelectionPage() {
             />
 
             <div className="absolute inset-0 bg-linear-to-t from-black via-black/50 to-transparent z-10" />
+
+            {cinemaImages.length > 1 && (
+              <div className="absolute inset-x-0 bottom-3 z-20 flex items-center justify-center gap-2">
+                {cinemaImages.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentImage(idx)}
+                    className={`h-2 w-2 rounded-full border border-white/50 transition ${idx === currentImage ? 'bg-white' : 'bg-white/30'}`}
+                    aria-label={`View image ${idx + 1}`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Info */}

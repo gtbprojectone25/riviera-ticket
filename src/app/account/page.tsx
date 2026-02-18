@@ -11,7 +11,7 @@ import type { UserProfile } from '@/types/account'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { EventTicketShowcase } from '@/components/tickets/EventTicketShowcase'
+import { MultiTicketShowcase } from '@/components/tickets/EventTicketShowcase'
 import Image from 'next/image'
 import { formatCurrency } from '@/lib/utils'
 
@@ -370,11 +370,7 @@ function AccountPageContent() {
         {eventsStatus === 'success' && events.length === 0 && allowDemoFallback && (
           <p className="text-sm text-gray-400">Demo mode enabled. Showing a preview ticket.</p>
         )}
-        {list.map((event) => (
-          <div key={event.id} className="space-y-touch-3">
-            <EventTicketShowcase event={event} />
-          </div>
-        ))}
+        <MultiTicketShowcase events={list} />
       </div>
     )
   }
