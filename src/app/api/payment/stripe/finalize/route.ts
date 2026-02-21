@@ -6,11 +6,12 @@ import Stripe from 'stripe'
 import { db } from '@/db'
 import { paymentIntents, carts, checkoutPurchases, tickets, sessions } from '@/db/schema'
 import { orders } from '@/db/admin-schema'
-import { consumeSeatsAndCreateTickets } from '@/db/queries'
+import { completeQueueEntriesForCheckout, consumeSeatsAndCreateTickets } from '@/db/queries'
 import { and, desc, eq, isNull, or, sql } from 'drizzle-orm'
 
 const stripeKey = process.env.STRIPE_SECRET_KEY
 const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: '2025-10-29.clover' }) : null
+const QUEUE_SCOPE_KEY = 'the-odyssey-global'
 
 let checkoutPurchasesExists: boolean | null = null
 
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json().catch(() => ({}))
+    const visitorTokenFromCookie = request.cookies.get('rt_visit_id')?.value ?? null
     const paymentIntentId: string | null = body?.paymentIntentId ?? null
     const cartIdBody: string | null = body?.cartId ?? null
     const checkoutSessionIdBody: string | null = body?.checkoutSessionId ?? body?.checkout_session_id ?? null
@@ -121,6 +123,7 @@ export async function POST(request: NextRequest) {
         stripePi.metadata?.checkout_session_id ||
         stripePi.metadata?.checkoutSessionId ||
         null
+      const visitorToken = visitorTokenFromCookie || stripePi.metadata?.visitor_token || null
 
       // PI status -> SUCCEEDED
       await tx
@@ -209,6 +212,16 @@ export async function POST(request: NextRequest) {
       }
 
       const { tickets: createdTickets, items, alreadyProcessed, userId } = consumeResult
+
+      await completeQueueEntriesForCheckout(
+        {
+          scopeKey: QUEUE_SCOPE_KEY,
+          cartId: dbPi.cartId,
+          visitorToken,
+          userId: dbPi.userId ?? null,
+        },
+        tx,
+      )
 
       // Order status
       const [sessionRow] = items.length

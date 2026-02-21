@@ -3,8 +3,10 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { allocateQueueNumber } from '@/db/queries'
 
+const DEFAULT_SCOPE_KEY = 'the-odyssey-global'
+
 const joinSchema = z.object({
-  scopeKey: z.string().trim().min(1).max(120).regex(/^[a-zA-Z0-9:_-]+$/),
+  scopeKey: z.string().trim().min(1).max(120).regex(/^[a-zA-Z0-9:_-]+$/).default(DEFAULT_SCOPE_KEY),
   userId: z.string().uuid().nullable().optional(),
   cartId: z.string().uuid().nullable().optional(),
 })
@@ -40,7 +42,8 @@ function isMissingVisitorTokenMigration(error: unknown) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    const rawBody = await request.text()
+    const body = rawBody.trim().length > 0 ? JSON.parse(rawBody) : {}
     const parsed = joinSchema.parse(body)
     const visitorCookieName = 'rt_visit_id'
     const visitorToken = request.cookies.get(visitorCookieName)?.value ?? randomUUID()
@@ -94,6 +97,16 @@ export async function POST(request: NextRequest) {
           message: 'Queue temporarily unavailable. Please try again.',
         },
         { status: 503 },
+      )
+    }
+
+    if (error instanceof SyntaxError) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[queue] join.invalid-json', { message: error.message })
+      }
+      return NextResponse.json(
+        { error: 'Invalid JSON payload' },
+        { status: 400 },
       )
     }
 

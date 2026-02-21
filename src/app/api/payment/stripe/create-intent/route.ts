@@ -146,6 +146,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const authenticatedUser = await getUserFromRequest(request)
+    const visitorToken = request.cookies.get('rt_visit_id')?.value ?? null
     const body = await request.json()
     const validation = createIntentSchema.safeParse(body)
 
@@ -221,6 +222,7 @@ export async function POST(request: NextRequest) {
         userId: effectiveUserId || '',
         customer_email: customerEmail || '',
         checkout_session_id: checkoutSessionId,
+        visitor_token: visitorToken || '',
       },
       automatic_payment_methods: {
         enabled: true,
@@ -277,6 +279,8 @@ export async function POST(request: NextRequest) {
           metadata: JSON.stringify({
             checkoutSessionId,
             customerEmail: customerEmail ?? null,
+            visitorToken,
+            visitorToken,
           }),
         }).returning({ id: paymentIntents.id })
         savedPaymentIntentId = created.id

@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { db } from '@/db'
-import { consumeSeatsAndCreateTickets, releaseCartHolds } from '@/db/queries'
+import { completeQueueEntriesForCheckout, consumeSeatsAndCreateTickets, releaseCartHolds } from '@/db/queries'
 import { orders } from '@/db/admin-schema'
 import {
   paymentIntents,
@@ -23,6 +23,7 @@ import { emailService } from '@/lib/email-service'
 const stripeSecret = process.env.STRIPE_SECRET_KEY
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 const isDev = process.env.NODE_ENV !== 'production'
+const QUEUE_SCOPE_KEY = 'the-odyssey-global'
 const log = (...args: unknown[]) => {
   if (isDev) {
     console.log('[stripe-webhook]', ...args)
@@ -318,6 +319,16 @@ async function handlePaymentSuccess(paymentIntent: Stripe.PaymentIntent) {
       userId: dbPaymentIntent.userId,
       guestEmail,
     })
+
+    await completeQueueEntriesForCheckout(
+      {
+        scopeKey: QUEUE_SCOPE_KEY,
+        cartId: dbPaymentIntent.cartId,
+        visitorToken: paymentIntent.metadata?.visitor_token ?? null,
+        userId: dbPaymentIntent.userId ?? null,
+      },
+      tx,
+    )
     log('tickets created', {
       count: createdTickets.length,
       alreadyProcessed,
