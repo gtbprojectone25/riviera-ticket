@@ -216,13 +216,13 @@ export default function LocationPage() {
 
                         {status === 'success' && (
                             <p className="text-sm text-gray-300 mb-4">
-                                {cinemas.length} rooms were found with tickets still available
+                                {cinemas.length} rooms were found with tickets still available.
                             </p>
                         )}
 
                         {status === 'empty' && (
                             <p className="text-sm text-gray-400 mb-4">
-                                No rooms were found with tickets still available
+                                No rooms were found with tickets still available.
                             </p>
                         )}
 

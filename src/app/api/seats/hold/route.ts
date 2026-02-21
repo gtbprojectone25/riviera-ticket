@@ -3,8 +3,10 @@ import { z } from 'zod'
 import { db } from '@/db'
 import { carts, cartItems, seats } from '@/db/schema'
 import { and, eq, inArray } from 'drizzle-orm'
-import { holdSeats } from '@/db/queries'
+import { bindActiveQueueEntryToCart, holdSeats } from '@/db/queries'
 import type { HoldSeatsResult } from '@/lib/seat-reservation'
+
+const QUEUE_SCOPE_KEY = 'the-odyssey-global'
 
 const holdSchema = z.object({
   cartId: z.string().uuid().nullable().optional(),
@@ -186,6 +188,21 @@ export async function POST(request: NextRequest) {
     const heldSeatIds = dedupedByDbId
       .filter((seat) => heldIds.has(seat.dbId))
       .map((seat) => seat.seatId)
+
+    const visitorToken = request.cookies.get('rt_visit_id')?.value
+    if (visitorToken) {
+      try {
+        await bindActiveQueueEntryToCart({
+          scopeKey: QUEUE_SCOPE_KEY,
+          visitorToken,
+          cartId: successHold.cartId,
+          userId: parsed.userId ?? null,
+        })
+      } catch (error) {
+        // Non-blocking: queue binding should not break seat hold flow.
+        console.warn('[seats/hold] failed to bind queue entry to cart', error)
+      }
+    }
 
     if (isDev) {
       console.debug('[seats/hold] success', { heldSeatIds, cartId: successHold.cartId })

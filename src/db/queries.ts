@@ -26,6 +26,7 @@ import {
   cartItems,
   tickets,
   paymentIntents,
+  queueCounters,
   queueEntries,
 } from './schema'
 
@@ -1157,7 +1158,7 @@ type QueueStatusResult = {
   progress: number
 }
 
-const QUEUE_TTL_MINUTES = 10
+const QUEUE_TTL_MINUTES = 30
 const QUEUE_RETENTION_HOURS = 24
 const ACTIVE_QUEUE_TEXT_STATUSES = ['WAITING', 'READY', 'NOTIFIED']
 // Current project enum uses READY as "your turn" status.
@@ -1206,6 +1207,98 @@ async function cleanupOldQueueEntries(scopeKey?: string) {
     .where(and(...conditions))
 }
 
+export async function bindActiveQueueEntryToCart(
+  params: {
+    scopeKey: string
+    visitorToken: string
+    cartId: string
+    userId?: string | null
+  },
+  client: DbInstance = db,
+) {
+  const now = new Date()
+  const [entry] = await client
+    .select({
+      id: queueEntries.id,
+      userId: queueEntries.userId,
+    })
+    .from(queueEntries)
+    .where(
+      and(
+        eq(queueEntries.scopeKey, params.scopeKey),
+        eq(queueEntries.visitorToken, params.visitorToken),
+        activeQueueStatusCondition(),
+        or(isNull(queueEntries.expiresAt), gt(queueEntries.expiresAt, now)),
+      ),
+    )
+    .orderBy(desc(queueEntries.createdAt))
+    .limit(1)
+
+  if (!entry) {
+    return null
+  }
+
+  await client
+    .update(queueEntries)
+    .set({
+      cartId: params.cartId,
+      userId: params.userId ?? entry.userId ?? null,
+      updatedAt: now,
+    })
+    .where(eq(queueEntries.id, entry.id))
+
+  return entry.id
+}
+
+export async function completeQueueEntriesForCheckout(
+  params: {
+    scopeKey?: string
+    cartId?: string | null
+    visitorToken?: string | null
+    userId?: string | null
+  },
+  client: DbInstance = db,
+) {
+  const now = new Date()
+  const identityCandidates = [
+    params.cartId ? eq(queueEntries.cartId, params.cartId) : undefined,
+    params.visitorToken ? eq(queueEntries.visitorToken, params.visitorToken) : undefined,
+    params.userId ? eq(queueEntries.userId, params.userId) : undefined,
+  ].filter((condition): condition is Exclude<typeof condition, undefined> => Boolean(condition))
+
+  const identityCondition = identityCandidates.length === 0
+    ? undefined
+    : identityCandidates.length === 1
+      ? identityCandidates[0]
+      : or(...identityCandidates)
+
+  if (!identityCondition) {
+    return 0
+  }
+
+  const conditions = [
+    identityCondition,
+    activeQueueStatusCondition(),
+    or(isNull(queueEntries.expiresAt), gt(queueEntries.expiresAt, now)),
+  ]
+
+  if (params.scopeKey) {
+    conditions.push(eq(queueEntries.scopeKey, params.scopeKey))
+  }
+
+  const updated = await client
+    .update(queueEntries)
+    .set({
+      status: 'COMPLETED',
+      expiresAt: now,
+      updatedAt: now,
+    })
+    .where(and(...conditions))
+    .returning({ id: queueEntries.id })
+
+  return updated.length
+}
+
 async function getActiveQueueCount(scopeKey: string, now: Date) {
   const [row] = await db
     .select({
@@ -1222,6 +1315,17 @@ async function getActiveQueueCount(scopeKey: string, now: Date) {
     .limit(1)
 
   return Number(row?.count ?? 0)
+}
+
+async function getQueueCumulativeCount(scopeKey: string, client: DbInstance = db) {
+  const [counterRow] = await client
+    .select({ nextNumber: queueCounters.nextNumber })
+    .from(queueCounters)
+    .where(eq(queueCounters.scopeKey, scopeKey))
+    .limit(1)
+
+  const cumulative = Number(counterRow?.nextNumber ?? 1) - 1
+  return Math.max(0, cumulative)
 }
 
 export async function allocateQueueNumber(params: {
@@ -1250,7 +1354,9 @@ export async function allocateQueueNumber(params: {
     .limit(1)
 
   if (existingEntry) {
-    const peopleInQueue = await getActiveQueueCount(params.scopeKey, now)
+    const activePeopleInQueue = await getActiveQueueCount(params.scopeKey, now)
+    const cumulativePeopleInQueue = await getQueueCumulativeCount(params.scopeKey)
+    const peopleInQueue = Math.max(activePeopleInQueue, cumulativePeopleInQueue, existingEntry.queueNumber)
     devQueueLog('join.reuse-active-entry', {
       scopeKey: params.scopeKey,
       visitorToken: params.visitorToken,
@@ -1295,7 +1401,9 @@ export async function allocateQueueNumber(params: {
       })
       .returning()
 
-    const peopleInQueue = await getActiveQueueCount(params.scopeKey, now)
+    const activePeopleInQueue = await getActiveQueueCount(params.scopeKey, now)
+    const cumulativePeopleInQueue = await getQueueCumulativeCount(params.scopeKey)
+    const peopleInQueue = Math.max(activePeopleInQueue, cumulativePeopleInQueue, queueNumber)
     devQueueLog('join.allocated-new-number', {
       scopeKey: params.scopeKey,
       visitorToken: params.visitorToken,
@@ -1335,7 +1443,9 @@ export async function allocateQueueNumber(params: {
       throw error
     }
 
-    const peopleInQueue = await getActiveQueueCount(params.scopeKey, now)
+    const activePeopleInQueue = await getActiveQueueCount(params.scopeKey, now)
+    const cumulativePeopleInQueue = await getQueueCumulativeCount(params.scopeKey)
+    const peopleInQueue = Math.max(activePeopleInQueue, cumulativePeopleInQueue, raceEntry.queueNumber)
     devQueueLog('join.recovered-after-unique-race', {
       scopeKey: params.scopeKey,
       visitorToken: params.visitorToken,
@@ -1434,12 +1544,14 @@ export async function getQueueStatus(entryId: string): Promise<QueueStatusResult
     )
     .limit(1)
 
-  const peopleInQueue = Math.max(1, Number(peopleRow?.count ?? 1))
+  const activePeopleInQueue = Math.max(1, Number(peopleRow?.count ?? 1))
+  const cumulativePeopleInQueue = await getQueueCumulativeCount(entry.scopeKey)
+  const peopleInQueue = Math.max(activePeopleInQueue, cumulativePeopleInQueue, entry.queueNumber)
   const queueNumber = status === 'EXPIRED' ? entry.queueNumber : Math.max(1, Number(positionRow?.count ?? entry.queueNumber))
   const base = Math.max(1, entry.queueNumber)
   const progressRatio = status === QUEUE_READY_STATUS
     ? 1
-    : Math.min(1, Math.max(0, 1 - (queueNumber - 1) / Math.max(1, base - 1)))
+    : Math.min(1, Math.max(0, (queueNumber - 1) / Math.max(1, base - 1)))
   const progress = Math.round(progressRatio * 100)
 
   const result = {

@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { cartId, amountCents, currency, paymentMethod } = validation.data
+    const visitorToken = request.cookies.get('rt_visit_id')?.value ?? null
 
     // Verificar cart
     const [cart] = await db.select().from(carts).where(eq(carts.id, cartId)).limit(1)
@@ -51,6 +52,9 @@ export async function POST(request: NextRequest) {
       reference: cartId,
       merchantAccount: ADYEN_MERCHANT_ACCOUNT,
       paymentMethod,
+      metadata: {
+        visitor_token: visitorToken ?? '',
+      },
       returnUrl: `${process.env.NEXT_PUBLIC_APP_URL}/payment/result`,
     }
 
@@ -80,7 +84,10 @@ export async function POST(request: NextRequest) {
       amountCents,
       currency,
       status: 'PENDING',
-      metadata: JSON.stringify(paymentResponse),
+      metadata: JSON.stringify({
+        ...paymentResponse,
+        visitor_token: visitorToken,
+      }),
     })
 
     return NextResponse.json({

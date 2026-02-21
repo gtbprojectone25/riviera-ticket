@@ -21,6 +21,7 @@ function formatNumberEnUS(value: number): string {
 }
 
 export function HeroSection() {
+  const [isMounted, setIsMounted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [entryId, setEntryId] = useState<string | null>(null)
   const [queueNumber, setQueueNumber] = useState<number | null>(null)
@@ -32,6 +33,12 @@ export function HeroSection() {
 
   const router = useRouter()
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Garante que o componente só renderiza lógica de cliente após montagem
+  // evitando o erro de Hydration do Next.js
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   const updateQueueState = useCallback((data: {
     queueNumber?: number
@@ -84,9 +91,7 @@ export function HeroSection() {
     }
 
     setEntryId(payload.queueEntryId)
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, payload.queueEntryId)
-    }
+    window.localStorage.setItem(STORAGE_KEY, payload.queueEntryId)
 
     updateQueueState({
       queueNumber: payload.queueNumber,
@@ -96,14 +101,17 @@ export function HeroSection() {
     })
   }, [updateQueueState])
 
+  // Bootstrap: só roda no cliente após montagem
   useEffect(() => {
+    if (!isMounted) return
+
     let disposed = false
 
     const bootstrap = async () => {
       setIsQueueLoading(true)
       setQueueError(null)
       try {
-        const cached = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null
+        const cached = window.localStorage.getItem(STORAGE_KEY)
         if (cached) {
           if (!disposed) {
             setEntryId(cached)
@@ -128,8 +136,33 @@ export function HeroSection() {
     return () => {
       disposed = true
     }
-  }, [joinQueue])
+  }, [joinQueue, isMounted])
 
+  // Sincroniza entryId entre abas do mesmo navegador via storage event
+  useEffect(() => {
+    if (!isMounted) return
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key !== STORAGE_KEY) return
+
+      if (e.newValue) {
+        setEntryId(e.newValue)
+        setQueueError(null)
+      } else {
+        // chave removida (expirou ou foi limpa em outra aba)
+        setEntryId(null)
+        setQueueNumber(null)
+        setInitialQueueNumber(null)
+        setPeopleInQueue(null)
+        setStatus(null)
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [isMounted])
+
+  // Polling de status da fila
   useEffect(() => {
     if (!entryId) return
 
@@ -160,9 +193,7 @@ export function HeroSection() {
 
         if (!res.ok) {
           if (res.status === 404 || res.status === 403) {
-            if (typeof window !== 'undefined') {
-              window.localStorage.removeItem(STORAGE_KEY)
-            }
+            window.localStorage.removeItem(STORAGE_KEY)
             if (!disposed) {
               setEntryId(null)
               setQueueNumber(null)
@@ -181,9 +212,7 @@ export function HeroSection() {
 
         if (disposed) return
         if (data.status === 'EXPIRED') {
-          if (typeof window !== 'undefined') {
-            window.localStorage.removeItem(STORAGE_KEY)
-          }
+          window.localStorage.removeItem(STORAGE_KEY)
           setEntryId(null)
           setQueueNumber(null)
           setInitialQueueNumber(null)
@@ -251,12 +280,12 @@ export function HeroSection() {
   const base = Math.max(1, safeInitial)
   const progressRatio = queueNumber === null
     ? 0
-    : clamp(1 - (safeQueueNumber - 1) / Math.max(1, base - 1), 0, 1)
+    : clamp((safeQueueNumber - 1) / Math.max(1, base - 1), 0, 1)
 
   const positionLabel = queueNumber !== null ? formatNumberEnUS(safeQueueNumber) : '--'
   const peopleLabel = formatNumberEnUS(Math.max(1, peopleInQueue ?? safeInitial ?? 1))
 
-  const queueReady = status === 'READY' || (queueNumber !== null && queueNumber <= 1)
+  const queueReady = status === 'READY' || (queueNumber !== null && queueNumber <= 1 && status !== 'WAITING')
   const canContinue = queueReady && !isQueueLoading && !queueError
   const showQueueMetrics = Boolean(entryId && queueNumber !== null)
 
@@ -277,13 +306,14 @@ export function HeroSection() {
 
       <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-[470px] flex-col px-4 pb-4 pt-9 sm:px-5 sm:pt-10">
         <div className="text-center mt-10 sm:mt-16">
-          <p className="text-[10px] uppercase tracking-[0.35em] text-white/60 ">A film by Christopher Nolan</p>
-          <h1 className="mt-2 text-[2.05rem] font-semibold tracking-[0.34em] text-[#1E4E73] sm:text-5xl">THE ODYSSEY</h1>
+          <p className="text-[10px] uppercase tracking-[0.35em] text-[#FFFFFF] ">A film by Christopher Nolan</p>
+          <h1 className="mt-2 text-[2.05rem] font-bold tracking-[0.34em] text-[#1E4E73] sm:text-4xl">THE ODYSSEY</h1>
         </div>
 
-        <div className="mt-8 text-center sm:mt-10">
-          <p className="text-sm font-semibold uppercase tracking-[0.42em] text-[#db3636] sm:text-base">DEFY THE GODS</p>
-          <p className="text-3xl font-extrabold uppercase tracking-[0.45em] text-[#1E4E73] sm:text-2xl">07.17.26</p>
+
+        <div className="mt-8 text-center sm:mt-[10px]">
+        <p className="text-[25px] font-extrabold uppercase tracking-[0.40em] text-[#db3636] sm:text-2xl mt-[-20px] ">07.17.26</p>
+        <p className="text-[10px] uppercase tracking-[0.35em] text-[#FFFFFF] mt-1.5 p-1">SHOT ENTIRELY WITH IMAX FILM CAMERAS</p>
         </div>
 
         <div className="mt-auto space-y-3 pb-1">
@@ -315,14 +345,22 @@ export function HeroSection() {
               />
             </div>
 
-            {isQueueLoading && (
+            {/* Enquanto não está montado no cliente, mostra skeleton para evitar hydration mismatch */}
+            {!isMounted && (
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="h-[92px] animate-pulse rounded-xl border border-white/10 bg-white/10" />
                 <div className="h-[92px] animate-pulse rounded-xl border border-white/10 bg-white/10" />
               </div>
             )}
 
-            {!isQueueLoading && queueError && (
+            {isMounted && isQueueLoading && (
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="h-[92px] animate-pulse rounded-xl border border-white/10 bg-white/10" />
+                <div className="h-[92px] animate-pulse rounded-xl border border-white/10 bg-white/10" />
+              </div>
+            )}
+
+            {isMounted && !isQueueLoading && queueError && (
               <div className="mt-4 space-y-3">
                 <p className="rounded-xl border border-red-200/25 bg-red-500/10 px-3 py-2 text-sm text-red-100">
                   Queue temporarily unavailable. Please try again.
@@ -333,7 +371,7 @@ export function HeroSection() {
               </div>
             )}
 
-            {!isQueueLoading && showQueueMetrics && (
+            {isMounted && !isQueueLoading && showQueueMetrics && (
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-white/10 bg-white/10 p-4 text-center backdrop-blur-sm">
                   <p className="text-3xl font-bold leading-none text-white sm:text-4xl">{positionLabel}</p>
@@ -346,14 +384,23 @@ export function HeroSection() {
               </div>
             )}
 
-            {!isQueueLoading && !queueError && showQueueMetrics && (
+            {isMounted && !isQueueLoading && !queueError && showQueueMetrics && (
               <div className="mt-4">
                 <Button
                   onClick={handleNavigateToPreOrder}
                   disabled={!canContinue}
-                  className="h-10 w-full rounded-xl bg-white/15 text-white hover:bg-white/25 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={`h-10 w-full rounded-xl text-white disabled:cursor-not-allowed disabled:opacity-50 relative overflow-hidden ${
+                    canContinue
+                      ? 'bg-linear-to-r from-blue-500 via-blue-400 to-blue-500 hover:from-blue-600 hover:via-blue-500 hover:to-blue-600'
+                      : 'bg-white/15 hover:bg-white/25'
+                  }`}
                 >
-                  {canContinue ? 'Get your ticket' : 'Waiting for your turn...'}
+                  {canContinue && (
+                    <span className="absolute inset-0 -translate-x-full animate-shimmer bg-linear-to-r from-transparent via-white/30 to-transparent" />
+                  )}
+                  <span className="relative z-10">
+                    {canContinue ? 'Get your ticket' : 'Waiting for your turn...'}
+                  </span>
                 </Button>
               </div>
             )}

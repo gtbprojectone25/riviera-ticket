@@ -27,6 +27,15 @@ const config = {
         caption: ["0.75rem", { lineHeight: "1rem" }],
         label: ["0.75rem", { lineHeight: "1rem", fontWeight: "600" }],
       },
+      keyframes: {
+        shimmer: {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(100%)" },
+        },
+      },
+      animation: {
+        shimmer: "shimmer 2s infinite",
+      },
     },
   },
   plugins: [],

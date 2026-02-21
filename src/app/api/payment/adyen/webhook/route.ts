@@ -4,13 +4,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { db } from '@/db'
-import { consumeSeatsAndCreateTickets, releaseCartHolds } from '@/db/queries'
+import { completeQueueEntriesForCheckout, consumeSeatsAndCreateTickets, releaseCartHolds } from '@/db/queries'
 import { paymentIntents, carts, tickets, users, sessions, type Session } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { barcodeService } from '@/lib/barcode-service'
 import { emailService } from '@/lib/email-service'
 
 const ADYEN_HMAC_KEY = process.env.ADYEN_HMAC_KEY || ''
+const QUEUE_SCOPE_KEY = 'the-odyssey-global'
 
 type AdyenNotificationRequestItem = {
   eventCode: string
@@ -94,6 +95,23 @@ function extractGuestEmail(metadata: string | null | undefined): string | null {
   return null
 }
 
+function extractVisitorToken(metadata: string | null | undefined): string | null {
+  if (!metadata) return null
+
+  try {
+    const parsed = JSON.parse(metadata) as {
+      visitor_token?: unknown
+      visitorToken?: unknown
+    }
+    if (typeof parsed.visitor_token === 'string' && parsed.visitor_token.trim().length > 0) return parsed.visitor_token
+    if (typeof parsed.visitorToken === 'string' && parsed.visitorToken.trim().length > 0) return parsed.visitorToken
+  } catch {
+    return null
+  }
+
+  return null
+}
+
 async function handleAdyenPaymentSuccess(event: AdyenNotificationRequestItem) {
   if (!event.merchantReference) {
     console.error('Missing merchantReference for Adyen success event')
@@ -129,6 +147,7 @@ async function handleAdyenPaymentSuccess(event: AdyenNotificationRequestItem) {
       .where(eq(carts.id, cartId))
 
     const guestEmail = extractGuestEmail(dbPaymentIntent.metadata)
+    const visitorToken = extractVisitorToken(dbPaymentIntent.metadata)
 
     const {
       tickets: createdTickets,
@@ -141,6 +160,16 @@ async function handleAdyenPaymentSuccess(event: AdyenNotificationRequestItem) {
       userId: dbPaymentIntent.userId,
       guestEmail,
     })
+
+    await completeQueueEntriesForCheckout(
+      {
+        scopeKey: QUEUE_SCOPE_KEY,
+        cartId: dbPaymentIntent.cartId,
+        visitorToken,
+        userId: dbPaymentIntent.userId ?? null,
+      },
+      tx,
+    )
 
     let sessionData: Session | null = null
     if (items[0]) {
