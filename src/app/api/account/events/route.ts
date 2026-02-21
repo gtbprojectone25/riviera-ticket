@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { auditoriums, carts, sessions, seats, tickets, userSessions, users } from '@/db/schema'
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
-import type { AccountEvent } from '@/types/account'
+import type { AccountEvent } from '../../../../types/account'
 import { buildExpectedSeatsFromLayout } from '@/server/seats/expectedSeats'
 
 async function getUserFromRequest(request: NextRequest) {
