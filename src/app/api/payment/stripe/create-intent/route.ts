@@ -280,7 +280,6 @@ export async function POST(request: NextRequest) {
             checkoutSessionId,
             customerEmail: customerEmail ?? null,
             visitorToken,
-            visitorToken,
           }),
         }).returning({ id: paymentIntents.id })
         savedPaymentIntentId = created.id
