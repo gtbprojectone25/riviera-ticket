@@ -73,16 +73,23 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({
-      status: status.status,
-      queueNumber: status.queueNumber,
-      initialQueueNumber: status.initialQueueNumber,
-      peopleInQueue: status.peopleInQueue,
-      scopeKey: status.scopeKey,
-      progress: status.progress,
-      expiresAt: status.expiresAt,
-      createdAt: status.createdAt,
-    })
+    return NextResponse.json(
+      {
+        status: status.status,
+        queueNumber: status.queueNumber,
+        initialQueueNumber: status.initialQueueNumber,
+        peopleInQueue: status.peopleInQueue,
+        scopeKey: status.scopeKey,
+        progress: status.progress,
+        expiresAt: status.expiresAt,
+        createdAt: status.createdAt,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+      },
+    )
   } catch (error) {
     const migrationCheck = isMissingVisitorTokenMigration(error)
     if (migrationCheck.missing) {

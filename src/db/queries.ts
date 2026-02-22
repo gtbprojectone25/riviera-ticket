@@ -1184,10 +1184,13 @@ type QueueStatusResult = {
   progress: number
 }
 
-const QUEUE_TTL_MINUTES = 30
+const QUEUE_TTL_MINUTES = 20
 const QUEUE_RETENTION_HOURS = 24
 const ACTIVE_QUEUE_TEXT_STATUSES = ['WAITING', 'READY', 'NOTIFIED']
-// Current project enum uses READY as "your turn" status.
+// Quantas pessoas podem estar "sua vez" ao mesmo tempo (top N da fila). Reduz reclamação de demora.
+const QUEUE_READY_SLOTS = typeof process.env.QUEUE_READY_SLOTS !== 'undefined'
+  ? Math.max(1, parseInt(process.env.QUEUE_READY_SLOTS, 10) || 10)
+  : 10
 const QUEUE_READY_STATUS: QueueAllocateResult['status'] = 'READY'
 
 function activeQueueStatusCondition() {
@@ -1492,7 +1495,6 @@ export async function allocateQueueNumber(params: {
 
 export async function getQueueStatus(entryId: string): Promise<QueueStatusResult | null> {
   const now = new Date()
-  await expireQueueEntries()
 
   const [entry] = await db
     .select()
@@ -1501,6 +1503,9 @@ export async function getQueueStatus(entryId: string): Promise<QueueStatusResult
     .limit(1)
 
   if (!entry) return null
+
+  // Expirar só entradas deste scope (evita UPDATE global a cada poll no deploy)
+  await expireQueueEntries(entry.scopeKey)
 
   let status = entry.status
   const createdAt = entry.createdAt ?? now
@@ -1530,7 +1535,7 @@ export async function getQueueStatus(entryId: string): Promise<QueueStatusResult
       .limit(1)
 
     const queuePosition = Math.max(1, Number(positionRow?.position ?? entry.queueNumber))
-    const nextStatus: QueueAllocateResult['status'] = queuePosition <= 1 ? QUEUE_READY_STATUS : 'WAITING'
+    const nextStatus: QueueAllocateResult['status'] = queuePosition <= QUEUE_READY_SLOTS ? QUEUE_READY_STATUS : 'WAITING'
 
     if (status !== nextStatus) {
       await db
