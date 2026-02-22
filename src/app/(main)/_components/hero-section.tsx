@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -74,6 +74,7 @@ export function HeroSection() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scopeKey: SCOPE_KEY }),
+      credentials: 'include',
     })
 
     const payload = await res.json().catch(() => ({})) as {
@@ -170,7 +171,10 @@ export function HeroSection() {
 
     const fetchStatus = async () => {
       try {
-        const res = await fetch(`/api/queue/status?entryId=${entryId}`, { cache: 'no-store' })
+        const res = await fetch(`/api/queue/status?entryId=${entryId}`, {
+          cache: 'no-store',
+          credentials: 'include',
+        })
         let data: {
           queueNumber?: number
           initialQueueNumber?: number
@@ -245,7 +249,7 @@ export function HeroSection() {
     }
 
     void fetchStatus()
-    pollTimerRef.current = setInterval(fetchStatus, 3000)
+    pollTimerRef.current = setInterval(fetchStatus, 2000)
 
     return () => {
       disposed = true
@@ -297,6 +301,7 @@ export function HeroSection() {
         src="/aquiles-capa.png"
         alt="The Odyssey"
         fill
+        sizes="(max-width: 768px) 100vw, 470px"
         priority
         className="object-cover object-[center_18%]"
       />

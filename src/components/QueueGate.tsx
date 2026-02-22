@@ -62,7 +62,10 @@ export function QueueGate({ scopeKey, nextHref, onContinue }: QueueGateProps) {
 
     const fetchStatus = async () => {
       try {
-        const res = await fetch(`/api/queue/status?entryId=${entryId}`)
+        const res = await fetch(`/api/queue/status?entryId=${entryId}`, {
+          cache: 'no-store',
+          credentials: 'include',
+        })
         if (!res.ok) return
         let data: { status?: QueueStatus; queueNumber?: number; progress?: number } = {}
         try {
@@ -83,7 +86,7 @@ export function QueueGate({ scopeKey, nextHref, onContinue }: QueueGateProps) {
     }
 
     void fetchStatus()
-    intervalId = setInterval(fetchStatus, 2500)
+    intervalId = setInterval(fetchStatus, 2000)
 
     return () => {
       active = false
