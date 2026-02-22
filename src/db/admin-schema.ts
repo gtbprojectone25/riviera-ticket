@@ -5,7 +5,7 @@
 
 import { pgTable, text, integer, boolean, timestamp, uuid, pgEnum, index, uniqueIndex, jsonb } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
-import { users, sessions, carts, cinemas } from './schema'
+import { users, sessions, carts, cinemas, queueStatusEnum } from './schema'
 
 // ============================================
 // ENUMS
@@ -21,7 +21,7 @@ export const orderStatusEnum = pgEnum('order_status', [
   'REFUNDED',
   'EXPIRED'
 ])
-export const queueStatusEnum = pgEnum('queue_status', ['WAITING', 'NOTIFIED', 'EXPIRED', 'COMPLETED'])
+export { queueStatusEnum }
 export const promotionTypeEnum = pgEnum('promotion_type', ['PERCENTAGE', 'FIXED_AMOUNT', 'BUY_X_GET_Y'])
 
 // ============================================

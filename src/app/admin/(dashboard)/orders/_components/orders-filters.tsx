@@ -6,6 +6,17 @@ import { Input } from '@/components/ui/input'
 import { Search, Download, Filter } from 'lucide-react'
 import { useState, useCallback } from 'react'
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 const statusOptions = [
   { value: '', label: 'Todos os status' },
   { value: 'PENDING', label: 'Pendente' },
@@ -41,25 +52,58 @@ export function OrdersFilters() {
     router.push('/admin/orders')
   }, [router])
 
-  const handleExportExcel = async () => {
+  const [exportingExcel, setExportingExcel] = useState(false)
+  const [exportingPdf, setExportingPdf] = useState(false)
+
+  const handleExportExcel = useCallback(async () => {
     const params = new URLSearchParams()
     if (search) params.set('search', search)
     if (status) params.set('status', status)
     if (dateFrom) params.set('dateFrom', dateFrom)
     if (dateTo) params.set('dateTo', dateTo)
 
-    window.open(`/api/admin/reports/orders/excel?${params.toString()}`, '_blank')
-  }
+    setExportingExcel(true)
+    try {
+      const res = await fetch(`/api/admin/reports/orders/excel?${params.toString()}`, { credentials: 'include' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error((err as { error?: string }).error || 'Falha ao exportar')
+      }
+      const blob = await res.blob()
+      const date = new Date().toISOString().split('T')[0]
+      downloadBlob(blob, `pedidos-${date}.xlsx`)
+    } catch (e) {
+      console.error(e)
+      alert((e instanceof Error ? e.message : 'Erro ao exportar Excel. Verifique se está logado no admin.') as string)
+    } finally {
+      setExportingExcel(false)
+    }
+  }, [search, status, dateFrom, dateTo])
 
-  const handleExportPdf = async () => {
+  const handleExportPdf = useCallback(async () => {
     const params = new URLSearchParams()
     if (search) params.set('search', search)
     if (status) params.set('status', status)
     if (dateFrom) params.set('dateFrom', dateFrom)
     if (dateTo) params.set('dateTo', dateTo)
 
-    window.open(`/api/admin/reports/orders/pdf?${params.toString()}`, '_blank')
-  }
+    setExportingPdf(true)
+    try {
+      const res = await fetch(`/api/admin/reports/orders/pdf?${params.toString()}`, { credentials: 'include' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error((err as { error?: string }).error || 'Falha ao exportar')
+      }
+      const blob = await res.blob()
+      const date = new Date().toISOString().split('T')[0]
+      downloadBlob(blob, `pedidos-${date}.pdf`)
+    } catch (e) {
+      console.error(e)
+      alert((e instanceof Error ? e.message : 'Erro ao exportar PDF. Verifique se está logado no admin.') as string)
+    } finally {
+      setExportingPdf(false)
+    }
+  }, [search, status, dateFrom, dateTo])
 
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-4">
@@ -121,20 +165,24 @@ export function OrdersFilters() {
       {/* Export Buttons */}
       <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-700">
         <Button
+          type="button"
           variant="outline"
           onClick={handleExportExcel}
+          disabled={exportingExcel}
           className="border-green-600 text-green-500 hover:bg-green-600/10"
         >
           <Download className="w-4 h-4 mr-2" />
-          Exportar Excel
+          {exportingExcel ? 'Exportando...' : 'Exportar Excel'}
         </Button>
         <Button
+          type="button"
           variant="outline"
           onClick={handleExportPdf}
+          disabled={exportingPdf}
           className="border-red-600 text-red-500 hover:bg-red-600/10"
         >
           <Download className="w-4 h-4 mr-2" />
-          Exportar PDF
+          {exportingPdf ? 'Exportando...' : 'Exportar PDF'}
         </Button>
       </div>
     </div>

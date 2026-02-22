@@ -114,7 +114,7 @@ export async function loginAdmin(
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       expires: expiresAt,
-      path: '/admin',
+      path: '/', // enviado também para /api/admin/* (export Excel/PDF, etc.)
     })
 
     return {
@@ -141,9 +141,17 @@ export async function logoutAdmin(): Promise<void> {
       .update(adminSessions)
       .set({ expiresAt: new Date() })
       .where(eq(adminSessions.token, token))
-
-    cookieStore.delete(ADMIN_COOKIE_NAME)
   }
+
+  // Remover o cookie: mesmas opções do login para o navegador aceitar a remoção
+  cookieStore.set(ADMIN_COOKIE_NAME, '', {
+    path: '/',
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 0,
+    expires: new Date(0),
+  })
 }
 
 export async function getAdminFromSession(): Promise<AdminAuthResult['admin'] | null> {
