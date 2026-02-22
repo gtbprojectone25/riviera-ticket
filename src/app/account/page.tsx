@@ -12,11 +12,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { MultiTicketShowcase } from '@/components/tickets/EventTicketShowcase'
+import { SupportTab } from '@/app/account/_components/support/SupportTab'
 import Image from 'next/image'
 import { formatCurrency } from '@/lib/utils'
 
-
-type ActiveTab = 'pendants' | 'events' | 'account'
+type ActiveTab = 'pendants' | 'events' | 'account' | 'support'
 
 export default function AccountPage() {
   return (
@@ -32,6 +32,7 @@ function AccountPageContent() {
   const { user, token, isAuthenticated, isLoading, logout } = useAuth()
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('events')
+
   const [refreshKey, setRefreshKey] = useState(0)
   const [profileForm, setProfileForm] = useState<UserProfile>({
     firstName: user?.name ?? '',
@@ -80,7 +81,7 @@ function AccountPageContent() {
   useEffect(() => {
     const tab = searchParams.get('tab') as ActiveTab | null
     const refresh = searchParams.get('refresh')
-    if (tab && (tab === 'events' || tab === 'pendants' || tab === 'account')) {
+    if (tab && (['events', 'pendants', 'account', 'support'] as ActiveTab[]).includes(tab)) {
       setActiveTab(tab)
     } else {
       setActiveTab('events')
@@ -190,20 +191,26 @@ function AccountPageContent() {
     }
   }
 
+  const TAB_LABELS: Record<ActiveTab, string> = {
+    pendants: 'Pendants',
+    events: 'My events',
+    account: 'My account',
+    support: 'Support',
+  }
+
   const renderTabs = () => (
-    <div className="flex border-b border-gray-800 relative z-20">
-      {(['pendants', 'events', 'account'] as ActiveTab[]).map((tab) => (
+    <div className="flex border-b border-gray-800 relative z-20 overflow-x-auto">
+      {(['pendants', 'events', 'account', 'support'] as ActiveTab[]).map((tab) => (
         <button
           key={tab}
           onClick={() => setActiveTab(tab)}
-          className={`flex-1 py-4 px-4 text-center text-sm font-medium transition-colors ${activeTab === tab
+          className={`flex-1 min-w-max py-4 px-4 text-center text-sm font-medium transition-colors whitespace-nowrap ${
+            activeTab === tab
               ? 'border-b-2 border-blue-600 text-blue-600'
               : 'text-gray-400 hover:text-white'
-            }`}
+          }`}
         >
-          {tab === 'pendants' && 'Pendants'}
-          {tab === 'events' && 'My events'}
-          {tab === 'account' && 'My account'}
+          {TAB_LABELS[tab]}
         </button>
       ))}
     </div>
@@ -589,6 +596,7 @@ function AccountPageContent() {
             {activeTab === 'pendants' && renderPendants()}
             {activeTab === 'events' && renderEvents()}
             {activeTab === 'account' && renderAccount()}
+            {activeTab === 'support' && <SupportTab token={token} />}
           </div>
         </div>
       </div>

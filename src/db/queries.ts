@@ -375,6 +375,32 @@ export async function getSalesReport(filters: SalesDateFilter) {
   }
 }
 
+/** Receita por dia (para gráfico de vendas). Usa payment_intents SUCCEEDED, igual aos cards do dashboard. */
+export async function getSalesByDay(filters: SalesDateFilter): Promise<{ date: string; revenueCents: number }[]> {
+  const conditions = [eq(paymentIntents.status, 'SUCCEEDED')]
+  if (filters.from) {
+    conditions.push(gte(paymentIntents.createdAt, filters.from))
+  }
+  if (filters.to) {
+    const end = new Date(filters.to)
+    end.setUTCHours(23, 59, 59, 999)
+    conditions.push(lte(paymentIntents.createdAt, end))
+  }
+  // Agrupar por data em UTC para bater com as chaves usadas no frontend
+  const dateExpr = sql<string>`to_char((${paymentIntents.createdAt} AT TIME ZONE 'UTC'), 'YYYY-MM-DD')`
+  const revenueExpr = sql<number>`COALESCE(SUM(${paymentIntents.amountCents}), 0)`
+  const rows = await db
+    .select({
+      date: dateExpr,
+      revenueCents: revenueExpr,
+    })
+    .from(paymentIntents)
+    .where(and(...conditions))
+    .groupBy(dateExpr)
+    .orderBy(asc(dateExpr))
+  return rows.map((r) => ({ date: String(r.date).trim(), revenueCents: Number(r.revenueCents) }))
+}
+
 // Auditorium operations
 export async function getAllAuditoriums() {
   return await db
@@ -1142,12 +1168,12 @@ type QueueAllocateResult = {
   queueNumber: number
   initialQueueNumber: number
   peopleInQueue: number
-  status: 'WAITING' | 'READY' | 'EXPIRED' | 'COMPLETED'
+  status: 'WAITING' | 'READY' | 'NOTIFIED' | 'EXPIRED' | 'COMPLETED'
   expiresAt: Date
 }
 
 type QueueStatusResult = {
-  status: 'WAITING' | 'READY' | 'EXPIRED' | 'COMPLETED'
+  status: 'WAITING' | 'READY' | 'NOTIFIED' | 'EXPIRED' | 'COMPLETED'
   queueNumber: number
   scopeKey: string
   visitorToken: string

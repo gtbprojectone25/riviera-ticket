@@ -15,7 +15,7 @@ export const paymentStatusEnum = pgEnum('payment_status', ['PENDING', 'SUCCEEDED
 export const checkoutPurchaseStatusEnum = pgEnum('checkout_purchase_status', ['PENDING', 'SUCCEEDED', 'FAILED', 'CLAIMED'])
 export const screenTypeEnum = pgEnum('screen_type', ['IMAX_70MM', 'STANDARD'])
 export const sessionSalesStatusEnum = pgEnum('session_sales_status', ['ACTIVE', 'PAUSED', 'CLOSED'])
-export const queueStatusEnum = pgEnum('queue_status', ['WAITING', 'READY', 'EXPIRED', 'COMPLETED'])
+export const queueStatusEnum = pgEnum('queue_status', ['WAITING', 'READY', 'NOTIFIED', 'EXPIRED', 'COMPLETED'])
 export const auditoriumTypeEnum = pgEnum('auditorium_type', ['IMAX', 'NORMAL'])
 export const userRoleEnum = pgEnum('user_role', ['USER', 'ADMIN', 'SUPER_ADMIN'])
 export const assetSlotEnum = pgEnum('asset_slot', ['HOME_HERO', 'POSTER', 'CINEMA_COVER', 'AUDITORIUM_IMAGE'])
@@ -29,6 +29,8 @@ export const users = pgTable('users', {
   hashedPassword: text('hashed_password'),
   emailVerified: boolean('email_verified').default(false),
   role: text('role').notNull().default('USER'), // USER, ADMIN, SUPER_ADMIN
+  encryptedSsn: text('encrypted_ssn'),
+  ssnHash: text('ssn_hash'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
@@ -598,3 +600,39 @@ export const webhookLogs = pgTable('webhook_logs', {
 
 export type WebhookLog = typeof webhookLogs.$inferSelect
 export type NewWebhookLog = typeof webhookLogs.$inferInsert
+
+// ─── Support ─────────────────────────────────────────────────────────────────
+
+export const supportTicketStatusEnum = pgEnum('support_ticket_status', ['OPEN', 'IN_REVIEW', 'RESOLVED'])
+export const supportTicketCategoryEnum = pgEnum('support_ticket_category', ['BUG', 'QUESTION', 'FINANCIAL', 'SUGGESTION'])
+export const ticketSenderEnum = pgEnum('ticket_sender', ['user', 'admin', 'system'])
+
+export const supportTickets = pgTable('support_tickets', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  subject: text('subject').notNull(),
+  category: supportTicketCategoryEnum('category').notNull(),
+  description: text('description').notNull(),
+  status: supportTicketStatusEnum('status').notNull().default('OPEN'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index('idx_support_tickets_user_id').on(table.userId),
+  statusIdx: index('idx_support_tickets_status').on(table.status),
+  createdAtIdx: index('idx_support_tickets_created_at').on(table.createdAt),
+}))
+
+export const ticketMessages = pgTable('ticket_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ticketId: uuid('ticket_id').references(() => supportTickets.id, { onDelete: 'cascade' }).notNull(),
+  sender: ticketSenderEnum('sender').notNull().default('user'),
+  message: text('message').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  ticketIdIdx: index('idx_ticket_messages_ticket_id').on(table.ticketId),
+}))
+
+export type SupportTicket = typeof supportTickets.$inferSelect
+export type NewSupportTicket = typeof supportTickets.$inferInsert
+export type TicketMessage = typeof ticketMessages.$inferSelect
+export type NewTicketMessage = typeof ticketMessages.$inferInsert

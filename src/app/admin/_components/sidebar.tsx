@@ -18,7 +18,9 @@ import {
   Settings,
   UserCog,
   ClipboardList,
+  MessageCircle,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 type AdminInfo = {
   id: string
@@ -37,6 +39,7 @@ const navigation = [
   { name: 'Salas', href: '/admin/auditoriums', icon: Armchair },
   { name: 'Filmes', href: '/admin/movies', icon: Film },
   { name: 'Fila de Espera', href: '/admin/waitlist', icon: ClipboardList },
+  { name: 'Suporte', href: '/admin/support', icon: MessageCircle, badge: true },
   { name: 'Usuários', href: '/admin/users', icon: Users },
   { name: 'Promoções', href: '/admin/promotions', icon: Tag },
   { name: 'Relatórios', href: '/admin/reports', icon: BarChart3 },
@@ -49,6 +52,14 @@ const adminNavigation = [
 
 export function AdminSidebar({ admin }: { admin: AdminInfo }) {
   const pathname = usePathname()
+  const [supportPendingCount, setSupportPendingCount] = useState(0)
+
+  useEffect(() => {
+    fetch('/api/admin/support/count')
+      .then((r) => r.ok ? r.json() : { pendingCount: 0 })
+      .then((data: { pendingCount?: number }) => setSupportPendingCount(data.pendingCount ?? 0))
+      .catch(() => setSupportPendingCount(0))
+  }, [])
 
   const isActive = (href: string) => {
     if (href === '/admin') return pathname === '/admin'
@@ -87,7 +98,12 @@ export function AdminSidebar({ admin }: { admin: AdminInfo }) {
               )}
             >
               <item.icon className="w-5 h-5 shrink-0" />
-              {item.name}
+              <span className="flex-1">{item.name}</span>
+              {'badge' in item && item.badge && supportPendingCount > 0 && (
+                <span className="min-w-5 h-5 px-1.5 rounded-full bg-amber-500/20 text-amber-400 text-xs font-semibold flex items-center justify-center">
+                  {supportPendingCount > 99 ? '99+' : supportPendingCount}
+                </span>
+              )}
             </Link>
           ))}
         </div>

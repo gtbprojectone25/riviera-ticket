@@ -21,7 +21,7 @@ export function Header({ className }: HeaderProps) {
   const pathname = usePathname()
 
   // Esconde o header em p�ginas de auth ou conta
-  const hiddenPrefixes = ['/account']
+  const hiddenPrefixes = ['/account', '/admin']
   if (pathname && hiddenPrefixes.some((prefix) => pathname.startsWith(prefix))) {
     return null
   }
