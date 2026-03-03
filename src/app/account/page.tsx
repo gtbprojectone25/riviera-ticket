@@ -382,6 +382,10 @@ function AccountPageContent() {
     )
   }
 
+  const [deletingAccount, setDeletingAccount] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
   const renderAccount = () => (
     <div className="relative z-10 pt-2">
       <div className="bg-[#111827] border border-gray-800 rounded-2xl p-6 shadow-lg space-y-6">
@@ -570,9 +574,6 @@ function AccountPageContent() {
             <div className="flex items-center gap-4">
              
               <span className="text-white font-bold text-lg">Welcome,</span>
-              <div className="text-white font-bold text-lg">
-                {user ? `${user.name} ${user.surname}` : 'My Account'}
-              </div>
             </div>
             <Button
               variant="ghost"

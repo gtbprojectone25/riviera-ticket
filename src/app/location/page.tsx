@@ -16,6 +16,7 @@ import {
 import { cinemas as cinemasData, type Cinema } from "@/data/cinemas"
 import { useBookingStore } from '@/stores/booking'
 import { MapModal } from "@/app/location/_components/MapModal"
+import { PurchaseTimerBanner } from '@/components/flow'
 
 type Status = 'idle' | 'loading' | 'success' | 'empty' | 'error'
 type CinemaSearchApiItem = {
@@ -144,16 +145,17 @@ export default function LocationPage() {
         <div className="min-h-screen text-white relative overflow-hidden">
             <div className="relative z-10 flex flex-col min-h-screen">
                 <div className="flex-1 flex items-start justify-center p-4 pt-6">
-                    <div className="w-full max-w-sm space-y-6 relative rounded-xl p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
+                    <div className="w-full max-w-sm relative rounded-xl bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)] overflow-hidden">
+                        <PurchaseTimerBanner />
+                        <div className="space-y-6 p-6">
+                            <div className="flex items-center justify-between">
+                                <h1 className="text-2xl font-bold text-white drop-shadow-lg">The Odyssey</h1>
+                                <Badge variant="secondary" className="bg-gray-700/80 text-white border border-gray-600">
+                                    Pre-order
+                                </Badge>
+                            </div>
 
-                        <div className="flex items-center justify-between">
-                            <h1 className="text-2xl font-bold text-white drop-shadow-lg">The Odyssey</h1>
-                            <Badge variant="secondary" className="bg-gray-700/80 text-white border border-gray-600">
-                                Pre-order
-                            </Badge>
-                        </div>
-
-                        <hr className="border-gray-700" />
+                            <hr className="border-gray-700" />
 
                         <h2 className="text-sm font-medium text-gray-200">Where to watch</h2>
 
@@ -191,26 +193,28 @@ export default function LocationPage() {
                             </div>
                         </div>
 
-                        <Button
-                            onClick={handleFindNearest}
-                            className="w-full bg-gray-800 hover:bg-gray-700 text-white border border-gray-600"
-                            disabled={loading}
-                        >
-                            {loading ? "Loading..." : "Find nearest location"} 
-                        </Button>
+                        <div className="flex flex-col gap-3">
+                            <Button
+                                onClick={handleFindNearest}
+                                className="w-full bg-gray-800 hover:bg-gray-700 text-white border border-gray-600"
+                                disabled={loading}
+                            >
+                                {loading ? "Loading..." : "Find nearest location"} 
+                            </Button>
 
-                        <Button
-                            onClick={handleApply}
-                            disabled={(!selectedState || !selectedCity) || loading}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white text-base font-semibold"
-                        >
-                            <span className="inline-flex items-center gap-2">
-                                {loading && (
-                                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/60 border-t-transparent" />
-                                )}
-                                {loading ? "Loading..." : "Apply"}
-                            </span>
-                        </Button>
+                            <Button
+                                onClick={handleApply}
+                                disabled={(!selectedState || !selectedCity) || loading}
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-base font-semibold"
+                            >
+                                <span className="inline-flex items-center gap-2">
+                                    {loading && (
+                                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/60 border-t-transparent" />
+                                    )}
+                                    {loading ? "Loading..." : "Apply"}
+                                </span>
+                            </Button>
+                        </div>
 
                         <hr className="border-gray-700" />
 
@@ -249,7 +253,7 @@ export default function LocationPage() {
                                                 </p>
                                             </div>
 
-                                            <div className="text-right flex items-center gap-1">
+                                            <div className="text-right flex flex-col items-end gap-1">
                                                 <Badge
                                                     variant="secondary"
                                                     className="bg-gray-700/80 text-white border-amber-50"
@@ -289,6 +293,7 @@ export default function LocationPage() {
                                 </Card>
                             ))}
                         </div>
+                    </div>
                     </div>
                 </div>
             </div>

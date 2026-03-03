@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { seats, sessions } from '@/db/schema'
 import { eq } from 'drizzle-orm'
@@ -16,7 +16,7 @@ type CachedSeats = {
 }
 
 const seatCache = new Map<string, CachedSeats>()
-const STALE_MS = 60 * 1000
+const STALE_MS = 0 // Disable cache to ensure real-time updates for SOLD seats
 
 type Params = { sessionId: string }
 
@@ -36,6 +36,18 @@ export async function GET(
     if (isDev) {
       console.warn('[seats]', { raw, id, len: id.length, forceEnsure, url: request.url })
     }
+
+    // AUDIT LOG: Check availability
+    const auditInfo = {
+      action: 'CHECK_AVAILABILITY',
+      sessionId: id,
+      timestamp: new Date().toISOString(),
+      userAgent: request.headers.get('user-agent'),
+      ip: request.headers.get('x-forwarded-for') || 'unknown',
+    }
+    // We use console.log for high-frequency read audits to avoid DB spam, 
+    // unless a specific requirement demands DB storage for every read.
+    if (isDev) console.log('[AUDIT_READ]', JSON.stringify(auditInfo))
 
     if (!isUuid) {
       return NextResponse.json(

@@ -1,13 +1,17 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
 import { PurchaseWarningModal } from '@/components/PurchaseWarningModal'
+import { useCheckoutTimer } from '@/components/flow'
 
 export default function PreOrderPage() {
+  const router = useRouter()
+  const { startTimer } = useCheckoutTimer()
   const [showWarningModal, setShowWarningModal] = useState(false)
 
   const notices = [
@@ -22,6 +26,12 @@ export default function PreOrderPage() {
 
   const handleModalTimeout = () => {
     setShowWarningModal(false)
+  }
+
+  const handleModalContinue = () => {
+    setShowWarningModal(false)
+    startTimer()
+    router.push('/location')
   }
 
   return (
@@ -95,7 +105,13 @@ export default function PreOrderPage() {
         </div>
       </div>
 
-      <PurchaseWarningModal open={showWarningModal} onTimeout={handleModalTimeout} />
+      {showWarningModal ? (
+        <PurchaseWarningModal
+          open
+          onTimeout={handleModalTimeout}
+          onContinue={handleModalContinue}
+        />
+      ) : null}
     </div>
   )
 }

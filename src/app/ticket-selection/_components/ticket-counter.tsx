@@ -1,8 +1,8 @@
-﻿'use client'
+'use client'
 
 import { Button } from '@/components/ui/button'
 import { Minus, Plus } from 'lucide-react'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatCurrencyForDisplay } from '@/lib/utils'
 
 interface TicketCounterProps {
   label: string
@@ -32,12 +32,12 @@ export function TicketCounter({
       <div className="flex items-center justify-between">
         <h4 className="text-base font-semibold text-white">{label}</h4>
         <div className="bg-gray-800 text-white px-3 py-1 rounded-full text-xs font-semibold">
-          {formatCurrency(price)}
+          {formatCurrencyForDisplay(price)}
         </div>
       </div>
 
       {isVip ? (
-        <div className="my-3 -mx-4 h-1 w-[calc(100%+2rem)] bg-linear-to-r from-purple-500 via-blue-500 to-yellow-500" />
+        <div className="my-3 -mx-4 h-1 w-[calc(100%+2rem)] bg-linear-to-r from-purple-500 via-blue-500 to-blue-300" />
       ) : (
         <div className="my-3 h-px w-full bg-white/10" />
       )}

@@ -43,7 +43,6 @@ export default function RootLayout({
           <CheckoutTimerProvider>
             <div className="relative z-10">
               <Header />
-              <PurchaseTimerBanner />
               <main>
                 {children}
               </main>

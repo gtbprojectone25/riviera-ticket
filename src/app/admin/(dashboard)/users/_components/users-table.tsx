@@ -2,11 +2,10 @@ import { db } from '@/db'
 import { users, tickets } from '@/db/schema'
 import { desc, eq, count } from 'drizzle-orm'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Eye, Ban, User } from 'lucide-react'
-import Link from 'next/link'
+import { User } from 'lucide-react'
+import { UserActions } from './user-actions'
 
 type UserRow = typeof users.$inferSelect
 
@@ -111,16 +110,7 @@ export async function UsersTable() {
                     </p>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex items-center justify-end gap-2">
-                      <Link href={`/admin/users/${user.id}`}>
-                        <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </Link>
-                      <Button variant="ghost" size="sm" className="text-gray-400 hover:text-red-500">
-                        <Ban className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    <UserActions userId={user.id} userName={`${user.name} ${user.surname}`} />
                   </td>
                 </tr>
               ))

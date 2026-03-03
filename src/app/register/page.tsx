@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ChevronLeft, Eye, EyeOff, Check, Lock } from 'lucide-react'
+import { PurchaseTimerBanner } from '@/components/flow'
 
 type AuthStep = 'info' | 'password' | 'verify' | 'encrypting' | 'success'
 
@@ -251,10 +252,34 @@ function RegisterContent() {
     }
   }
 
+  const BackButton = () => (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => {
+        if (currentStep === 'info') {
+          router.back()
+        } else {
+          const steps: AuthStep[] = ['info', 'password', 'verify', 'encrypting', 'success']
+          const currentIndex = steps.indexOf(currentStep)
+          if (currentIndex > 0) {
+            setCurrentStep(steps[currentIndex - 1])
+          }
+        }
+      }}
+      className="text-white hover:bg-gray-800 p-0 h-8 w-8 shrink-0"
+    >
+      <ChevronLeft className="w-5 h-5" />
+    </Button>
+  )
+
   // Render Step 1: Info
   const renderInfoStep = () => (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-white">Your information</h2>
+      <div className="flex items-center gap-2">
+        <BackButton />
+        <h2 className="text-2xl font-bold text-white">Your information</h2>
+      </div>
 
       <div className="space-y-5">
         {error && (
@@ -305,34 +330,17 @@ function RegisterContent() {
         </Button>
       </div>
 
-      {/* Encryption Info */}
-      <div className="mt-8 space-y-2">
-        <div className="flex items-start gap-2">
-          <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-0.5">
-            <Check className="w-3 h-3 text-white" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-white mb-2">Advanced End-to-End Encryption</h3>
-            <p className="text-xs text-gray-400 leading-relaxed">
-              In today’s digital world, privacy is not optional - it’s essential. That’s why we use advanced end-to-end encryption, powered by cutting-edge security technologies.
-            </p>
-            <p className="text-xs text-gray-400 leading-relaxed mt-2">
-              Unlike basic encryption methods, our system locks your data at the source and ensures it can only be unlocked by the intended recipient.
-              Not even we can access it.
-              Every message, file, and transaction is protected using the same cryptographic protocols trusted by global banks, government agencies, and cybersecurity leaders.
-              Block 6 - Loading Status:
-              Encrypting data...
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Encryption Info - REMOVED */}
     </div>
   )
 
   // Render Step 3: Password
   const renderPasswordStep = () => (
     <div className="space-y-6">
-      <div className="text-center space-y-2">
+      <div className="relative text-center space-y-2">
+        <div className="absolute left-0 top-0">
+          <BackButton />
+        </div>
         <h2 className="text-2xl font-bold text-white">Enter a secure password</h2>
         <p className="text-sm text-gray-400">
           Your password must meet the security requirements; remember to write it down so you don’t forget it.
@@ -411,30 +419,17 @@ function RegisterContent() {
         </Button>
       </div>
 
-      {/* Encryption Info */}
-      <div className="mt-8 space-y-2">
-        <div className="flex items-start gap-2">
-          <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-0.5">
-            <Check className="w-3 h-3 text-white" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-white mb-2">Advanced End-to-End Encryption</h3>
-            <p className="text-xs text-gray-400 leading-relaxed">
-              In today’s digital world, privacy is not optional - it’s essential. That’s why we use advanced end-to-end encryption, powered by cutting-edge security technologies.
-            </p>
-            <p className="text-xs text-gray-400 leading-relaxed mt-2">
-              Unlike basic encryption methods, our system locks your data at the source and ensures it can only be unlocked by the intended recipient. Not even we can access it. Every message, file, and transaction is protected using the same cryptographic protocols trusted by global banks, government agencies, and cybersecurity leaders.
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Encryption Info - REMOVED */}
     </div>
   )
 
   // Render Step 4: Verify
   const renderVerifyStep = () => (
     <div className="space-y-6">
-      <div className="text-center space-y-2">
+      <div className="relative text-center space-y-2">
+        <div className="absolute left-0 top-0">
+          <BackButton />
+        </div>
         <h2 className="text-2xl font-bold text-white">Confirm your email</h2>
         <p className="text-sm text-gray-400">
           we sent a 5-digit confirmation code to <span className="text-white font-medium">{email}</span>. Please check your inbox and verify the code.
@@ -483,23 +478,7 @@ function RegisterContent() {
         </p>
       </div>
 
-      {/* Encryption Info */}
-      <div className="mt-8 space-y-2">
-        <div className="flex items-start gap-2">
-          <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center shrink-0 mt-0.5">
-            <Check className="w-3 h-3 text-white" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-white mb-2">Advanced end-to-end encryption</h3>
-            <p className="text-xs text-gray-400 leading-relaxed">
-              In today&apos;s digital world, privacy isn&apos;t optional - it&apos;s essential. That&apos;s why we implement advanced end-to-end encryption powered by state-of-the-art security technologies.
-            </p>
-            <p className="text-xs text-gray-400 leading-relaxed mt-2">
-              Unlike basic encryption methods, our system ensures that your data is locked at the source and only unlocked by its rightful recipient. Not even we can access it. Every message, file, or transaction is shielded with cutting-edge cryptographic protocols - the same level of protection trusted by global banks, governments, and cybersecurity leaders.
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Encryption Info - REMOVED */}
     </div>
   )
 
@@ -532,15 +511,7 @@ function RegisterContent() {
         </div>
       </div>
 
-      {/* Encryption Info */}
-      <div className="mt-8 space-y-2">
-        <div className="flex items-center gap-2 justify-center">
-          <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
-            <Check className="w-3 h-3 text-white" />
-          </div>
-          <h3 className="text-sm font-semibold text-white">Advanced Encryption</h3>
-        </div>
-      </div>
+      {/* Encryption Info - REMOVED */}
     </div>
   )
 
@@ -562,32 +533,15 @@ function RegisterContent() {
   return (
     <div className="min-h-screen  text-white flex flex-col items-center justify-start py-10 px-4">
       <div className="w-full max-w-md">
-        <div className="bg-[#111827] rounded-3xl p-8 border border-white/5 shadow-xl">
-        <div className="flex items-center justify-start mb-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              if (currentStep === 'info') {
-                router.back()
-              } else {
-                const steps: AuthStep[] = ['info', 'password', 'verify', 'encrypting', 'success']
-                const currentIndex = steps.indexOf(currentStep)
-                if (currentIndex > 0) {
-                  setCurrentStep(steps[currentIndex - 1])
-                }
-              }
-            }}
-            className="text-white hover:bg-gray-800"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-        </div>
+        <div className="bg-[#111827] relative rounded-3xl border border-white/5 shadow-xl overflow-hidden">
+        <PurchaseTimerBanner />
+        <div className="p-8">
           {currentStep === 'info' && renderInfoStep()}
           {currentStep === 'password' && renderPasswordStep()}
           {currentStep === 'verify' && renderVerifyStep()}
           {currentStep === 'encrypting' && renderEncryptingStep()}
           {currentStep === 'success' && renderSuccessStep()}
+        </div>
         </div>
       </div>
     </div>

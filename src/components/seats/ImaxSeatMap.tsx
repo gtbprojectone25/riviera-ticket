@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Accessibility, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
@@ -44,11 +44,15 @@ function isSeatTypeAllowed(type: string, allowedTypes: string[]) {
 }
 
 function seatVisual(node: SeatRenderNode) {
-  if (node.status === 'SOLD') return { bg: 'bg-zinc-800', fg: 'text-zinc-300', blocked: true }
+  // Fix: Check for SOLD status first and force it
+  if (node.status === 'SOLD' || (node.status as string) === 'sold') {
+    return { bg: 'bg-zinc-800', fg: 'text-zinc-600', blocked: true }
+  }
   if (node.status === 'HELD') return { bg: 'bg-zinc-500', fg: 'text-zinc-100', blocked: true }
-  if (node.type === 'VIP') return { bg: 'bg-violet-600', fg: 'text-violet-100', blocked: false }
-  if (node.type === 'WHEELCHAIR') return { bg: 'bg-sky-700', fg: 'text-sky-100', blocked: false }
-  return { bg: 'bg-sky-500', fg: 'text-sky-100', blocked: false }
+  if (node.type === 'VIP') return { bg: 'bg-[#8B5CF6]', fg: 'text-white', blocked: false } // Bright Violet
+  if (node.type === 'WHEELCHAIR') return { bg: 'bg-[#0369A1]', fg: 'text-white', blocked: false } // Sky 700
+  if (node.type === 'STANDARD') return { bg: 'bg-[#0EA5E9]', fg: 'text-white', blocked: false } // Sky 500
+  return { bg: 'bg-[#0EA5E9]', fg: 'text-white', blocked: false } // Default to Standard/Sky 500
 }
 
 const SeatButton = memo(function SeatButton({
@@ -95,16 +99,26 @@ const SeatButton = memo(function SeatButton({
       onClick={() => onToggle(node.seatId)}
       className={[
         'absolute flex h-4 w-4 items-center justify-center rounded-[3px] border border-black/30 text-[8px] font-semibold transition',
-        selected ? 'bg-orange-400 text-zinc-950' : disabled ? 'bg-zinc-700 text-zinc-200' : visual.bg,
-        selected ? '' : visual.fg,
-        disabled ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:brightness-110',
+        selected
+          ? 'bg-orange-400 text-zinc-950'
+          : (disabledReason === 'SOLD' || node.status === 'SOLD' || (node.status as string) === 'sold')
+            ? 'bg-zinc-800 text-zinc-600 opacity-20'
+            : disabledReason === 'HELD'
+              ? 'bg-zinc-500 text-zinc-100'
+              : disabled
+                ? 'bg-zinc-900 text-zinc-500'
+                : visual.bg,
+        selected || disabled ? '' : visual.fg,
+        disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:brightness-110',
         selected ? 'ring-2 ring-amber-300 ring-offset-1 ring-offset-zinc-950' : '',
       ].join(' ')}
       style={{
         transform: `translate(${node.x}px, ${node.y}px)`,
       }}
     >
-      {node.type === 'WHEELCHAIR' ? <Accessibility className="h-2.5 w-2.5" aria-hidden="true" /> : null}
+      {disabledReason !== 'SOLD' && node.type === 'WHEELCHAIR' ? (
+        <Accessibility className="h-2.5 w-2.5" aria-hidden="true" />
+      ) : null}
     </button>
   )
 })
@@ -508,9 +522,11 @@ export function ImaxSeatMap({
                   ? 'SOLD'
                   : node.status === 'HELD'
                     ? 'HELD'
-                    : !fallbackAllowed
-                      ? 'NO_SLOT'
-                      : null
+                    : disabled
+                      ? (fallbackAllowed ? null : 'NO_SLOT') // Fix: don't show NO_SLOT if disabled for other reasons
+                      : !fallbackAllowed
+                        ? 'NO_SLOT'
+                        : null
               return (
                 <SeatButton
                   key={node.seatId}
@@ -537,20 +553,20 @@ export function ImaxSeatMap({
           <LegendItem className="bg-violet-600" label="Available (VIP)" />
           <LegendItem className="bg-sky-500" label="Available (Standard)" />
           <LegendItem className="bg-orange-500" label="Selected" />
-          <LegendItem className="bg-zinc-700" label="Unavailable" />
+          <LegendItem className="bg-zinc-800" label="Unavailable" />
           <LegendItem className="bg-zinc-500" label="Reserved" />
           <LegendItem className="bg-sky-700" label="Wheelchair Accessible" icon={<Accessibility className="h-3.5 w-3.5 text-white" />} />
         </div>
       </details>
 
       <div className="hidden sm:grid grid-cols-2 gap-2 text-[11px] text-zinc-300 lg:grid-cols-3">
-        <LegendItem className="bg-violet-600" label="Available (VIP)" />
-        <LegendItem className="bg-sky-500" label="Available (Standard)" />
+        <LegendItem className="bg-[#8B5CF6]" label="Available (VIP)" />
+        <LegendItem className="bg-[#0EA5E9]" label="Available (Standard)" />
         <LegendItem className="bg-orange-500" label="Selected" />
-        <LegendItem className="bg-zinc-700" label="Unavailable" />
+        <LegendItem className="bg-zinc-800" label="Unavailable" />
         <LegendItem className="bg-zinc-500" label="Reserved" />
         
-        <LegendItem className="bg-sky-700" label="Wheelchair Accessible" icon={<Accessibility className="h-3.5 w-3.5 text-white" />} />
+        <LegendItem className="bg-[#0369A1]" label="Wheelchair Accessible" icon={<Accessibility className="h-3.5 w-3.5 text-white" />} />
       </div>
 
       <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-3">

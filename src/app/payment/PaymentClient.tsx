@@ -11,6 +11,7 @@ import { formatCurrency } from '@/lib/utils'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements } from '@stripe/react-stripe-js'
 import { StripeCheckoutForm } from './StripeCheckoutForm'
+import { PurchaseTimerBanner } from '@/components/flow'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '')
 
@@ -239,7 +240,9 @@ export default function PaymentClient() {
         </div>
 
         <div className="container mx-auto px-4 pb-8 max-w-md relative z-10 space-y-5">
-          <div className="bg-zinc-800/90 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.45)] p-5">
+          <div className="bg-zinc-800/90 relative rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.45)] overflow-hidden">
+            <PurchaseTimerBanner />
+            <div className="p-5">
             <h2 className="text-lg font-semibold text-white mb-3">Order Summary</h2>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-white/80">
@@ -264,6 +267,7 @@ export default function PaymentClient() {
                 </span>
               </div>
             </div>
+          </div>
           </div>
 
           <div className="bg-zinc-800/90 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.45)] p-5 space-y-4">

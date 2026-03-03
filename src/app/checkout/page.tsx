@@ -13,6 +13,7 @@ import {
   BuyerGuarantee,
 } from './_components/premium-summary'
 import { formatCurrency } from '@/lib/utils'
+import { PurchaseTimerBanner } from '@/components/flow'
 
 type SessionApi = {
   id: string
@@ -71,6 +72,17 @@ export default function CheckoutPage() {
     .map((t) => t.assignedSeatId)
     .filter(Boolean) as string[]
 
+  const selectedSeatLabels = useMemo(() => {
+    if (selectedSeatIds.length === 0) return []
+    const allSeats = seatRows.flatMap((r) => r.seats)
+    return selectedSeatIds
+      .map((id) => {
+        const seat = allSeats.find((s) => s.id === id)
+        return seat?.seatId ?? seat?.seat_id ?? id
+      })
+      .filter(Boolean)
+  }, [selectedSeatIds, seatRows])
+
   const summaryTickets = useMemo(() => {
     const grouped = finalizedTickets.reduce<
       Record<string, { id: string; name: string; price: number; amount: number }>
@@ -115,7 +127,9 @@ export default function CheckoutPage() {
 
       <div className="relative z-10 flex flex-col items-center min-h-screen pt-6">
         
-        <div className="w-full max-w-md space-y-6 relative rounded-xl p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)] pb-32">
+        <div className="w-full max-w-md relative rounded-xl bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)] overflow-hidden">
+          <PurchaseTimerBanner />
+          <div className="space-y-6 p-6 pb-32">
           {/* Back Button */}
           <button
             onClick={() => router.back()}
@@ -202,7 +216,7 @@ export default function CheckoutPage() {
                 Your Accent
               </h3>
               <p className="text-base text-white font-bold">
-                {selectedSeatIds.join(' | ')}
+                {selectedSeatLabels.join(' | ')}
               </p>
             </div>
 
@@ -244,6 +258,7 @@ export default function CheckoutPage() {
             >
               Go to payment {formatCurrency(totalAmountCents)}
             </Button>
+          </div>
           </div>
         </div>
       </div>
