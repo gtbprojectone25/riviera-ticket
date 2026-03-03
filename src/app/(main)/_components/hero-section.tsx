@@ -316,8 +316,8 @@ export function HeroSection() {
         </div>
 
 
-        <div className="mt-8 text-center sm:mt-[10px]">
-        <p className="text-[25px] font-extrabold uppercase tracking-[0.40em] text-[#db3636] sm:text-2xl mt-[-20px] ">07.17.26</p>
+        <div className="mt-8 text-center sm:mt-2.5">
+        <p className="text-[25px] font-extrabold uppercase tracking-[0.40em] text-[#db3636] sm:text-2xl mt-2 ">07.17.26</p>
         <p className="text-[10px] uppercase tracking-[0.35em] text-[#FFFFFF] mt-1.5 p-1">SHOT ENTIRELY WITH IMAX FILM CAMERAS</p>
         </div>
 

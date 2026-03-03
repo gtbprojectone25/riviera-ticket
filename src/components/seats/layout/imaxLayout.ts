@@ -142,46 +142,61 @@ function pushBlockNodes(
   rowLabel: string,
   rowIndex: number,
   rowY: number,
-  scale: number,
+  _ignoredScale: number,
   blocks: RowBlocks,
 ) {
+  // Use a fixed array length reference (e.g. 14 rows) to stabilize scale progression
+  // or pass totalRows from buildImaxLayout
+  const scale = lerp(0.92, 1.06, rowIndex / 14) 
   const step = SEAT_UNIT * scale
   const gap = 4 * scale
   const corridor = 24 * scale
   const margin = SIDE_MARGIN * scale
-  const seatVisual = 14 * scale
   const rowHeight = 18 * scale
 
-  const leftWidth = blocks.left.length > 0 ? blocks.left.length * step + Math.max(0, blocks.left.length - 1) * gap : 0
-  const centerWidth = blocks.center.length > 0 ? blocks.center.length * step + Math.max(0, blocks.center.length - 1) * gap : 0
-  const rightWidth = blocks.right.length > 0 ? blocks.right.length * step + Math.max(0, blocks.right.length - 1) * gap : 0
+  // Calculate total width first to center everything
+  const getBlockWidth = (items: RowSlot[]) => 
+    items.length > 0 ? items.length * step + Math.max(0, items.length - 1) * gap : 0
 
-  const corridorCount = blocks.center.length > 0 ? 2 : blocks.right.length > 0 ? 1 : 0
-  const innerCorridorTotal = corridorCount * corridor
-  const totalWidth = margin + leftWidth + innerCorridorTotal + centerWidth + rightWidth + margin
-  let cursorX = -totalWidth / 2 + margin
+  const leftWidth = getBlockWidth(blocks.left)
+  const centerWidth = getBlockWidth(blocks.center)
+  const rightWidth = getBlockWidth(blocks.right)
+
+  // Determine number of corridors based on which blocks exist
+  let currentCorridors = 0
+  if (blocks.left.length > 0 && (blocks.center.length > 0 || blocks.right.length > 0)) currentCorridors++
+  if (blocks.center.length > 0 && blocks.right.length > 0) currentCorridors++
+  
+  const totalContentWidth = leftWidth + centerWidth + rightWidth + (currentCorridors * corridor)
+  let cursorX = -totalContentWidth / 2
 
   const placeBlock = (
-    block: 'LEFT' | 'CENTER' | 'RIGHT',
+    blockType: 'LEFT' | 'CENTER' | 'RIGHT',
     items: RowSlot[],
   ) => {
     if (items.length === 0) return
 
-    const blockStart = cursorX
-    const blockWidth = items.length * step + Math.max(0, items.length - 1) * gap
+    const blockWidth = getBlockWidth(items)
+    
+    // Debug info
     acc.blockDebugNodes.push({
-      id: `${rowLabel}-${block}`,
+      id: `${rowLabel}-${blockType}`,
       row: rowLabel,
-      block,
-      x: blockStart,
-      y: rowY - rowHeight * 0.65,
+      block: blockType,
+      x: cursorX,
+      y: rowY - rowHeight * 0.5,
       width: blockWidth,
-      height: rowHeight * 1.2,
+      height: rowHeight,
     })
 
     items.forEach((seat, index) => {
-      const xBase = blockStart + index * (step + gap) + step / 2
-      const xNorm = totalWidth === 0 ? 0 : xBase / (totalWidth / 2)
+      // Position seat relative to start of block
+      const xOffset = index * (step + gap) + (step / 2)
+      const xBase = cursorX + xOffset
+      
+      // Calculate curve effect based on distance from center (0)
+      // Normalize x to -1...1 range roughly for curve calc
+      const xNorm = xBase / 400 
       const yCurve = CURVE_STRENGTH * (xNorm * xNorm) * scale
       const y = rowY + yCurve
 
@@ -208,21 +223,13 @@ function pushBlockNodes(
     cursorX += blockWidth
   }
 
-  acc.spacerNodes.push({
-    id: `${rowLabel}-margin-left`,
-    row: rowLabel,
-    kind: 'margin',
-    x: -totalWidth / 2,
-    y: rowY - rowHeight / 2,
-    width: margin,
-    height: rowHeight,
-  })
-
+  // Place LEFT block
   placeBlock('LEFT', blocks.left)
 
-  if (blocks.center.length > 0 || blocks.right.length > 0) {
+  // Add corridor after LEFT if there are more blocks
+  if (blocks.left.length > 0 && (blocks.center.length > 0 || blocks.right.length > 0)) {
     acc.spacerNodes.push({
-      id: `${rowLabel}-corridor-main-a`,
+      id: `${rowLabel}-corridor-1`,
       row: rowLabel,
       kind: 'corridor',
       x: cursorX,
@@ -233,11 +240,13 @@ function pushBlockNodes(
     cursorX += corridor
   }
 
+  // Place CENTER block
   placeBlock('CENTER', blocks.center)
 
+  // Add corridor after CENTER if there is RIGHT block
   if (blocks.center.length > 0 && blocks.right.length > 0) {
     acc.spacerNodes.push({
-      id: `${rowLabel}-corridor-main-b`,
+      id: `${rowLabel}-corridor-2`,
       row: rowLabel,
       kind: 'corridor',
       x: cursorX,
@@ -248,33 +257,8 @@ function pushBlockNodes(
     cursorX += corridor
   }
 
+  // Place RIGHT block
   placeBlock('RIGHT', blocks.right)
-
-  acc.spacerNodes.push({
-    id: `${rowLabel}-margin-right`,
-    row: rowLabel,
-    kind: 'margin',
-    x: totalWidth / 2 - margin,
-    y: rowY - rowHeight / 2,
-    width: margin,
-    height: rowHeight,
-  })
-
-  const corridorHeight = ROW_STEP * 0.95
-  acc.spacerNodes.forEach((node) => {
-    if (node.row === rowLabel && node.kind === 'corridor') {
-      node.height = corridorHeight
-      node.y = rowY - corridorHeight / 2
-    }
-  })
-
-  const seatHalf = seatVisual / 2
-  acc.seatNodes.forEach((node) => {
-    if (node.row === rowLabel) {
-      node.x = Number(node.x.toFixed(3))
-      node.y = Number((node.y - seatHalf).toFixed(3))
-    }
-  })
 }
 
 export function buildImaxLayout(rowsInput: ImaxSeatRowInput[]): ImaxLayoutResult {
@@ -285,10 +269,11 @@ export function buildImaxLayout(rowsInput: ImaxSeatRowInput[]): ImaxLayoutResult
   const blockDebugNodes: BlockDebugNode[] = []
 
   rows.forEach((row, rowIndex) => {
-    const t = rows.length <= 1 ? 1 : rowIndex / (rows.length - 1)
-    const scale = lerp(FRONT_SCALE, BACK_SCALE, t)
     const rowY = rowIndex * ROW_STEP
+    // Sort seats by number to ensure correct order 1, 2, 3...
     const slots = sortSeatsByNumber(row.seats)
+    
+    // Split into visual blocks (aisles)
     const blocks = inferBlocks(slots)
 
     pushBlockNodes(
@@ -296,27 +281,29 @@ export function buildImaxLayout(rowsInput: ImaxSeatRowInput[]): ImaxLayoutResult
       row.label,
       rowIndex,
       rowY,
-      scale,
+      0, // scale passed inside function now based on row index logic
       blocks,
     )
 
-    rowLabelNodes.push({
-      row: row.label,
-      x: Math.min(...seatNodes.filter((s) => s.row === row.label).map((s) => s.x), -180) - 18,
-      y: rowY,
-    })
+    // Add row label to the left of the leftmost seat
+    const rowSeats = seatNodes.filter(s => s.row === row.label)
+    if (rowSeats.length > 0) {
+      const minRowX = Math.min(...rowSeats.map(s => s.x))
+      rowLabelNodes.push({
+        row: row.label,
+        x: minRowX - 30, // 30px padding to left
+        y: rowY,
+      })
+    }
   })
 
+  // Calculate bounds
   const allX = [
     ...seatNodes.map((n) => n.x),
-    ...spacerNodes.map((n) => n.x),
-    ...spacerNodes.map((n) => n.x + n.width),
     ...rowLabelNodes.map((n) => n.x),
   ]
   const allY = [
     ...seatNodes.map((n) => n.y),
-    ...spacerNodes.map((n) => n.y),
-    ...spacerNodes.map((n) => n.y + n.height),
     ...rowLabelNodes.map((n) => n.y),
   ]
 
@@ -331,12 +318,12 @@ export function buildImaxLayout(rowsInput: ImaxSeatRowInput[]): ImaxLayoutResult
     rowLabelNodes,
     blockDebugNodes,
     bounds: {
-      minX,
-      maxX,
-      minY,
-      maxY,
-      width: Math.max(0, maxX - minX),
-      height: Math.max(0, maxY - minY),
+      minX: minX - 20, // Add some padding
+      maxX: maxX + 20,
+      minY: minY - 20,
+      maxY: maxY + 20,
+      width: Math.max(0, maxX - minX) + 40,
+      height: Math.max(0, maxY - minY) + 40,
     },
   }
 }

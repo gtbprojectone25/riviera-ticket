@@ -22,7 +22,14 @@ export function toSeatStateDTO(seat: SeatRow, now = new Date()): SeatStateDTO {
   const isSold =
     seat.status === 'SOLD' ||
     Boolean(seat.soldAt) ||
-    Boolean(seat.soldCartId)
+    Boolean(seat.soldCartId) ||
+    // Check if soldCartId is a valid UUID string (not empty/null)
+    (typeof seat.soldCartId === 'string' && seat.soldCartId.length > 0)
+
+  // Debug specific seats for TCL (H-19, H-20, J-17, J-18)
+  if (['H-19', 'H-20', 'J-17', 'J-18'].includes(seat.seatId)) {
+    console.log(`[DEBUG_SEAT] ${seat.seatId}: status=${seat.status}, soldAt=${seat.soldAt}, soldCartId=${seat.soldCartId}, isSold=${isSold}`)
+  }
 
   const isHeldActive =
     !isSold &&

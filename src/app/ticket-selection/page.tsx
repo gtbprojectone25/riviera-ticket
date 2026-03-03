@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
@@ -11,6 +11,7 @@ import { ChevronLeft } from 'lucide-react'
 import { TicketCounter } from './_components/ticket-counter'
 import { TicketSummary } from './_components/ticket-summary'
 import { SessionSelector } from './_components/session-selector'
+import { PurchaseTimerBanner } from '@/components/flow'
 
 // Store e tipos
 import { useBookingStore, type SelectedTicket } from '@/stores/booking'
@@ -115,7 +116,7 @@ export default function TicketSelectionPage() {
       id: 'vip',
       name: 'VIP',
       price: 44900,
-      description: ['TICKET VIP Center-Optic Premium Seat','Priority Entry Lane', 'Spartan Helmet Lego Limited ', 'Collectible Commemorative Ticket','Official Launch Poster','Commander’s Insignia (Enamel Pin)','VIP Access Wristband'],
+      description: ['TICKET VIP Center-Optic Premium Seat', 'TICKET VIP IMAX 70mm Seat', 'Priority Entry Lane', 'Spartan Helmet Lego Limited ', 'Collectible Commemorative Ticket', 'Official Launch Poster', 'Commander’s Insignia (Enamel Pin)', 'VIP Access Wristband'],
       amount: 0,
     },
     {
@@ -359,7 +360,9 @@ export default function TicketSelectionPage() {
   return (
     <div className="min-h-screen text-white relative overflow-hidden ">
       <div className="relative z-10 flex flex-col items-center justify-center min-h-[calc(100vh-100px)] pt-8 ">
-        <div className="w-full max-w-md rounded-xl mx-4 space-y-6 p-6 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)]">
+        <div className="w-full max-w-md rounded-xl mx-4 bg-[linear-gradient(to_top,#050505_0%,#080808_25%,#0A0A0A_45%,#0D0D0D_65%,#111111_80%,#181818_100%)] overflow-hidden">
+          <PurchaseTimerBanner />
+          <div className="space-y-6 p-6">
           {/* Header */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -493,6 +496,7 @@ export default function TicketSelectionPage() {
 
           <div className="text-center text-sm text-gray-500 pb-4 opacity-50">
             Secure Checkout provided by Riviera
+          </div>
           </div>
         </div>
       </div>

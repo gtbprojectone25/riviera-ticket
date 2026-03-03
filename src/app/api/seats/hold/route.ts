@@ -1,9 +1,10 @@
-﻿import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/db'
 import { carts, cartItems, seats } from '@/db/schema'
 import { and, eq, inArray } from 'drizzle-orm'
 import { bindActiveQueueEntryToCart, holdSeats } from '@/db/queries'
+import { writeAuditLog } from '@/lib/audit-log'
 import type { HoldSeatsResult } from '@/lib/seat-reservation'
 
 const QUEUE_SCOPE_KEY = 'the-odyssey-global'
@@ -177,6 +178,14 @@ export async function POST(request: NextRequest) {
       })
 
     if ('ok' in holdResult && holdResult.ok === false) {
+      await writeAuditLog({
+        adminId: null,
+        action: 'SEAT_HOLD_FAILED',
+        entity: 'seats',
+        newValues: { error: holdResult.error, failedSeatIds: parsed.seatIds },
+        ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
+        userAgent: request.headers.get('user-agent'),
+      })
       return NextResponse.json(
         { ok: false, error: holdResult.error, failedSeatIds: parsed.seatIds },
         { status: holdResult.status },
@@ -208,6 +217,16 @@ export async function POST(request: NextRequest) {
       console.debug('[seats/hold] success', { heldSeatIds, cartId: successHold.cartId })
     }
 
+    await writeAuditLog({
+      adminId: null,
+      action: 'SEAT_HOLD_SUCCESS',
+      entity: 'seats',
+      entityId: successHold.cartId,
+      newValues: { heldSeatIds, cartId: successHold.cartId, heldUntil: successHold.hold.heldUntil },
+      ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
+      userAgent: request.headers.get('user-agent'),
+    })
+
     return NextResponse.json({
       ok: true,
       cartId: successHold.cartId,
@@ -223,6 +242,16 @@ export async function POST(request: NextRequest) {
       )
     }
     console.error('Erro ao segurar assentos:', error)
+    
+    await writeAuditLog({
+      adminId: null,
+      action: 'SEAT_HOLD_ERROR',
+      entity: 'seats',
+      newValues: { error: error instanceof Error ? error.message : 'Unknown error' },
+      ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
+      userAgent: request.headers.get('user-agent'),
+    })
+
     return NextResponse.json(
       { ok: false, error: 'INTERNAL_ERROR' },
       { status: 500 },
