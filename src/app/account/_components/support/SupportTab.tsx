@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Loader2, RefreshCw } from 'lucide-react'
+import { Plus, Loader2, RefreshCw, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useSupportTickets } from '@/hooks/use-support-tickets'
 import { TicketList } from './TicketList'
@@ -11,13 +11,14 @@ import type { SupportTicket, TicketMessage } from '@/db/schema'
 
 type Props = {
   token: string | null
+  onExit?: () => void
 }
 
 type View =
   | { kind: 'list' }
   | { kind: 'detail'; ticket: SupportTicket; messages: TicketMessage[]; detailLoading: boolean }
 
-export function SupportTab({ token }: Props) {
+export function SupportTab({ token, onExit }: Props) {
   const { tickets, status, error, createTicket, fetchTicket, sendMessage, reload } =
     useSupportTickets(token, true)
 
@@ -52,9 +53,20 @@ export function SupportTab({ token }: Props) {
     <div className="relative z-10 pt-2 space-y-4">
       {/* Toolbar */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">
-          {view.kind === 'detail' ? 'Ticket details' : 'Support'}
-        </h2>
+        <div className="flex items-center gap-2">
+          {view.kind === 'list' && onExit && (
+            <button
+              onClick={onExit}
+              className="text-gray-400 hover:text-white transition-colors"
+              aria-label="Back to Support Center"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          )}
+          <h2 className="text-lg font-semibold text-white">
+            {view.kind === 'detail' ? 'Ticket details' : 'Support'}
+          </h2>
+        </div>
         <div className="flex items-center gap-2">
           {view.kind === 'list' && (
             <Button

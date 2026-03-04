@@ -35,9 +35,8 @@ class BarcodeService {
     } = options
 
     try {
-      // bwip-js no Node.js - usar toBuffer diretamente
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const barcodeBuffer = await bwipjs.toBuffer({
+      // bwip-js no Node.js - usar toBuffer diretamente (tipar como any para evitar conflito com build/browser)
+      const barcodeBuffer = await (bwipjs as unknown as any).toBuffer({
         bcid: 'code128', // Barcode type
         text: data,
         scale: 3,
