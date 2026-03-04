@@ -127,6 +127,7 @@ export async function GET(request: NextRequest) {
           movieTitle: order.movieTitle ?? 'Session',
           cinemaName: order.cinemaName ?? 'Riviera',
           cinemaAddress: order.cinemaAddress ?? null,
+          cinemaCity: order.cinemaAddress?.split(',')?.[2]?.trim() ?? null,
           checkoutSessionId:
             order.checkoutSessionId ||
             extractCheckoutSessionIdFromMetadata(order.metadata) ||

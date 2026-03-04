@@ -6,9 +6,6 @@ import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
 
 import { useAuth } from '@/context/auth'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 
 export default function LoginPage() {
   return (
@@ -89,91 +86,78 @@ function LoginPageContent() {
   }
 
   return (
-    <div className="min-h-screen  text-white flex flex-col items-center justify-start py-10 px-4">
-      <div className="w-full max-w-md">
-        <div className="bg-[#111827] rounded-3xl p-8 shadow-xl border border-white/5">
-          <h1 className="text-center text-xl sm:text-2xl font-bold mb-6">
-            Create an account or log in
-          </h1>
+    <div className="riviera-login-screen">
+      <div className="login-wrap">
+        <div className="login-logo">RIVIERA</div>
+        <div className="imax-badge">
+          <span>OFFICIAL PARTNER</span>
+          <strong>IMAX</strong>
+        </div>
 
-          <form className="space-y-5" onSubmit={handleSubmit}>
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm text-gray-300">
-                E-mail
-              </Label>
-              <Input
-                id="email"
+        <div className="login-card animate-in">
+          <h2>WELCOME BACK</h2>
+          <p>Sign in to manage your tickets and reservations</p>
+
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label>E-mail</label>
+              <input
                 type="email"
-                placeholder="enter your email"
+                placeholder="your@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="bg-[#1F2933] border border-white/10 text-white placeholder:text-gray-500"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm text-gray-300">
-                Senha
-              </Label>
-              <Input
-                id="password"
+            <div className="form-group">
+              <label>Password</label>
+              <input
                 type="password"
-                placeholder="digite sua senha"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="bg-[#1F2933] border border-white/10 text-white placeholder:text-gray-500"
               />
+            </div>
+
+            <div className="forgot">
+              <Link href="#">Forgot password?</Link>
             </div>
 
             {error && (
-              <p className="text-red-400 text-sm text-center">{error}</p>
+              <p className="text-riv-red text-sm text-center mb-4">{error}</p>
             )}
 
-            <Button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white py-3 text-base font-semibold rounded-xl"
-            >
+            <button type="submit" className="btn-primary" disabled={loading}>
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Logging in...
                 </span>
               ) : (
-                'Login'
+                'Sign In'
               )}
-            </Button>
-
-            <p className="text-center text-sm text-gray-400">
-              Don’t have an account?{' '}
-              <Link
-                href={`/register?returnUrl=${encodeURIComponent(getSafeReturnTo())}`}
-                className="text-blue-400 hover:underline"
-              >
-                Tap to create account
-              </Link>
-            </p>
+            </button>
           </form>
 
-          <div className="mt-6 text-center text-xs text-gray-500 space-y-2 max-w-2xl mx-auto">
-            <div className="flex items-center justify-center gap-2 text-gray-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
-              <span>Advanced end-to-end encryption</span>
-            </div>
-            <p className="leading-relaxed">
-              In today’s digital world, privacy isn’t optional — it’s essential. That’s why we implement
-              advanced end-to-end encryption powered by state-of-the-art security technologies.
-            </p>
-            <p className="leading-relaxed">
-              Unlike basic encryption methods, our system ensures that your data is locked at the source
-              and only unlocked by its rightful recipient. Not even we can access it. Every message, file, or
-              transaction is shielded with cutting-edge cryptographic protocols — the same level of protection
-              trusted by global banks, governments, and cybersecurity leaders.
-            </p>
+          <div className="login-divider" style={{display: 'none'}}><span>or</span></div>
+
+          <button className="btn-google" style={{display: 'none'}}>
+            <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285f4" d="M23.745 12.27c0-.79-.07-1.54-.19-2.27h-11.3v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34a853" d="M12.255 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96h-3.98v3.09C3.515 21.3 7.615 24 12.255 24z"/><path fill="#fbbc05" d="M5.525 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62h-3.98a11.86 11.86 0 0 0 0 10.76l3.98-3.09z"/><path fill="#ea4335" d="M12.255 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C18.205 1.19 15.495 0 12.255 0c-4.64 0-8.74 2.7-10.71 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"/></svg>
+            Continue with Google
+          </button>
+
+          <div className="security-note">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span>256-bit encryption. Your data is secured and never shared with third parties.</span>
+          </div>
+
+          <div className="login-footer">
+            Don&apos;t have an account?{' '}
+            <Link href={`/?returnUrl=${encodeURIComponent(getSafeReturnTo())}`}>
+              Create account
+            </Link>
           </div>
         </div>
-
-
       </div>
     </div>
   )

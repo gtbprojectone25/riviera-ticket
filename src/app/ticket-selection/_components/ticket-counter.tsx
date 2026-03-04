@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { Minus, Plus } from 'lucide-react'
-import { formatCurrency, formatCurrencyForDisplay } from '@/lib/utils'
+import { formatCurrencyForDisplay } from '@/lib/utils'
 
 interface TicketCounterProps {
   label: string
@@ -82,4 +82,3 @@ export function TicketCounter({
     </div>
   )
 }
-

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { auditoriums, carts, sessions, seats, tickets, userSessions, users } from '@/db/schema'
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
+import { auditoriums, carts, sessions, seats, tickets, userSessions, users, cinemas } from '@/db/schema'
+import { orders } from '@/db/admin-schema'
+import type { AuditoriumLayout } from '@/db/schema'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import type { AccountEvent } from '../../../../types/account'
 import { buildExpectedSeatsFromLayout } from '@/server/seats/expectedSeats'
 
@@ -47,6 +49,8 @@ export async function GET(request: NextRequest) {
     const rows = await db
       .select({
         ticketId: tickets.id,
+        orderId: tickets.orderId,
+        orderNumber: orders.orderNumber,
         cartId: tickets.cartId,
         sessionId: tickets.sessionId,
         ticketType: tickets.ticketType,
@@ -55,6 +59,8 @@ export async function GET(request: NextRequest) {
         sessionTime: sessions.startTime,
         movieTitle: sessions.movieTitle,
         cinemaName: sessions.cinemaName,
+        cinemaCity: cinemas.city,
+        cinemaAddress: cinemas.address,
         auditoriumId: sessions.auditoriumId,
         basePrice: sessions.basePrice,
         vipPrice: sessions.vipPrice,
@@ -65,7 +71,9 @@ export async function GET(request: NextRequest) {
       .from(tickets)
       .leftJoin(seats, eq(tickets.seatId, seats.id))
       .leftJoin(sessions, eq(tickets.sessionId, sessions.id))
+      .leftJoin(cinemas, eq(sessions.cinemaId, cinemas.id))
       .leftJoin(carts, eq(tickets.cartId, carts.id))
+      .leftJoin(orders, eq(tickets.orderId, orders.id))
       .where(
         and(
           eq(tickets.userId, user.id),
@@ -105,9 +113,9 @@ export async function GET(request: NextRequest) {
         const aud = audById.get(row.auditoriumId)
         if (!aud) continue
 
-        const layout = (aud.seatMapConfig ?? aud.layout) as unknown
+        const layout = (aud.seatMapConfig ?? aud.layout) as AuditoriumLayout | null
         const expected = buildExpectedSeatsFromLayout(
-          layout as any,
+          layout,
           row.basePrice ?? 0,
           row.vipPrice ?? 0,
         )
@@ -123,9 +131,18 @@ export async function GET(request: NextRequest) {
     const normalizedTicketType = (row: (typeof rows)[number]): 'VIP' | 'STANDARD' => {
       const sessionMap = seatTypeBySessionAndSeatId.get(row.sessionId)
       const expected = row.seatLabel && sessionMap ? sessionMap.get(row.seatLabel) : undefined
-      // Tratamos apenas VIP como VIP; todo resto vira STANDARD (inclui PREMIUM/WHEELCHAIR etc.)
+      
+      // 1. Explicit VIP from layout/expected seats
       if (expected === 'VIP') return 'VIP'
+      
+      // 2. Explicit VIP from stored ticket type
       if (row.ticketType === 'VIP') return 'VIP'
+      
+      // 3. Price heuristic: if ticket price matches session VIP price (and distinct from base)
+      if (row.vipPrice && row.ticketPrice && row.ticketPrice === row.vipPrice && row.vipPrice > (row.basePrice || 0)) {
+        return 'VIP'
+      }
+
       return 'STANDARD'
     }
 
@@ -135,12 +152,14 @@ export async function GET(request: NextRequest) {
       movieTitle: row.movieTitle || 'Your Event',
       sessionTime: row.sessionTime?.toISOString?.() || new Date().toISOString(),
       cinemaName: row.cinemaName || 'Riviera',
-      cinemaAddress: undefined,
+      cinemaCity: row.cinemaCity || undefined,
+      cinemaAddress: row.cinemaAddress || undefined,
       seatLabels: row.seatLabel ? [row.seatLabel] : [],
       status: row.cartStatus === 'COMPLETED' ? 'paid' : 'reserved',
       amount: row.ticketPrice ?? 0,
       type: normalizedTicketType(row),
       barcode: row.barcodeBlurred || undefined,
+      orderId: row.orderNumber || row.orderId || undefined,
     }))
     return NextResponse.json(events)
   } catch (error) {

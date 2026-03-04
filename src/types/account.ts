@@ -3,12 +3,14 @@ export type AccountEvent = {
   movieTitle: string
   sessionTime: string
   cinemaName: string
+  cinemaCity?: string
   seatLabels: string[]
   status: string
   amount: number
   type?: 'STANDARD' | 'VIP'
   cinemaAddress?: string
   barcode?: string
+  orderId?: string
 }
 
 export type AccountPending = {
@@ -23,6 +25,7 @@ export type AccountPending = {
   movieTitle: string
   cinemaName: string
   cinemaAddress?: string | null
+  cinemaCity?: string | null
   checkoutSessionId: string | null
   paymentIntentStatus: string | null
   paymentReference: string | null
