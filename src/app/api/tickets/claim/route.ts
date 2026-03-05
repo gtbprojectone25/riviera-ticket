@@ -8,17 +8,23 @@ export async function POST(request: NextRequest) {
     const checkoutSessionId = typeof body?.checkout_session_id === 'string'
       ? body.checkout_session_id
       : null
+    const cartId = typeof body?.cartId === 'string' ? body.cartId : null
 
-    if (!checkoutSessionId) {
+    if (!checkoutSessionId && !cartId) {
       return NextResponse.json(
-        { error: 'checkout_session_id is required' },
+        { error: 'checkout_session_id or cartId is required' },
         { status: 400 },
       )
     }
 
     const url = new URL(request.url)
     url.pathname = '/api/tickets/by-cart'
-    url.searchParams.set('checkout_session_id', checkoutSessionId)
+    if (checkoutSessionId) {
+      url.searchParams.set('checkout_session_id', checkoutSessionId)
+    }
+    if (cartId) {
+      url.searchParams.set('cartId', cartId)
+    }
 
     const proxiedRequest = new NextRequest(url.toString(), {
       method: 'GET',

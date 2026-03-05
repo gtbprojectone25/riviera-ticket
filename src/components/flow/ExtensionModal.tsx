@@ -20,6 +20,7 @@ export function ExtensionModal() {
     hasExtended,
     popupCountdown,
     extendTimer,
+    isOnFlowPage,
   } = useCheckoutTimer()
 
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -36,7 +37,7 @@ export function ExtensionModal() {
   }, [status, hasExtended])
 
   // Only show popup when timer reaches 0 and user hasn't extended yet
-  const isOpen = status === 'popup' && !hasExtended
+  const isOpen = isOnFlowPage && status === 'popup' && !hasExtended
 
   // Progress value (100 = full, 0 = empty)
   const progressValue = (popupCountdown / POPUP_TOTAL_SECONDS) * 100

@@ -7,6 +7,8 @@ import { randomBytes } from 'node:crypto'
 import { users, emailVerifications, userSessions } from '@/db/schema'
 import { eq, and, desc, gt } from 'drizzle-orm'
 import { webhookService } from '@/lib/webhook-service'
+import { isTransientDbError } from '@/lib/db-error'
+import { withDbRetry } from '@/lib/db-retry'
 
 function generateSessionToken(): string {
   return randomBytes(32).toString('hex')
@@ -28,33 +30,37 @@ export async function POST(request: NextRequest) {
 
     // Verificar código na tabela de verificação
     // Primeiro, tentar encontrar o código exato (mesmo que expirado, em dev aceitamos)
-    const [verificationByCode] = await db
-      .select()
-      .from(emailVerifications)
-      .where(
-        and(
-          eq(emailVerifications.email, email),
-          eq(emailVerifications.code, code) // Buscar pelo código exato
-        )
-      )
-      .orderBy(desc(emailVerifications.createdAt))
-      .limit(1)
-    
-    // Se não encontrou pelo código exato, buscar o mais recente não expirado
-    let verificationData = verificationByCode || null
-    
-    if (!verificationData) {
-      const [latestVerification] = await db
+    const [verificationByCode] = await withDbRetry(() =>
+      db
         .select()
         .from(emailVerifications)
         .where(
           and(
             eq(emailVerifications.email, email),
-            gt(emailVerifications.expiresAt, new Date()) // Apenas códigos não expirados
+            eq(emailVerifications.code, code) // Buscar pelo código exato
           )
         )
         .orderBy(desc(emailVerifications.createdAt))
-        .limit(1)
+        .limit(1),
+    )
+    
+    // Se não encontrou pelo código exato, buscar o mais recente não expirado
+    let verificationData = verificationByCode || null
+    
+    if (!verificationData) {
+      const [latestVerification] = await withDbRetry(() =>
+        db
+          .select()
+          .from(emailVerifications)
+          .where(
+            and(
+              eq(emailVerifications.email, email),
+              gt(emailVerifications.expiresAt, new Date()) // Apenas códigos não expirados
+            )
+          )
+          .orderBy(desc(emailVerifications.createdAt))
+          .limit(1),
+      )
       
       verificationData = latestVerification || null
     }
@@ -95,10 +101,12 @@ export async function POST(request: NextRequest) {
       if (verificationData.code !== code) {
         console.log('❌ Código não corresponde:', { esperado: verificationData.code, recebido: code })
         // Incrementar tentativas
-        await db
-          .update(emailVerifications)
-          .set({ attempts: verificationData.attempts + 1 })
-          .where(eq(emailVerifications.id, verificationData.id))
+        await withDbRetry(() =>
+          db
+            .update(emailVerifications)
+            .set({ attempts: verificationData.attempts + 1 })
+            .where(eq(emailVerifications.id, verificationData.id)),
+        )
         
         return NextResponse.json(
           { error: 'Código inválido. Verifique o código digitado.' },
@@ -117,7 +125,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Buscar usuário
-    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1)
+    const [user] = await withDbRetry(() =>
+      db.select().from(users).where(eq(users.email, email)).limit(1),
+    )
 
     if (!user) {
       console.log('❌ Usuário não encontrado para email:', email)
@@ -130,19 +140,24 @@ export async function POST(request: NextRequest) {
     console.log('✅ Usuário encontrado:', user.email)
 
     // Atualizar usuário como verificado
-    await db.update(users)
-      .set({ emailVerified: true, updatedAt: new Date() })
-      .where(eq(users.id, user.id))
+    await withDbRetry(() =>
+      db
+        .update(users)
+        .set({ emailVerified: true, updatedAt: new Date() })
+        .where(eq(users.id, user.id)),
+    )
 
     // Criar sessão
     const sessionToken = generateSessionToken()
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
 
-    await db.insert(userSessions).values({
-      userId: user.id,
-      sessionToken,
-      expiresAt
-    })
+    await withDbRetry(() =>
+      db.insert(userSessions).values({
+        userId: user.id,
+        sessionToken,
+        expiresAt
+      }),
+    )
 
     // Enviar webhook de notificação para API externa (código confirmado)
     webhookService.sendNotificacaoWebhook({
@@ -175,6 +190,12 @@ export async function POST(request: NextRequest) {
     return response
   } catch (error) {
     console.error('❌ Error in verify-email:', error)
+    if (isTransientDbError(error)) {
+      return NextResponse.json(
+        { error: 'Servico temporariamente indisponivel. Tente novamente.' },
+        { status: 503 },
+      )
+    }
     return NextResponse.json(
       { error: `Erro ao processar solicitação: ${error instanceof Error ? error.message : 'Erro desconhecido'}` },
       { status: 500 }

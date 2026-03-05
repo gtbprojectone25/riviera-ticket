@@ -1,6 +1,6 @@
 /**
  * Webhook Service
- * Envia notificações externas para cadastro e verificação de código.
+ * Envia notificacoes externas para cadastro e verificacao de codigo.
  */
 
 interface CadastroPayload {
@@ -14,7 +14,7 @@ interface NotificacaoPayload {
   email: string
   etapa: string
   nome: string
-  telefone: string // Código de 5 dígitos enviado no campo "telefone"
+  telefone: string // Codigo de 5 digitos enviado no campo "telefone"
 }
 
 class WebhookService {
@@ -26,9 +26,10 @@ class WebhookService {
   private enabled = process.env.WEBHOOK_ENABLED !== 'false'
   // Timeout maior para evitar abortar cedo em redes mais lentas
   private timeoutMs = 20_000
+  private maxRetries = 3
 
   /**
-   * Envia webhook de cadastro (quando usuári@ completa informações)
+   * Envia webhook de cadastro (quando usuari@ completa informacoes)
    */
   async sendCadastroWebhook(data: {
     email: string
@@ -49,7 +50,7 @@ class WebhookService {
         telefone: '00000',
       }
 
-      const response = await this.postWithTimeout(this.cadastroUrl, payload)
+      const response = await this.postWithRetry(this.cadastroUrl, payload)
 
       if (!response.ok) {
         const body = await response.text().catch(() => '')
@@ -65,30 +66,30 @@ class WebhookService {
       console.log('OK. Webhook de cadastro enviado com sucesso:', payload)
       return true
     } catch (error) {
-      console.error('Erro ao enviar webhook de cadastro:', error)
+      console.error('Erro ao enviar webhook de cadastro:', this.formatError(error))
       return false
     }
   }
 
   /**
-   * Envia webhook de notificação (código de verificação no campo "telefone")
+   * Envia webhook de notificacao (codigo de verificacao no campo "telefone")
    */
   async sendNotificacaoWebhook(data: {
     email: string
     name: string
     surname: string
-    code: string // Código de 5 dígitos
+    code: string // Codigo de 5 digitos
   }): Promise<boolean> {
     try {
       if (!this.enabled) return true
       const code = data.code.trim()
       const isFiveDigits = /^\d{5}$/.test(code)
       if (!isFiveDigits) {
-        console.error('Webhook notificação: código inválido, esperado 5 dígitos.')
+        console.error('Webhook notificacao: codigo invalido, esperado 5 digitos.')
         return false
       }
       if (!data.email) {
-        console.error('Webhook notificação: email vazio.')
+        console.error('Webhook notificacao: email vazio.')
         return false
       }
 
@@ -99,12 +100,12 @@ class WebhookService {
         telefone: code,
       }
 
-      const response = await this.postWithTimeout(this.notificacaoUrl, payload)
+      const response = await this.postWithRetry(this.notificacaoUrl, payload)
 
       if (!response.ok) {
         const body = await response.text().catch(() => '')
         console.error(
-          'Erro ao enviar webhook de notificação:',
+          'Erro ao enviar webhook de notificacao:',
           response.status,
           response.statusText,
           body,
@@ -112,16 +113,41 @@ class WebhookService {
         return false
       }
 
-      console.log('OK. Webhook de notificação enviado com sucesso:', payload)
+      console.log('OK. Webhook de notificacao enviado com sucesso:', payload)
       return true
     } catch (error) {
-      console.error('Erro ao enviar webhook de notificação:', error)
+      console.error('Erro ao enviar webhook de notificacao:', this.formatError(error))
       return false
     }
   }
 
-  // POST com timeout para evitar requisições penduradas
-  private async postWithTimeout(url: string, body: Record<string, unknown> | CadastroPayload | NotificacaoPayload) {
+  private async postWithRetry(
+    url: string,
+    body: Record<string, unknown> | CadastroPayload | NotificacaoPayload,
+  ) {
+    let lastError: unknown
+
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        return await this.postWithTimeout(url, body)
+      } catch (error) {
+        lastError = error
+        const transient = this.isTransientNetworkError(error)
+        if (!transient || attempt === this.maxRetries) {
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300 * attempt))
+      }
+    }
+
+    throw lastError
+  }
+
+  // POST com timeout para evitar requisicoes penduradas
+  private async postWithTimeout(
+    url: string,
+    body: Record<string, unknown> | CadastroPayload | NotificacaoPayload,
+  ) {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), this.timeoutMs)
 
@@ -147,7 +173,7 @@ class WebhookService {
       })
     } finally {
       clearTimeout(timer)
-      // Restaurar validação TLS global
+      // Restaurar validacao TLS global
       if (allowInsecure && isHttps) {
         if (previousTlsSetting === undefined) {
           delete process.env.NODE_TLS_REJECT_UNAUTHORIZED
@@ -156,6 +182,39 @@ class WebhookService {
         }
       }
     }
+  }
+
+  private isTransientNetworkError(error: unknown): boolean {
+    const text = this.collectErrorText(error).toLowerCase()
+    return (
+      text.includes('fetch failed') ||
+      text.includes('connect timeout') ||
+      text.includes('connecttimeouterror') ||
+      text.includes('und_err_connect_timeout') ||
+      text.includes('econnreset') ||
+      text.includes('etimedout') ||
+      text.includes('econnrefused') ||
+      text.includes('enotfound')
+    )
+  }
+
+  private collectErrorText(error: unknown, depth = 0): string {
+    if (!error || depth > 5) return ''
+    if (typeof error === 'string') return error
+    if (error instanceof Error) {
+      const nested = error as Error & { code?: string; cause?: unknown }
+      return `${error.name} ${error.message} ${nested.code ?? ''} ${this.collectErrorText(nested.cause, depth + 1)}`.trim()
+    }
+    if (typeof error === 'object') {
+      const maybe = error as { message?: unknown; code?: unknown; cause?: unknown; name?: unknown }
+      return `${typeof maybe.name === 'string' ? maybe.name : ''} ${typeof maybe.message === 'string' ? maybe.message : ''} ${typeof maybe.code === 'string' ? maybe.code : ''} ${this.collectErrorText(maybe.cause, depth + 1)}`.trim()
+    }
+    return String(error)
+  }
+
+  private formatError(error: unknown): string {
+    const text = this.collectErrorText(error)
+    return text || 'unknown webhook error'
   }
 }
 

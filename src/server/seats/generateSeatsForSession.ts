@@ -4,6 +4,7 @@ import { db } from '@/db'
 import { seats as seatsTable, sessions, auditoriums, type AuditoriumLayout } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { buildExpectedSeatsFromLayout } from './expectedSeats'
+import { withDbRetry } from '@/lib/db-retry'
 
 type DbClient = typeof db
 type DbTransaction = Parameters<Parameters<DbClient['transaction']>[0]>[0]
@@ -44,16 +45,18 @@ export async function ensureSeatsForSession(sessionId: string, options?: { dbCli
 }
 
 async function ensureSeatsInternal(client: DbInstance, sessionId: string) {
-  const [session] = await client
-    .select({
-      id: sessions.id,
-      auditoriumId: sessions.auditoriumId,
-      basePrice: sessions.basePrice,
-      vipPrice: sessions.vipPrice,
-    })
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
-    .limit(1)
+  const [session] = await withDbRetry(() =>
+    client
+      .select({
+        id: sessions.id,
+        auditoriumId: sessions.auditoriumId,
+        basePrice: sessions.basePrice,
+        vipPrice: sessions.vipPrice,
+      })
+      .from(sessions)
+      .where(eq(sessions.id, sessionId))
+      .limit(1),
+  )
 
   if (!session) {
     throw new Error('SESSION_NOT_FOUND')
@@ -62,12 +65,15 @@ async function ensureSeatsInternal(client: DbInstance, sessionId: string) {
   if (!session.auditoriumId) {
     throw new Error('SESSION_MISSING_AUDITORIUM')
   }
+  const auditoriumId = session.auditoriumId
 
-  const [auditorium] = await client
-    .select({ layout: auditoriums.layout, seatMapConfig: auditoriums.seatMapConfig })
-    .from(auditoriums)
-    .where(eq(auditoriums.id, session.auditoriumId))
-    .limit(1)
+  const [auditorium] = await withDbRetry(() =>
+    client
+      .select({ layout: auditoriums.layout, seatMapConfig: auditoriums.seatMapConfig })
+      .from(auditoriums)
+      .where(eq(auditoriums.id, auditoriumId))
+      .limit(1),
+  )
 
   if (!auditorium) {
     throw new Error('AUDITORIUM_NOT_FOUND')
@@ -79,10 +85,12 @@ async function ensureSeatsInternal(client: DbInstance, sessionId: string) {
     return { created: 0, skipped: false, expected: 0 }
   }
 
-  const existing = await client
-    .select({ row: seatsTable.row, number: seatsTable.number, seatId: seatsTable.seatId })
-    .from(seatsTable)
-    .where(eq(seatsTable.sessionId, session.id))
+  const existing = await withDbRetry(() =>
+    client
+      .select({ row: seatsTable.row, number: seatsTable.number, seatId: seatsTable.seatId })
+      .from(seatsTable)
+      .where(eq(seatsTable.sessionId, session.id)),
+  )
 
   const existingSeatIds = new Set(existing.map((seat) => seat.seatId))
   const existingCoords = new Set(existing.map((seat) => `${seat.row.toUpperCase()}|${seat.number}`))
@@ -103,11 +111,13 @@ async function ensureSeatsInternal(client: DbInstance, sessionId: string) {
     return { created: 0, skipped: true, expected: expectedSeats.length }
   }
 
-  const inserted = await client
-    .insert(seatsTable)
-    .values(inserts)
-    .onConflictDoNothing({ target: [seatsTable.sessionId, seatsTable.seatId] })
-    .returning({ seatId: seatsTable.seatId })
+  const inserted = await withDbRetry(() =>
+    client
+      .insert(seatsTable)
+      .values(inserts)
+      .onConflictDoNothing({ target: [seatsTable.sessionId, seatsTable.seatId] })
+      .returning({ seatId: seatsTable.seatId }),
+  )
 
   const created = inserted.length
 

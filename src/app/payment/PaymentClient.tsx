@@ -11,6 +11,8 @@ import { formatCurrency } from '@/lib/utils'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements } from '@stripe/react-stripe-js'
 import { StripeCheckoutForm } from './StripeCheckoutForm'
+import { UserInfoModal } from './UserInfoModal'
+import { ExitConfirmationModal } from './ExitConfirmationModal'
 import { PurchaseTimerBanner } from '@/components/flow'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '')
@@ -52,6 +54,8 @@ export default function PaymentClient() {
   const [currentCartId, setCurrentCartId] = useState<string | null>(null)
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null)
   const [resumeData, setResumeData] = useState<ResumePaymentResponse | null>(null)
+  const [isExitModalOpen, setIsExitModalOpen] = useState(false)
+  const [isUserInfoModalOpen, setIsUserInfoModalOpen] = useState(false)
 
   useEffect(() => {
     if (authLoading) return
@@ -195,7 +199,7 @@ export default function PaymentClient() {
 
     setPaymentData({
       orderId: currentCartId || `ORD-${Date.now()}`,
-      paymentIntentId: checkoutSessionId || undefined,
+      paymentIntentId: undefined,
       checkoutSessionId: checkoutSessionId || undefined,
       totalAmount: totalAmountCents,
       paymentDate: new Date().toISOString(),
@@ -220,18 +224,33 @@ export default function PaymentClient() {
     router.push(successPath)
   }, [totalAmountCents, setPaymentData, currentCartId, checkoutSessionId, user, router])
 
+  const handleExit = () => {
+    router.push('/account?tab=pending')
+  }
+
   if (!isResumeMode && (!finalizedTickets || finalizedTickets.length === 0)) {
     return null
   }
 
   return (
     <div className="min-h-screen text-white relative overflow-x-hidden">
+      <ExitConfirmationModal
+        isOpen={isExitModalOpen}
+        onClose={() => setIsExitModalOpen(false)}
+        onConfirm={handleExit}
+      />
+      <UserInfoModal
+        isOpen={isUserInfoModalOpen}
+        onClose={() => setIsUserInfoModalOpen(false)}
+        userName={user?.name}
+        userEmail={user?.email}
+      />
       <div className="relative z-10">
         <div className="flex items-center gap-2 p-4">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => router.back()}
+            onClick={() => setIsExitModalOpen(true)}
             className="text-white hover:bg-white/5"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -243,7 +262,10 @@ export default function PaymentClient() {
           <div className="bg-zinc-800/90 relative rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.45)] overflow-hidden">
             <PurchaseTimerBanner />
             <div className="p-5">
-            <h2 className="text-lg font-semibold text-white mb-3">Order Summary</h2>
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-lg font-semibold text-white">Order Summary</h2>
+              <Button variant="link" className="text-blue-400" onClick={() => setIsUserInfoModalOpen(true)}>View User Info</Button>
+            </div>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-white/80">
                 <span>Tickets</span>
@@ -308,19 +330,35 @@ export default function PaymentClient() {
                 options={{
                   clientSecret,
                   appearance: {
-                    theme: 'stripe',
+                    theme: 'night',
                     variables: {
                       colorPrimary: '#2563eb',
-                      colorBackground: '#ffffff',
-                      colorText: '#0f172a',
-                      colorTextSecondary: '#64748b',
-                      borderRadius: '10px',
-                      fontFamily: 'inherit',
+                      colorBackground: '#1f2937',
+                      colorText: '#ffffff',
+                      colorTextSecondary: '#9ca3af',
+                      colorIcon: '#9ca3af',
+                      borderRadius: '8px',
+                      fontFamily: 'var(--font-poppins), sans-serif',
+                      spacingUnit: '4px',
                     },
                     rules: {
-                      '.Input': { backgroundColor: '#ffffff', border: '1px solid #e5e7eb' },
-                      '.Label': { color: '#e5e7eb' },
-                      '.Tab': { border: '1px solid #e5e7eb' },
+                      '.Input': {
+                        backgroundColor: '#1f2937',
+                        border: '1px solid #4b5563',
+                      },
+                      '.Label': { 
+                        color: '#d1d5db',
+                        fontWeight: '500',
+                        fontSize: '0.875rem',
+                      },
+                      '.Tab': { 
+                        border: '1px solid #4b5563',
+                        backgroundColor: '#374151',
+                      },
+                      '.Tab--selected': {
+                        borderColor: '#4b5563',
+                        backgroundColor: '#1f2937',
+                      },
                     },
                   },
                 }}

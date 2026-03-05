@@ -4,12 +4,16 @@ import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm'
 import { db } from '@/db'
 import { userSessions, users, paymentIntents, sessions, cinemas, carts } from '@/db/schema'
 import { orders } from '@/db/admin-schema'
+import { isTransientDbError } from '@/lib/db-error'
 
 function extractCheckoutSessionIdFromMetadata(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== 'object') return null
   const candidate = (metadata as { checkout_session_id?: unknown }).checkout_session_id
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : null
 }
+
+const SESSION_CACHE = new Map<string, { user: (typeof users.$inferSelect); session: (typeof userSessions.$inferSelect); cachedAt: number }>()
+const CACHE_TTL_MS = 60_000
 
 async function getUserFromRequest(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -21,15 +25,35 @@ async function getUserFromRequest(request: NextRequest) {
 
   if (!sessionToken) return null
 
-  const result = await db
-    .select({
-      user: users,
-      session: userSessions,
-    })
-    .from(userSessions)
-    .innerJoin(users, eq(userSessions.userId, users.id))
-    .where(eq(userSessions.sessionToken, sessionToken))
-    .limit(1)
+  const cached = SESSION_CACHE.get(sessionToken)
+  if (cached && cached.session.expiresAt > new Date() && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
+    return cached.user
+  }
+
+  let result: Array<{ user: typeof users.$inferSelect; session: typeof userSessions.$inferSelect }> = []
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      result = await db
+        .select({
+          user: users,
+          session: userSessions,
+        })
+        .from(userSessions)
+        .innerJoin(users, eq(userSessions.userId, users.id))
+        .where(eq(userSessions.sessionToken, sessionToken))
+        .limit(1)
+      break
+    } catch (err) {
+      const transient = isTransientDbError(err)
+      if (!transient || attempt === 2) {
+        if (cached && cached.session.expiresAt > new Date()) {
+          return cached.user
+        }
+        throw err
+      }
+      await new Promise((r) => setTimeout(r, 300 * (attempt + 1)))
+    }
+  }
 
   if (result.length === 0) return null
 
@@ -39,6 +63,7 @@ async function getUserFromRequest(request: NextRequest) {
     return null
   }
 
+  SESSION_CACHE.set(sessionToken, { user, session, cachedAt: Date.now() })
   return user
 }
 

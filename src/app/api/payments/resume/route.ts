@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { db } from '@/db'
 import { orders } from '@/db/admin-schema'
 import { carts, paymentIntents, sessions, userSessions, users } from '@/db/schema'
+import { validateCartSeatHolds } from '@/db/queries'
 
 const stripeKey = process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder'
 const stripe = new Stripe(stripeKey, {
@@ -109,6 +110,14 @@ export async function POST(request: NextRequest) {
 
     if (!cart) {
       return NextResponse.json({ error: 'Cart not found' }, { status: 404 })
+    }
+
+    const holdValidation = await validateCartSeatHolds(order.cartId)
+    if (!holdValidation.valid) {
+      return NextResponse.json(
+        { error: holdValidation.error, invalidSeatIds: holdValidation.invalidSeatIds },
+        { status: 409 },
+      )
     }
 
     const amountCents = order.total ?? cart.totalAmount

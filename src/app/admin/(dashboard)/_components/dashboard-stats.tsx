@@ -2,16 +2,19 @@ import { db } from '@/db'
 import { tickets, sessions, paymentIntents } from '@/db/schema'
 import { eq, gte, sql, and, count } from 'drizzle-orm'
 import { DollarSign, Ticket, CalendarCheck, TrendingUp } from 'lucide-react'
+import { withDbRetry } from '@/lib/db-retry'
 
 async function safeSumPaymentIntents(fromDate: Date) {
   try {
-    const [row] = await db
-      .select({ total: sql<number>`COALESCE(SUM(${paymentIntents.amountCents}), 0)` })
-      .from(paymentIntents)
-      .where(and(
-        eq(paymentIntents.status, 'SUCCEEDED'),
-        gte(paymentIntents.createdAt, fromDate)
-      ))
+    const [row] = await withDbRetry(() =>
+      db
+        .select({ total: sql<number>`COALESCE(SUM(${paymentIntents.amountCents}), 0)` })
+        .from(paymentIntents)
+        .where(and(
+          eq(paymentIntents.status, 'SUCCEEDED'),
+          gte(paymentIntents.createdAt, fromDate),
+        )),
+    )
 
     return Number(row?.total || 0)
   } catch (error) {
@@ -21,42 +24,56 @@ async function safeSumPaymentIntents(fromDate: Date) {
   }
 }
 
+async function safeCountTodayTickets(today: Date) {
+  try {
+    const [todayTickets] = await withDbRetry(() =>
+      db
+        .select({ count: count() })
+        .from(tickets)
+        .where(and(
+          eq(tickets.status, 'CONFIRMED'),
+          gte(tickets.createdAt, today),
+        )),
+    )
+    return todayTickets?.count || 0
+  } catch (error) {
+    console.error('DashboardStats: failed to count tickets', error)
+    return 0
+  }
+}
+
+async function safeCountActiveSessions(today: Date) {
+  try {
+    const [activeSessions] = await withDbRetry(() =>
+      db
+        .select({ count: count() })
+        .from(sessions)
+        .where(gte(sessions.startTime, today)),
+    )
+    return activeSessions?.count || 0
+  } catch (error) {
+    console.error('DashboardStats: failed to count sessions', error)
+    return 0
+  }
+}
+
 async function getStats() {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  
-  const weekAgo = new Date(today)
-  weekAgo.setDate(weekAgo.getDate() - 7)
-  
+
   const monthAgo = new Date(today)
   monthAgo.setMonth(monthAgo.getMonth() - 1)
 
-  // Faturamento hoje
   const todayRevenue = await safeSumPaymentIntents(today)
-
-  // Faturamento do mês
   const monthRevenue = await safeSumPaymentIntents(monthAgo)
-
-  // Tickets vendidos hoje
-  const [todayTickets] = await db
-    .select({ count: count() })
-    .from(tickets)
-    .where(and(
-      eq(tickets.status, 'CONFIRMED'),
-      gte(tickets.createdAt, today)
-    ))
-
-  // Sessões ativas hoje
-  const [activeSessions] = await db
-    .select({ count: count() })
-    .from(sessions)
-    .where(gte(sessions.startTime, today))
+  const todayTickets = await safeCountTodayTickets(today)
+  const activeSessions = await safeCountActiveSessions(today)
 
   return {
     todayRevenue: todayRevenue / 100,
     monthRevenue: monthRevenue / 100,
-    todayTickets: todayTickets?.count || 0,
-    activeSessions: activeSessions?.count || 0,
+    todayTickets,
+    activeSessions,
   }
 }
 
@@ -86,7 +103,7 @@ export async function DashboardStats() {
       bgColor: 'bg-purple-500/10',
     },
     {
-      title: 'Sessões Ativas Hoje',
+      title: 'Sessoes Ativas Hoje',
       value: stats.activeSessions.toString(),
       icon: CalendarCheck,
       color: 'text-orange-500',

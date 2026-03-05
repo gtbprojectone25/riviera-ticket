@@ -4,6 +4,7 @@ import { desc, gte } from 'drizzle-orm'
 import { Badge } from '@/components/ui/badge'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { withDbRetry } from '@/lib/db-retry'
 
 type SessionRow = typeof sessions.$inferSelect
 type SessionWithSales = SessionRow & {
@@ -12,36 +13,41 @@ type SessionWithSales = SessionRow & {
 }
 
 async function getTopSessions() {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  try {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
 
-  // Buscar sessões ativas com contagem de tickets vendidos
-  const sessionsWithSales = (await db
-    .select({
-      id: sessions.id,
-      movieTitle: sessions.movieTitle,
-      cinemaName: sessions.cinemaName,
-      startTime: sessions.startTime,
-      totalSeats: sessions.totalSeats,
-      availableSeats: sessions.availableSeats,
-      screenType: sessions.screenType,
+    const sessionsWithSales = (await withDbRetry(() =>
+      db
+        .select({
+          id: sessions.id,
+          movieTitle: sessions.movieTitle,
+          cinemaName: sessions.cinemaName,
+          startTime: sessions.startTime,
+          totalSeats: sessions.totalSeats,
+          availableSeats: sessions.availableSeats,
+          screenType: sessions.screenType,
+        })
+        .from(sessions)
+        .where(gte(sessions.startTime, today))
+        .orderBy(desc(sessions.startTime))
+        .limit(5),
+    )) as SessionRow[]
+
+    return sessionsWithSales.map((session: SessionRow): SessionWithSales => {
+      const soldSeats = session.totalSeats - session.availableSeats
+      const occupancy = Math.round((soldSeats / session.totalSeats) * 100)
+
+      return {
+        ...session,
+        soldSeats,
+        occupancy,
+      }
     })
-    .from(sessions)
-    .where(gte(sessions.startTime, today))
-    .orderBy(desc(sessions.startTime))
-    .limit(5)) as SessionRow[]
-
-  // Calcular ocupação
-  return sessionsWithSales.map((session: SessionRow): SessionWithSales => {
-    const soldSeats = session.totalSeats - session.availableSeats
-    const occupancy = Math.round((soldSeats / session.totalSeats) * 100)
-
-    return {
-      ...session,
-      soldSeats,
-      occupancy,
-    }
-  })
+  } catch (error) {
+    console.error('TopSessions: failed to load sessions', error)
+    return [] as SessionWithSales[]
+  }
 }
 
 export async function TopSessions() {
@@ -57,14 +63,14 @@ export async function TopSessions() {
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-white">Sessões de Hoje</h3>
+        <h3 className="text-lg font-semibold text-white">Sessoes de Hoje</h3>
         <a href="/admin/sessions" className="text-sm text-red-500 hover:text-red-400">
-          Ver todas →
+          Ver todas &rarr;
         </a>
       </div>
 
       {topSessions.length === 0 ? (
-        <p className="text-gray-500 text-center py-8">Nenhuma sessão para hoje</p>
+        <p className="text-gray-500 text-center py-8">Nenhuma sessao para hoje</p>
       ) : (
         <div className="space-y-3">
           {topSessions.map((session) => (
@@ -77,7 +83,7 @@ export async function TopSessions() {
                   {session.movieTitle}
                 </p>
                 <p className="text-xs text-gray-500 truncate">
-                  {session.cinemaName} • {format(new Date(session.startTime), 'HH:mm', { locale: ptBR })}
+                  {session.cinemaName} - {format(new Date(session.startTime), 'HH:mm', { locale: ptBR })}
                 </p>
               </div>
 
@@ -98,4 +104,3 @@ export async function TopSessions() {
     </div>
   )
 }
-

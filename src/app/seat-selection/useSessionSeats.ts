@@ -31,7 +31,10 @@ export function useSessionSeats({ sessionId }: UseSessionSeatsOptions) {
         }
         setError(null)
 
-        const res = await fetch(`/api/sessions/${sessionId}/seats?ensure=true`)
+        const endpoint = isFirstLoad
+          ? `/api/sessions/${sessionId}/seats?ensure=true`
+          : `/api/sessions/${sessionId}/seats`
+        const res = await fetch(endpoint)
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}))

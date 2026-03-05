@@ -6,6 +6,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { User } from 'lucide-react'
 import { UserActions } from './user-actions'
+import { isTransientDbError } from '@/lib/db-error'
 
 type UserRow = typeof users.$inferSelect
 
@@ -13,33 +14,63 @@ type UserWithTickets = UserRow & {
   ticketsCount: number
 }
 
-async function getUsers() {
-  const allUsers = (await db
-    .select()
-    .from(users)
-    .orderBy(desc(users.createdAt))
-    .limit(50)) as UserRow[]
+async function withDbRetry<T>(fn: () => Promise<T>): Promise<T> {
+  const maxAttempts = 3
+  let lastError: unknown
 
-  // Enriquecer com contagem de tickets
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error
+      if (!isTransientDbError(error) || attempt === maxAttempts) break
+      await new Promise((resolve) => setTimeout(resolve, 300 * attempt))
+    }
+  }
+
+  throw lastError
+}
+
+async function getUsers(): Promise<{ users: UserWithTickets[]; unavailable: boolean }> {
+  let allUsers: UserRow[] = []
+
+  try {
+    allUsers = (await withDbRetry(() =>
+      db
+        .select()
+        .from(users)
+        .orderBy(desc(users.createdAt))
+        .limit(50),
+    )) as UserRow[]
+  } catch (error) {
+    if (isTransientDbError(error)) {
+      console.error('UsersTable DB unavailable:', error)
+      return { users: [], unavailable: true }
+    }
+    throw error
+  }
+
   const enrichedUsers: UserWithTickets[] = await Promise.all(
     allUsers.map(async (user: UserRow) => {
-      const [ticketsCount] = await db
-        .select({ count: count() })
-        .from(tickets)
-        .where(eq(tickets.userId, user.id))
+      const [ticketsCount] = await withDbRetry(() =>
+        db
+          .select({ count: count() })
+          .from(tickets)
+          .where(eq(tickets.userId, user.id)),
+      )
 
       return {
         ...user,
         ticketsCount: ticketsCount?.count || 0,
       }
-    })
+    }),
   )
 
-  return enrichedUsers
+  return { users: enrichedUsers, unavailable: false }
 }
 
 export async function UsersTable() {
-  const allUsers = await getUsers()
+  const { users: allUsers, unavailable } = await getUsers()
 
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl overflow-hidden">
@@ -48,7 +79,7 @@ export async function UsersTable() {
           <thead className="bg-gray-900/50">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Usuário
+                Usuario
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Email
@@ -63,15 +94,21 @@ export async function UsersTable() {
                 Cadastro
               </th>
               <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                Ações
+                Acoes
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-700/50">
-            {allUsers.length === 0 ? (
+            {unavailable ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-12 text-center text-yellow-400">
+                  Banco temporariamente indisponivel. Tente novamente em instantes.
+                </td>
+              </tr>
+            ) : allUsers.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
-                  Nenhum usuário encontrado
+                  Nenhum usuario encontrado
                 </td>
               </tr>
             ) : (
@@ -94,10 +131,13 @@ export async function UsersTable() {
                     <p className="text-sm text-gray-300">{user.email}</p>
                   </td>
                   <td className="px-4 py-4">
-                    <Badge className={user.emailVerified 
-                      ? 'bg-green-500/10 text-green-500 border-green-500/20' 
-                      : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
-                    }>
+                    <Badge
+                      className={
+                        user.emailVerified
+                          ? 'bg-green-500/10 text-green-500 border-green-500/20'
+                          : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                      }
+                    >
                       {user.emailVerified ? 'Verificado' : 'Pendente'}
                     </Badge>
                   </td>

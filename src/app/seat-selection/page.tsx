@@ -37,10 +37,12 @@ function SeatSelectionPageContent() {
   // 1. Consumir dados da Store
   const selectedCinema = useBookingStore((s) => s.selectedCinema);
   const selectedTicketsFromStore = useBookingStore((s) => s.selectedTickets); 
+  const finalizedTicketsFromStore = useBookingStore((s) => s.finalizedTickets);
   const selectedSessionId = useBookingStore((s) => s.selectedSessionId);
   const setSelectedSessionId = useBookingStore((s) => s.setSelectedSessionId);
   const cartId = useBookingStore((s) => s.cartId);
   const setCartId = useBookingStore((s) => s.setCartId);
+  const setFinalizedTickets = useBookingStore((s) => s.setFinalizedTickets);
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const isDev = process.env.NODE_ENV !== 'production';
@@ -99,7 +101,19 @@ function SeatSelectionPageContent() {
             });
         }
     });
-    return expandedTickets.slice(0, 4);
+    const normalized = expandedTickets.slice(0, 4);
+    const hasReusableDraft =
+      finalizedTicketsFromStore.length > 0 &&
+      finalizedTicketsFromStore.length === normalized.length
+
+    if (!hasReusableDraft) {
+      return normalized;
+    }
+
+    return normalized.map((ticket, index) => ({
+      ...ticket,
+      assignedSeatId: finalizedTicketsFromStore[index]?.assignedSeatId,
+    }));
   });
 
   const allSeats = useMemo(() => seatRows.flatMap((r) => r.seats), [seatRows]);
@@ -190,7 +204,10 @@ function SeatSelectionPageContent() {
         console.debug('[seat-selection] hold response', { status: response.status, data });
       }
       if (!response.ok || !data?.ok) {
-        const reason = typeof data?.error === 'string' ? data.error : 'Assento indisponível'
+        const rawReason = typeof data?.error === 'string' ? data.error : 'Assento indisponível'
+        const reason = rawReason === 'TICKET_LIMIT_EXCEEDED'
+          ? 'Limite de 4 ingressos por pessoa excedido'
+          : rawReason
         if (isDev) {
           console.debug('[seat-selection] hold failed', { status: response.status, data })
         }
@@ -278,6 +295,17 @@ function SeatSelectionPageContent() {
   }, [selectedSeatIds, seatRows]);
   const allowedTypes = Array.from(new Set(ticketSlots.map((t) => t.type)));
   const isAllSelected = counts.totalSlots > 0 && counts.totalSelected === counts.totalSlots;
+
+  useEffect(() => {
+    const draft: FinalizedTicket[] = ticketSlots.map((ticket) => ({
+      id: ticket.id,
+      name: ticket.name,
+      type: ticket.type,
+      price: ticket.price,
+      assignedSeatId: ticket.assignedSeatId,
+    }));
+    setFinalizedTickets(draft);
+  }, [setFinalizedTickets, ticketSlots]);
 
   useEffect(() => {
     if (!seatRows.length) return;
