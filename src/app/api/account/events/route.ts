@@ -6,6 +6,10 @@ import type { AuditoriumLayout } from '@/db/schema'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import type { AccountEvent } from '../../../../types/account'
 import { buildExpectedSeatsFromLayout } from '@/server/seats/expectedSeats'
+import { isTransientDbError } from '@/lib/db-error'
+
+const SESSION_CACHE = new Map<string, { user: (typeof users.$inferSelect); session: (typeof userSessions.$inferSelect); cachedAt: number }>()
+const CACHE_TTL_MS = 60_000
 
 async function getUserFromRequest(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -17,15 +21,36 @@ async function getUserFromRequest(request: NextRequest) {
 
   if (!sessionToken) return null
 
-  const result = await db
-    .select({
-      user: users,
-      session: userSessions,
-    })
-    .from(userSessions)
-    .innerJoin(users, eq(userSessions.userId, users.id))
-    .where(eq(userSessions.sessionToken, sessionToken))
-    .limit(1)
+  const cached = SESSION_CACHE.get(sessionToken)
+  if (cached && cached.session.expiresAt > new Date() && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
+    return cached.user
+  }
+
+  let result: Array<{ user: typeof users.$inferSelect; session: typeof userSessions.$inferSelect }> = []
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      result = await db
+        .select({
+          user: users,
+          session: userSessions,
+        })
+        .from(userSessions)
+        .innerJoin(users, eq(userSessions.userId, users.id))
+        .where(eq(userSessions.sessionToken, sessionToken))
+        .limit(1)
+      break
+    } catch (err) {
+      const transient = isTransientDbError(err)
+      if (!transient || attempt === 2) {
+        // fallback ao cache se existir e nao expirou
+        if (cached && cached.session.expiresAt > new Date()) {
+          return cached.user
+        }
+        throw err
+      }
+      await new Promise((r) => setTimeout(r, 300 * (attempt + 1)))
+    }
+  }
 
   if (result.length === 0) return null
 
@@ -35,6 +60,7 @@ async function getUserFromRequest(request: NextRequest) {
     return null
   }
 
+  SESSION_CACHE.set(sessionToken, { user, session, cachedAt: Date.now() })
   return user
 }
 

@@ -77,11 +77,12 @@ export async function GET(request: NextRequest) {
         let sessionTitle = '-'
         let cinemaName = '-'
 
-        if (order.userId) {
+        const orderUserId = order.userId
+        if (orderUserId) {
           const [user] = await db
             .select({ name: users.name, email: users.email })
             .from(users)
-            .where(eq(users.id, order.userId))
+            .where(eq(users.id, orderUserId))
             .limit(1)
 
           if (user) {
@@ -183,4 +184,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Erro ao gerar relatório' }, { status: 500 })
   }
 }
+
 

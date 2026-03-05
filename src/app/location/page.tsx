@@ -52,6 +52,16 @@ export default function LocationPage() {
 
     const setCinemaStore = useBookingStore((s) => s.setCinema)
 
+    const generateRandomRating = () => {
+        return (Math.random() * (9.9 - 8.5) + 8.5).toFixed(1);
+    };
+
+    const generateRandomReviewCount = () => {
+        const count = Math.floor(Math.random() * (5000 - 2000 + 1)) + 2000;
+        return count.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    };
+
+
     const states = [...new Set(cinemasData.map(c => c.state))]
     const cities = selectedState
         ? [...new Set(cinemasData.filter(c => c.state === selectedState).map(c => c.city))]
@@ -253,19 +263,13 @@ export default function LocationPage() {
                                                 </p>
                                             </div>
 
-                                            <div className="text-right flex flex-col items-end gap-1">
-                                                <Badge
-                                                    variant="secondary"
-                                                    className="bg-gray-700/80 text-white border-amber-50"
-                                                >
-                                                    <span className="text-white font-light text-sm">
-                                                        {index === 0 ? "9.7" : "9.2"}/10
-                                                    </span>
+                                            <div className="flex items-center gap-3">
+                                                <Badge className="bg-gray-700 text-white px-3 py-1.5">
+                                                    {generateRandomRating()}/10
                                                 </Badge>
-                                                <div className="text-xs text-gray-500">
-                                                    {index === 0
-                                                        ? "Extraordinary 2.987 reviews"
-                                                        : "Extraordinary 1.112 reviews"}
+                                                <div className="text-right">
+                                                    <div className="text-xs text-gray-400">Extraordinary</div>
+                                                    <div className="text-xs text-gray-500">{generateRandomReviewCount()} reviews</div>
                                                 </div>
                                             </div>
                                         </div>

@@ -20,8 +20,9 @@ const STORAGE_KEY_EXPIRES_AT = 'riviera_flow_expiresAt'
 const STORAGE_KEY_EXTENDED = 'riviera_flow_extendedOnce'
 const STORAGE_KEY_CART = 'riviera-cart'
 
-// Pages that are part of the purchase flow
+// Pages that are part of the purchase flow (from pre-order until payment)
 const FLOW_PAGES = [
+  '/pre-order',
   '/location',
   '/sessions',
   '/ticket-selection',
@@ -30,6 +31,14 @@ const FLOW_PAGES = [
   '/register',
   '/payment',
 ]
+
+function normalizePath(pathname: string | null): string {
+  if (!pathname) return ''
+  if (pathname.length > 1 && pathname.endsWith('/')) {
+    return pathname.slice(0, -1)
+  }
+  return pathname
+}
 
 type TimerStatus = 'active' | 'popup' | 'expired'
 
@@ -78,8 +87,10 @@ export function CheckoutTimerProvider({ children }: CheckoutTimerProviderProps) 
 
   const popupTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Check if current page is part of the flow
-  const isOnFlowPage = FLOW_PAGES.some(page => pathname?.startsWith(page))
+  // Check if current page is part of the flow.
+  // Exact-match only to avoid leaking timer popup to non-flow routes like /payment/success.
+  const normalizedPathname = normalizePath(pathname)
+  const isOnFlowPage = FLOW_PAGES.includes(normalizedPathname)
 
   // Load initial state from localStorage
   useEffect(() => {
@@ -129,7 +140,7 @@ export function CheckoutTimerProvider({ children }: CheckoutTimerProviderProps) 
 
   // Popup countdown timer (10 seconds)
   useEffect(() => {
-    if (status !== 'popup') {
+    if (status !== 'popup' || !isOnFlowPage) {
       if (popupTimerRef.current) {
         clearInterval(popupTimerRef.current)
         popupTimerRef.current = null
@@ -155,7 +166,7 @@ export function CheckoutTimerProvider({ children }: CheckoutTimerProviderProps) 
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status])
+  }, [status, isOnFlowPage])
 
   // Persist timer to localStorage
   const persistTimer = useCallback((expiresAt: number, extended: boolean) => {

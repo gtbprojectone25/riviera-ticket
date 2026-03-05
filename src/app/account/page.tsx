@@ -12,7 +12,8 @@ import { SupportTab } from '@/app/account/_components/support/SupportTab'
 import { formatCurrency } from '@/lib/utils'
 import React from 'react'
 
-type ActiveTab = 'events' | 'account' | 'support'
+type ActiveTab = 'events' | 'account' | 'support' | 'orders'
+type ProfileForm = Pick<UserProfile, 'firstName' | 'lastName' | 'email'>
 
 const formatSessionDateUTC = (ts: string | number | Date) => {
   const d = new Date(ts)
@@ -79,7 +80,7 @@ const TicketFaceContent = ({ selectedEvent, isVip, noiseBg }: { selectedEvent: A
 
   return (
     <div 
-      className={`ticket-card-3d transition-colors duration-300 relative overflow-hidden`} 
+      className="transition-colors duration-300 relative overflow-hidden" 
       style={{
         width: '100%', 
         height: '100%',
@@ -346,12 +347,27 @@ function AccountPageContent() {
   const searchParams = useSearchParams()
   const { user, token, isAuthenticated, isLoading, logout } = useAuth()
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>('support')
+  const [activeTab, setActiveTab] = useState<ActiveTab>('events')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [showSupportSystem, setShowSupportSystem] = useState(false)
+  const [showFaq, setShowFaq] = useState(false)
+  const [faqExpandedIndex, setFaqExpandedIndex] = useState<number | null>(null)
+  const [ordersData, setOrdersData] = useState<Array<{
+    id: string
+    orderNumber: string | null
+    status: string
+    totalAmount: number
+    createdAt: string | null
+    paidAt: string | null
+    movieTitle: string | null
+    sessionTime: string | null
+    cinemaName: string | null
+  }>>([])
+  const [ordersLoading, setOrdersLoading] = useState(false)
+  const [ordersError, setOrdersError] = useState<string | null>(null)
 
   const [refreshKey, setRefreshKey] = useState(0)
-  const [profileForm, setProfileForm] = useState<UserProfile>({
+  const [profileForm, setProfileForm] = useState<ProfileForm>({
     firstName: user?.name ?? '',
     lastName: user?.surname ?? '',
     email: user?.email ?? '',
@@ -397,10 +413,10 @@ function AccountPageContent() {
   useEffect(() => {
     const tab = searchParams.get('tab') as ActiveTab | null
     const refresh = searchParams.get('refresh')
-    if (tab && (['events', 'account', 'support'] as ActiveTab[]).includes(tab)) {
+    if (tab && (['events', 'account', 'support', 'orders'] as ActiveTab[]).includes(tab)) {
       setActiveTab(tab)
     } else {
-      setActiveTab('support')
+      setActiveTab('events')
     }
 
     if (refresh) {
@@ -452,6 +468,40 @@ function AccountPageContent() {
       return () => clearTimeout(timer)
     }
   }, [selectedEvent])
+
+  useEffect(() => {
+    if (activeTab !== 'orders') return
+    let aborted = false
+    setOrdersLoading(true)
+    setOrdersError(null)
+    fetch('/api/account/orders', {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      cache: 'no-store',
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body?.error || `HTTP ${res.status}`)
+        }
+        return res.json()
+      })
+      .then((data) => {
+        if (aborted) return
+        setOrdersData(Array.isArray(data?.orders) ? data.orders : [])
+      })
+      .catch((err) => {
+        if (aborted) return
+        setOrdersError(err?.message || 'Failed to load orders')
+        setOrdersData([])
+      })
+      .finally(() => {
+        if (aborted) return
+        setOrdersLoading(false)
+      })
+    return () => {
+      aborted = true
+    }
+  }, [activeTab, token, refreshKey])
 
   const handleSaveProfile = async () => {
     if (!token) return
@@ -721,21 +771,12 @@ function AccountPageContent() {
           ))}
         </div>
 
-        {/* Quick Actions */}
         <div className="section-header animate-in delay-3" style={{marginTop: '32px'}}>
           <div className="section-title">QUICK ACTIONS</div>
         </div>
 
         <div className="quick-actions animate-in delay-3">
-          <div className="qa-item">
-            <div className="qa-icon" style={{background: 'var(--riv-blue-dim)'}}>🎬</div>
-            <div className="qa-label">Browse<br/>Events</div>
-          </div>
-          <div className="qa-item">
-            <div className="qa-icon" style={{background: 'rgba(200,168,75,0.1)'}}>🎟️</div>
-            <div className="qa-label">My<br/>Tickets</div>
-          </div>
-          <div className="qa-item">
+          <div className="qa-item" onClick={() => setActiveTab('orders')} style={{cursor: 'pointer'}}>
             <div className="qa-icon" style={{background: 'rgba(34,197,94,0.08)'}}>📋</div>
             <div className="qa-label">Order<br/>History</div>
           </div>
@@ -889,37 +930,154 @@ function AccountPageContent() {
     </div>
   )
 
-  const renderSupport = () => (
-    <div className="page-content active" id="page-support">
+  const renderSupport = () => {
+    if (showFaq) {
+      const items = [
+        'How do I receive my ticket?',
+        'What is Riviera?',
+        'Is there a limit on tickets per person?',
+        'Will there be another batch later?',
+        "Is there a guarantee I'll get a ticket in the queue?",
+        "Am I entitled to a refund if I change my mind?",
+        'What is the difference between standard and premium tickets?',
+        'When and how will I receive my VIP Kit items?',
+        'Tickets are sold out everywhere else. How is Riviera offering now?',
+      ]
+      return (
+        <div className="page-content active" id="page-faq">
+          <div className="welcome-banner" style={{marginBottom: 28}}>
+            <div>
+              <div className="welcome-name">FAQ</div>
+              <div className="welcome-sub">Frequent doubts</div>
+            </div>
+            <button
+              className="btn-ghost-sm"
+              onClick={() => {
+                setShowFaq(false)
+                setFaqExpandedIndex(null)
+              }}
+              style={{marginLeft: 'auto'}}
+            >
+              Back
+            </button>
+          </div>
+          <div style={{display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 24}}>
+            <div>
+              {items.map((q, idx) => {
+                const open = faqExpandedIndex === idx
+                return (
+                  <div key={q} style={{padding: '18px 0', borderBottom: '1px solid rgba(255,255,255,0.06)'}}>
+                    <button
+                      onClick={() => setFaqExpandedIndex(open ? null : idx)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        width: '100%',
+                        color: 'var(--riv-text)',
+                        fontSize: 15,
+                        fontWeight: 600,
+                        letterSpacing: '0.01em',
+                      }}
+                    >
+                      <span style={{flex: 1, textAlign: 'left', paddingRight: 12}}>{q}</span>
+                      <span style={{width: 16, display: 'inline-block', textAlign: 'right', opacity: 0.8}}>
+                        {open ? '×' : '+'}
+                      </span>
+                    </button>
+                    {open && (
+                      <div style={{marginTop: 12, color: 'var(--riv-text2)', fontSize: 14, lineHeight: 1.6}}>
+                        <p>Answer will be added here.</p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="page-content active" id="page-support">
+        <div className="welcome-banner" style={{marginBottom: '28px'}}>
+          <div>
+            <div className="welcome-name">SUPPORT CENTER</div>
+            <div className="welcome-sub">How can we help you today?</div>
+          </div>
+        </div>
+
+        {!showSupportSystem ? (
+          <div className="support-grid">
+            <div 
+              className="support-item"
+              onClick={() => setShowSupportSystem(true)}
+            >
+              <div className="support-icon">📧</div>
+              <div className="support-info">
+                <h4>Contact Support</h4>
+                <p>Open a ticket for bugs, questions, payment or refund requests. Avg reply: 2 hours · 9am–10pm.</p>
+              </div>
+            </div>
+            <div
+              className="support-item"
+              onClick={() => setShowFaq(true)}
+              style={{cursor: 'pointer'}}
+            >
+              <div className="support-icon">❓</div>
+              <div className="support-info">
+                <h4>FAQ</h4>
+                <p>Find quick answers to the most common questions about tickets and events.</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <SupportTab token={token} onExit={() => setShowSupportSystem(false)} />
+        )}
+      </div>
+    )
+  }
+
+  const renderOrders = () => (
+    <div className="page-content active" id="page-orders">
       <div className="welcome-banner" style={{marginBottom: '28px'}}>
         <div>
-          <div className="welcome-name">SUPPORT CENTER</div>
-          <div className="welcome-sub">How can we help you today?</div>
+          <div className="welcome-name">ORDER HISTORY</div>
+          <div className="welcome-sub">Your purchases and totals</div>
         </div>
       </div>
-
-      {!showSupportSystem ? (
-        <div className="support-grid">
-          <div 
-            className="support-item"
-            onClick={() => setShowSupportSystem(true)}
-          >
-            <div className="support-icon">📧</div>
-            <div className="support-info">
-              <h4>Contact Support</h4>
-              <p>Open a ticket for bugs, questions, payment or refund requests. Avg reply: 2 hours · 9am–10pm.</p>
-            </div>
-          </div>
-          <div className="support-item">
-            <div className="support-icon">❓</div>
-            <div className="support-info">
-              <h4>FAQ</h4>
-              <p>Find quick answers to the most common questions about tickets and events.</p>
-            </div>
-          </div>
-        </div>
+      {ordersLoading ? (
+        <div className="text-riv-text2 text-sm">Loading orders...</div>
+      ) : ordersError ? (
+        <div className="text-red-400 text-sm">{ordersError}</div>
+      ) : ordersData.length === 0 ? (
+        <div className="text-riv-text2 text-sm">No orders found.</div>
       ) : (
-        <SupportTab token={token} onExit={() => setShowSupportSystem(false)} />
+        <div className="account-card" style={{padding: 0}}>
+          <div style={{padding: '8px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'grid', gridTemplateColumns: '160px 1fr 140px 120px', columnGap: 16, fontSize: 12, color: 'var(--riv-text3)'}}>
+            <div>Date</div>
+            <div>Purchase</div>
+            <div>Status</div>
+            <div style={{textAlign: 'right'}}>Total</div>
+          </div>
+          {ordersData.map((o) => {
+            const d = o.paidAt || o.createdAt
+            const dateTxt = d ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(d)) : '-'
+            const title = o.movieTitle ? o.movieTitle : `Order ${o.orderNumber ?? o.id.slice(0,6).toUpperCase()}`
+            return (
+              <div key={o.id} style={{padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'grid', gridTemplateColumns: '160px 1fr 140px 120px', columnGap: 16, alignItems: 'center'}}>
+                <div style={{color: 'var(--riv-text2)', fontSize: 13}}>{dateTxt}</div>
+                <div style={{fontSize: 14, fontWeight: 600, color: 'var(--riv-text)'}}>
+                  {title}
+                  {o.cinemaName ? <span style={{marginLeft: 8, color: 'var(--riv-text3)', fontSize: 12}}>· {o.cinemaName}</span> : null}
+                </div>
+                <div style={{fontSize: 12, color: 'var(--riv-text2)'}}>{o.status}</div>
+                <div style={{textAlign: 'right', fontWeight: 700}}>{formatCurrency(o.totalAmount ?? 0)}</div>
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )
@@ -1007,6 +1165,7 @@ function AccountPageContent() {
           background: 'var(--riv-bg, #0b0b0c)',
           borderRight: '1px solid rgba(255,255,255,0.06)',
           boxShadow: '8px 0 24px rgba(0,0,0,0.6)',
+          overflowY: 'auto',
         }}
       >
         <div style={{ padding: '20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1117,11 +1276,19 @@ function AccountPageContent() {
         </div>
       </nav>
 
-      <div className="main pt-16 md:pt-0">
+      <div
+        className="main pt-16 md:pt-0"
+        style={{
+          minHeight: '100dvh',
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
         <div className="page-content active">
           {activeTab === 'events' && renderEvents()}
           {activeTab === 'account' && renderAccount()}
           {activeTab === 'support' && renderSupport()}
+          {activeTab === 'orders' && renderOrders()}
         </div>
       </div>
 
@@ -1162,3 +1329,4 @@ function AccountPageContent() {
     </div>
   )
 }
+

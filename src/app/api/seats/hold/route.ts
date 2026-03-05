@@ -8,6 +8,7 @@ import { writeAuditLog } from '@/lib/audit-log'
 import type { HoldSeatsResult } from '@/lib/seat-reservation'
 
 const QUEUE_SCOPE_KEY = 'the-odyssey-global'
+const MAX_TICKETS_PER_USER = 4
 
 const holdSchema = z.object({
   cartId: z.string().uuid().nullable().optional(),
@@ -140,6 +141,11 @@ export async function POST(request: NextRequest) {
           price: seat.price,
         }))
 
+      // Hard limit at server-side: no cart can hold more than 4 tickets
+      if (existingItems.length + itemsToInsert.length > MAX_TICKETS_PER_USER) {
+        throw new Error('TICKET_LIMIT_EXCEEDED')
+      }
+
       if (itemsToInsert.length > 0) {
         await tx.insert(cartItems).values(itemsToInsert)
       }
@@ -173,6 +179,9 @@ export async function POST(request: NextRequest) {
       }
       if (message === 'SEAT_OCCUPIED') {
         return { ok: false as const, error: 'SEAT_OCCUPIED', status: 409 }
+      }
+      if (message === 'TICKET_LIMIT_EXCEEDED') {
+        return { ok: false as const, error: 'TICKET_LIMIT_EXCEEDED', status: 409 }
       }
       throw error
       })

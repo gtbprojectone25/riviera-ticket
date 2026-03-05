@@ -1,4 +1,4 @@
-﻿import { db } from '@/db'
+import { db } from '@/db'
 import { paymentIntents, carts, users, sessions } from '@/db/schema'
 import { desc, eq, and, gte, lte } from 'drizzle-orm'
 import { Badge } from '@/components/ui/badge'
@@ -71,11 +71,12 @@ async function getOrders(params: { [key: string]: string | undefined }) {
       let userEmail = '-'
       let sessionTitle = '-'
 
-      if (order.userId) {
+      const orderUserId = order.userId
+      if (orderUserId) {
         const [user] = await db
           .select({ name: users.name, email: users.email })
           .from(users)
-          .where(eq(users.id, order.userId))
+          .where(eq(users.id, orderUserId))
           .limit(1)
 
         if (user) {
@@ -233,3 +234,4 @@ export async function OrdersTable({ searchParams }: { searchParams: SearchParams
     </div>
   )
 }
+

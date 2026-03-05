@@ -476,6 +476,10 @@ function RegisterContent() {
             tap here to resend it{resendTimer > 0 ? ` in ${resendTimer} seconds` : ''}
           </span>.
         </p>
+
+        <p className="text-xs text-gray-400 text-center">
+          Or <span className="text-blue-400 underline cursor-pointer" onClick={() => setCurrentStep('info')}>change your email</span>.
+        </p>
       </div>
 
       {/* Encryption Info - REMOVED */}

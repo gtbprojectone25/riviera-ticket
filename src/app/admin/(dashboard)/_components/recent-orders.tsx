@@ -4,6 +4,7 @@ import { desc, eq } from 'drizzle-orm'
 import { Badge } from '@/components/ui/badge'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { withDbRetry } from '@/lib/db-retry'
 
 type PaymentRow = Pick<
   typeof paymentIntents.$inferSelect,
@@ -16,48 +17,56 @@ type OrderWithDetails = PaymentRow & {
 }
 
 async function getRecentOrders() {
-  // Buscar últimos pagamentos com sucesso
-  const recentPayments = (await db
-    .select({
-      id: paymentIntents.id,
-      amountCents: paymentIntents.amountCents,
-      status: paymentIntents.status,
-      createdAt: paymentIntents.createdAt,
-      cartId: paymentIntents.cartId,
-      userId: paymentIntents.userId,
-    })
-    .from(paymentIntents)
-    .orderBy(desc(paymentIntents.createdAt))
-    .limit(5)) as PaymentRow[]
+  try {
+    const recentPayments = (await withDbRetry(() =>
+      db
+        .select({
+          id: paymentIntents.id,
+          amountCents: paymentIntents.amountCents,
+          status: paymentIntents.status,
+          createdAt: paymentIntents.createdAt,
+          cartId: paymentIntents.cartId,
+          userId: paymentIntents.userId,
+        })
+        .from(paymentIntents)
+        .orderBy(desc(paymentIntents.createdAt))
+        .limit(5),
+    )) as PaymentRow[]
 
-  // Buscar dados dos usuários
-  const ordersWithDetails: OrderWithDetails[] = await Promise.all(
-    recentPayments.map(async (payment) => {
-      let userName = 'Convidado'
-      let userEmail = '-'
+    const ordersWithDetails: OrderWithDetails[] = await Promise.all(
+      recentPayments.map(async (payment) => {
+        let userName = 'Convidado'
+        let userEmail = '-'
 
-      if (payment.userId) {
-        const [user] = await db
-          .select({ name: users.name, email: users.email })
-          .from(users)
-          .where(eq(users.id, payment.userId))
-          .limit(1)
+        const userId = payment.userId
+        if (userId) {
+          const [user] = await withDbRetry(() =>
+            db
+              .select({ name: users.name, email: users.email })
+              .from(users)
+              .where(eq(users.id, userId))
+              .limit(1),
+          )
 
-        if (user) {
-          userName = user.name
-          userEmail = user.email
+          if (user) {
+            userName = user.name
+            userEmail = user.email
+          }
         }
-      }
 
-      return {
-        ...payment,
-        userName,
-        userEmail,
-      }
-    })
-  )
+        return {
+          ...payment,
+          userName,
+          userEmail,
+        }
+      }),
+    )
 
-  return ordersWithDetails
+    return ordersWithDetails
+  } catch (error) {
+    console.error('RecentOrders: failed to load recent orders', error)
+    return [] as OrderWithDetails[]
+  }
 }
 
 const statusColors: Record<string, string> = {
@@ -80,9 +89,9 @@ export async function RecentOrders() {
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-white">Últimos Pedidos</h3>
+        <h3 className="text-lg font-semibold text-white">Ultimos Pedidos</h3>
         <a href="/admin/orders" className="text-sm text-red-500 hover:text-red-400">
-          Ver todos →
+          Ver todos &rarr;
         </a>
       </div>
 
@@ -106,15 +115,15 @@ export async function RecentOrders() {
 
               <div className="text-right mx-4">
                 <p className="text-sm font-medium text-white">
-                  {new Intl.NumberFormat('pt-BR', { 
-                    style: 'currency', 
-                    currency: 'BRL' 
+                  {new Intl.NumberFormat('pt-BR', {
+                    style: 'currency',
+                    currency: 'BRL',
                   }).format(order.amountCents / 100)}
                 </p>
                 <p className="text-xs text-gray-500">
-                  {formatDistanceToNow(new Date(order.createdAt), { 
-                    addSuffix: true, 
-                    locale: ptBR 
+                  {formatDistanceToNow(new Date(order.createdAt), {
+                    addSuffix: true,
+                    locale: ptBR,
                   })}
                 </p>
               </div>

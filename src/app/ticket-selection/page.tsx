@@ -99,6 +99,16 @@ export default function TicketSelectionPage() {
   const bootstrapAttempted = useRef(false)
   const isDev = process.env.NODE_ENV !== 'production'
 
+  const generateRandomRating = () => {
+    return (Math.random() * (9.9 - 8.5) + 8.5).toFixed(1);
+  };
+
+  const generateRandomReviewCount = () => {
+      const count = Math.floor(Math.random() * (5000 - 2000 + 1)) + 2000;
+      return count.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+
   const selectedCinema = useBookingStore((state) => state.selectedCinema)
   const setSelectedTickets = useBookingStore((state) => state.setSelectedTickets)
   const selectedSessionId = useBookingStore((state) => state.selectedSessionId)
@@ -427,11 +437,11 @@ export default function TicketSelectionPage() {
               </div>
               <div className="flex items-center gap-3">
                 <Badge className="bg-gray-700 text-white px-3 py-1.5">
-                  9.7/10
+                  {generateRandomRating()}/10
                 </Badge>
                 <div className="text-right">
                   <div className="text-xs text-gray-400">Extraordinary</div>
-                  <div className="text-xs text-gray-500">2.987 reviews</div>
+                  <div className="text-xs text-gray-500">{generateRandomReviewCount()} reviews</div>
                 </div>
               </div>
             </div>

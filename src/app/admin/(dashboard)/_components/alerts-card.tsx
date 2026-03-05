@@ -2,6 +2,7 @@ import { db } from '@/db'
 import { sessions, carts } from '@/db/schema'
 import { gte, lte, and, eq, sql, count } from 'drizzle-orm'
 import { AlertTriangle, TrendingDown, Users, Ticket, LucideIcon } from 'lucide-react'
+import { withDbRetry } from '@/lib/db-retry'
 
 type AlertItem = {
   type: 'warning' | 'danger' | 'info'
@@ -10,78 +11,91 @@ type AlertItem = {
 }
 
 async function getAlerts() {
-  const now = new Date()
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  
-  const tomorrow = new Date(today)
-  tomorrow.setDate(tomorrow.getDate() + 1)
+  try {
+    const now = new Date()
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
 
-  const alerts: AlertItem[] = []
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
 
-  // Sessões quase lotadas (> 90%)
-  const almostFullSessions = await db
-    .select({ count: count() })
-    .from(sessions)
-    .where(and(
-      gte(sessions.startTime, today),
-      lte(sessions.startTime, tomorrow),
-      sql`(${sessions.totalSeats} - ${sessions.availableSeats}) * 100 / ${sessions.totalSeats} >= 90`
-    ))
+    const alerts: AlertItem[] = []
 
-  if (almostFullSessions[0]?.count > 0) {
-    alerts.push({
-      type: 'warning',
-      icon: Users,
-      message: `${almostFullSessions[0].count} sessão(ões) quase lotada(s) hoje`,
-    })
+    const almostFullSessions = await withDbRetry(() =>
+      db
+        .select({ count: count() })
+        .from(sessions)
+        .where(and(
+          gte(sessions.startTime, today),
+          lte(sessions.startTime, tomorrow),
+          sql`(${sessions.totalSeats} - ${sessions.availableSeats}) * 100 / ${sessions.totalSeats} >= 90`,
+        )),
+    )
+
+    if (almostFullSessions[0]?.count > 0) {
+      alerts.push({
+        type: 'warning',
+        icon: Users,
+        message: `${almostFullSessions[0].count} sessao(oes) quase lotada(s) hoje`,
+      })
+    }
+
+    const lowSalesSessions = await withDbRetry(() =>
+      db
+        .select({ count: count() })
+        .from(sessions)
+        .where(and(
+          gte(sessions.startTime, today),
+          lte(sessions.startTime, tomorrow),
+          sql`(${sessions.totalSeats} - ${sessions.availableSeats}) * 100 / ${sessions.totalSeats} < 20`,
+        )),
+    )
+
+    if (lowSalesSessions[0]?.count > 0) {
+      alerts.push({
+        type: 'danger',
+        icon: TrendingDown,
+        message: `${lowSalesSessions[0].count} sessao(oes) com baixa venda hoje`,
+      })
+    }
+
+    const expiringCarts = await withDbRetry(() =>
+      db
+        .select({ count: count() })
+        .from(carts)
+        .where(and(
+          eq(carts.status, 'ACTIVE'),
+          lte(carts.expiresAt, new Date(now.getTime() + 2 * 60 * 1000)),
+        )),
+    )
+
+    if (expiringCarts[0]?.count > 0) {
+      alerts.push({
+        type: 'info',
+        icon: Ticket,
+        message: `${expiringCarts[0].count} carrinho(s) prestes a expirar`,
+      })
+    }
+
+    if (alerts.length === 0) {
+      alerts.push({
+        type: 'info',
+        icon: AlertTriangle,
+        message: 'Nenhum alerta no momento',
+      })
+    }
+
+    return alerts
+  } catch (error) {
+    console.error('AlertsCard: failed to load alerts', error)
+    return [
+      {
+        type: 'info' as const,
+        icon: AlertTriangle,
+        message: 'Painel temporariamente indisponivel',
+      },
+    ]
   }
-
-  // Sessões com baixa venda (< 20%)
-  const lowSalesSessions = await db
-    .select({ count: count() })
-    .from(sessions)
-    .where(and(
-      gte(sessions.startTime, today),
-      lte(sessions.startTime, tomorrow),
-      sql`(${sessions.totalSeats} - ${sessions.availableSeats}) * 100 / ${sessions.totalSeats} < 20`
-    ))
-
-  if (lowSalesSessions[0]?.count > 0) {
-    alerts.push({
-      type: 'danger',
-      icon: TrendingDown,
-      message: `${lowSalesSessions[0].count} sessão(ões) com baixa venda hoje`,
-    })
-  }
-
-  // Carrinhos expirando (ativos há mais de 8 minutos)
-  const expiringCarts = await db
-    .select({ count: count() })
-    .from(carts)
-    .where(and(
-      eq(carts.status, 'ACTIVE'),
-      lte(carts.expiresAt, new Date(now.getTime() + 2 * 60 * 1000))
-    ))
-
-  if (expiringCarts[0]?.count > 0) {
-    alerts.push({
-      type: 'info',
-      icon: Ticket,
-      message: `${expiringCarts[0].count} carrinho(s) prestes a expirar`,
-    })
-  }
-
-  // Se não houver alertas
-  if (alerts.length === 0) {
-    alerts.push({
-      type: 'info',
-      icon: AlertTriangle,
-      message: 'Nenhum alerta no momento',
-    })
-  }
-
-  return alerts
 }
 
 const alertStyles = {

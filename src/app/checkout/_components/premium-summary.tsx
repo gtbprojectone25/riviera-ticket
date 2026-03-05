@@ -113,8 +113,13 @@ export function FeatureCards() {
   )
 }
 
+import { BuyerGuaranteeModal } from './BuyerGuaranteeModal'
+import { useState } from 'react'
+
 // Componente para 100% Buyer Guarantee
 export function BuyerGuarantee() {
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
@@ -131,9 +136,11 @@ export function BuyerGuarantee() {
         <p className="text-xs text-gray-400">• Full compensation for events that are canceled and not rescheduled</p>
         <p className="text-xs text-gray-400">• Valid tickets delivered on time - or your money back</p>
         <p className="text-xs text-gray-400">
-          • <span className="text-gray-500 underline cursor-pointer hover:text-gray-300">Learn more about Buyer Guarantee</span>
+          • <span className="text-gray-500 underline cursor-pointer hover:text-gray-300" onClick={() => setIsModalOpen(true)}>Learn more about Buyer Guarantee</span>
         </p>
       </div>
+
+      <BuyerGuaranteeModal open={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </div>
   )
 }

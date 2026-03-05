@@ -50,17 +50,21 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const checkoutSessionId = searchParams.get('checkout_session_id')
+    const cartIdFromQuery = searchParams.get('cartId')
 
-    if (!checkoutSessionId) {
-      return NextResponse.json({ error: 'checkout_session_id is required' }, { status: 400 })
+    if (!checkoutSessionId && !cartIdFromQuery) {
+      return NextResponse.json({ error: 'checkout_session_id or cartId is required' }, { status: 400 })
     }
     if (isDev) {
-      console.info('[tickets/by-cart] request', { userId: user.id, checkoutSessionId })
+      console.info('[tickets/by-cart] request', { userId: user.id, checkoutSessionId, cartId: cartIdFromQuery })
     }
 
     const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
-    if (!uuidRegex.test(checkoutSessionId)) {
+    if (checkoutSessionId && !uuidRegex.test(checkoutSessionId)) {
       return NextResponse.json({ error: 'checkout_session_id invalid' }, { status: 400 })
+    }
+    if (cartIdFromQuery && !uuidRegex.test(cartIdFromQuery)) {
+      return NextResponse.json({ error: 'cartId invalid' }, { status: 400 })
     }
 
     const isMissingCheckoutSchemaError = (error: unknown) => {
@@ -79,11 +83,73 @@ export async function GET(request: NextRequest) {
     }
 
     const resolveCheckoutContext = async (): Promise<CheckoutContext | null> => {
+      if (cartIdFromQuery) {
+        const [cartRow] = await db
+          .select({
+            id: carts.id,
+            userId: carts.userId,
+          })
+          .from(carts)
+          .where(eq(carts.id, cartIdFromQuery))
+          .limit(1)
+
+        if (!cartRow) {
+          return null
+        }
+
+        const [latestPaymentForCart] = await db
+          .select({
+            userId: paymentIntents.userId,
+            stripePaymentIntentId: paymentIntents.stripePaymentIntentId,
+            status: paymentIntents.status,
+          })
+          .from(paymentIntents)
+          .where(eq(paymentIntents.cartId, cartIdFromQuery))
+          .orderBy(desc(paymentIntents.createdAt))
+          .limit(1)
+
+        const [orderForCart] = await db
+          .select({
+            userId: orders.userId,
+            status: orders.status,
+          })
+          .from(orders)
+          .where(eq(orders.cartId, cartIdFromQuery))
+          .orderBy(desc(orders.createdAt))
+          .limit(1)
+
+        const [confirmedTicketForCart] = await db
+          .select({ id: tickets.id })
+          .from(tickets)
+          .where(
+            and(
+              eq(tickets.cartId, cartIdFromQuery),
+              inArray(tickets.status, ['CONFIRMED']),
+            ),
+          )
+          .limit(1)
+
+        const ownerUserId = orderForCart?.userId ?? latestPaymentForCart?.userId ?? cartRow.userId ?? null
+        const paymentConfirmed =
+          Boolean(confirmedTicketForCart) ||
+          latestPaymentForCart?.status === 'SUCCEEDED' ||
+          orderForCart?.status === 'PAID' ||
+          orderForCart?.status === 'CONFIRMED'
+
+        return {
+          cartId: cartIdFromQuery,
+          ownerUserId,
+          paymentConfirmed,
+          paymentIntentId: latestPaymentForCart?.stripePaymentIntentId ?? null,
+          source: 'payment_intents',
+        }
+      }
+
       try {
         const [checkout] = await db
           .select()
           .from(checkoutPurchases)
-          .where(eq(checkoutPurchases.checkoutSessionId, checkoutSessionId))
+          .where(eq(checkoutPurchases.checkoutSessionId, checkoutSessionId!))
           .limit(1)
 
         if (checkout) {
@@ -117,8 +183,8 @@ export async function GET(request: NextRequest) {
         .from(orders)
         .where(
           or(
-            eq(orders.checkoutSessionId, checkoutSessionId),
-            sql`${orders.metadata}->>'checkout_session_id' = ${checkoutSessionId}`,
+            eq(orders.checkoutSessionId, checkoutSessionId!),
+            sql`${orders.metadata}->>'checkout_session_id' = ${checkoutSessionId!}`,
           ),
         )
         .orderBy(desc(orders.createdAt))
@@ -196,7 +262,7 @@ export async function GET(request: NextRequest) {
           metadata: paymentIntents.metadata,
         })
         .from(paymentIntents)
-        .where(eq(paymentIntents.checkoutSessionId, checkoutSessionId))
+        .where(eq(paymentIntents.checkoutSessionId, checkoutSessionId!))
         .orderBy(desc(paymentIntents.createdAt))
         .limit(1)
 
@@ -211,7 +277,7 @@ export async function GET(request: NextRequest) {
             metadata: paymentIntents.metadata,
           })
           .from(paymentIntents)
-          .where(sql`${paymentIntents.metadata} ILIKE ${`%"checkoutSessionId":"${checkoutSessionId}"%`}`)
+          .where(sql`${paymentIntents.metadata} ILIKE ${`%"checkoutSessionId":"${checkoutSessionId!}"%`}`)
           .orderBy(desc(paymentIntents.createdAt))
           .limit(1)
 
@@ -265,24 +331,26 @@ export async function GET(request: NextRequest) {
       }
 
       const now = new Date()
-      try {
-        await tx
-          .update(checkoutPurchases)
-          .set({
-            userId: user.id,
-            status: 'CLAIMED',
-            claimedAt: now,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(checkoutPurchases.checkoutSessionId, checkoutSessionId),
-              or(isNull(checkoutPurchases.userId), eq(checkoutPurchases.userId, user.id)),
-            ),
-          )
-      } catch (error) {
-        if (!isMissingCheckoutSchemaError(error)) {
-          throw error
+      if (checkoutSessionId) {
+        try {
+          await tx
+            .update(checkoutPurchases)
+            .set({
+              userId: user.id,
+              status: 'CLAIMED',
+              claimedAt: now,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(checkoutPurchases.checkoutSessionId, checkoutSessionId),
+                or(isNull(checkoutPurchases.userId), eq(checkoutPurchases.userId, user.id)),
+              ),
+            )
+        } catch (error) {
+          if (!isMissingCheckoutSchemaError(error)) {
+            throw error
+          }
         }
       }
 

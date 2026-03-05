@@ -9,6 +9,7 @@ import { eq, and, gt } from 'drizzle-orm'
 import { cookies } from 'next/headers'
 import { randomBytes } from 'crypto'
 import { hashPassword as hashUserPassword, verifyPasswordWithMigration } from '@/lib/password'
+import { withDbRetry } from '@/lib/db-retry'
 
 const SESSION_DURATION_DAYS = 7
 const ADMIN_COOKIE_NAME = 'admin_session'
@@ -161,25 +162,29 @@ export async function getAdminFromSession(): Promise<AdminAuthResult['admin'] | 
 
     if (!token) return null
 
-    const [session] = await db
-      .select()
-      .from(adminSessions)
-      .where(and(
-        eq(adminSessions.token, token),
-        gt(adminSessions.expiresAt, new Date())
-      ))
-      .limit(1)
+    const [session] = await withDbRetry(() =>
+      db
+        .select()
+        .from(adminSessions)
+        .where(and(
+          eq(adminSessions.token, token),
+          gt(adminSessions.expiresAt, new Date())
+        ))
+        .limit(1),
+    )
 
     if (!session) return null
 
-    const [admin] = await db
-      .select()
-      .from(adminUsers)
-      .where(and(
-        eq(adminUsers.id, session.adminId),
-        eq(adminUsers.isActive, true)
-      ))
-      .limit(1)
+    const [admin] = await withDbRetry(() =>
+      db
+        .select()
+        .from(adminUsers)
+        .where(and(
+          eq(adminUsers.id, session.adminId),
+          eq(adminUsers.isActive, true)
+        ))
+        .limit(1),
+    )
 
     if (!admin) return null
 

@@ -4,8 +4,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { paymentIntents, carts } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
+import { validateCartSeatHolds } from '@/db/queries'
 
 const ADYEN_API_KEY = process.env.ADYEN_API_KEY || ''
 const ADYEN_MERCHANT_ACCOUNT = process.env.ADYEN_MERCHANT_ACCOUNT || ''
@@ -40,6 +41,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Carrinho nao encontrado' },
         { status: 404 }
+      )
+    }
+
+    const holdValidation = await validateCartSeatHolds(cartId)
+    if (!holdValidation.valid) {
+      return NextResponse.json(
+        { error: holdValidation.error, invalidSeatIds: holdValidation.invalidSeatIds },
+        { status: 409 },
+      )
+    }
+
+    const cartItemsCountResult = await db.execute(sql<{ count: number }>`
+      select count(*)::int as count from cart_items where cart_id = ${cartId}
+    `)
+    const rawCartItemsCount = cartItemsCountResult.rows?.[0]?.count
+    const cartItemsCount = typeof rawCartItemsCount === 'number'
+      ? rawCartItemsCount
+      : Number(rawCartItemsCount ?? 0)
+    if (cartItemsCount > 4) {
+      return NextResponse.json(
+        { error: 'Limite de 4 ingressos por pessoa excedido' },
+        { status: 409 },
       )
     }
 

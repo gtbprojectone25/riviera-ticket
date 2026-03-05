@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { seats, sessions } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { seats, sessions, tickets } from '@/db/schema'
+import { and, eq } from 'drizzle-orm'
 import { ensureSeatsForSession } from '@/server/seats/generateSeatsForSession'
 import { toSeatStateRows } from '@/server/seats/seatStateDTO'
+import { withDbRetry } from '@/lib/db-retry'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -64,19 +65,23 @@ export async function GET(
     }
 
     const fetchSeats = async () =>
-      db
-        .select()
-        .from(seats)
-        .where(eq(seats.sessionId, id))
+      withDbRetry(() =>
+        db
+          .select()
+          .from(seats)
+          .where(eq(seats.sessionId, id)),
+      )
 
     let dbSeats = await fetchSeats()
 
     if (dbSeats.length === 0 || forceEnsure) {
-      const [sessionExists] = await db
-        .select({ id: sessions.id })
-        .from(sessions)
-        .where(eq(sessions.id, id))
-        .limit(1)
+      const [sessionExists] = await withDbRetry(() =>
+        db
+          .select({ id: sessions.id })
+          .from(sessions)
+          .where(eq(sessions.id, id))
+          .limit(1),
+      )
 
       if (!sessionExists) {
         return NextResponse.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 })
@@ -98,7 +103,27 @@ export async function GET(
       }
     }
 
-    const rows: RowResponse[] = toSeatStateRows(dbSeats)
+    // Hard guarantee: if there is a confirmed ticket for a seat, it must be treated as SOLD in the map.
+    const confirmedTicketSeats = await withDbRetry(() =>
+      db
+        .select({ seatId: tickets.seatId })
+        .from(tickets)
+        .where(
+          and(
+            eq(tickets.sessionId, id),
+            eq(tickets.status, 'CONFIRMED'),
+          ),
+        ),
+    )
+
+    const confirmedSeatIds = new Set(confirmedTicketSeats.map((t) => t.seatId).filter(Boolean))
+    const normalizedSeats = dbSeats.map((seat) =>
+      confirmedSeatIds.has(seat.id)
+        ? { ...seat, status: 'SOLD' as const }
+        : seat,
+    )
+
+    const rows: RowResponse[] = toSeatStateRows(normalizedSeats)
 
     seatCache.set(id, { rows, at: Date.now() })
 
@@ -129,4 +154,3 @@ export async function GET(
     )
   }
 }
-

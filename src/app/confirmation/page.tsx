@@ -1,10 +1,11 @@
 ﻿'use client'
 
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { CheckCircle, Clock3,AlertTriangle } from 'lucide-react'
 
 import { useAuth } from '@/context/auth'
+import { useCheckoutTimer } from '@/components/flow'
 import { useBookingStore } from '@/stores/booking'
 import { qrcodeService } from '@/lib/qrcode-service'
 import { formatCurrency } from '@/lib/utils'
@@ -44,17 +45,24 @@ function ConfirmationPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { isAuthenticated, isLoading: authLoading } = useAuth()
+  const { clearFlow } = useCheckoutTimer()
   const isDev = process.env.NODE_ENV !== 'production'
 
   const paymentData = useBookingStore((s) => s.paymentData)
   const resetBooking = useBookingStore((s) => s.resetBooking)
 
   const checkoutSessionId = searchParams.get('checkout_session_id') || paymentData?.checkoutSessionId || null
+  const cartIdFromQuery = searchParams.get('cartId')
+  const cartIdFromPayment = paymentData?.orderId || null
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  const cartIdCandidate = cartIdFromQuery || cartIdFromPayment
+  const cartId = cartIdCandidate && uuidRegex.test(cartIdCandidate) ? cartIdCandidate : null
 
   const [fetchState, setFetchState] = useState<FetchState>('processing')
   const [fetchMessage, setFetchMessage] = useState<string>('Awaiting ticket confirmation...')
   const [retryCount, setRetryCount] = useState(0)
   const [reloadNonce, setReloadNonce] = useState(0)
+  const hasClearedFlowRef = useRef(false)
 
   const [sessionInfo, setSessionInfo] = useState<{
     id: string
@@ -72,7 +80,7 @@ function ConfirmationPageContent() {
   const [, setQrCodeUrl] = useState<string | null>(null)
   const [, setQrLoading] = useState(false)
 
-  const hasCheckoutSession = useMemo(() => Boolean(checkoutSessionId), [checkoutSessionId])
+  const hasClaimIdentity = useMemo(() => Boolean(checkoutSessionId || cartId), [checkoutSessionId, cartId])
 
   const orderId = useMemo(() => {
     return paymentData?.orderId || checkoutSessionId || `ORD-${Date.now()}`
@@ -87,18 +95,19 @@ function ConfirmationPageContent() {
 
   useEffect(() => {
     if (authLoading || isAuthenticated) return
-    const returnTo = checkoutSessionId
-      ? `/confirmation?checkout_session_id=${encodeURIComponent(checkoutSessionId)}`
-      : '/confirmation'
+    const returnQuery = new URLSearchParams()
+    if (checkoutSessionId) returnQuery.set('checkout_session_id', checkoutSessionId)
+    if (cartId) returnQuery.set('cartId', cartId)
+    const returnTo = `/confirmation${returnQuery.toString() ? `?${returnQuery.toString()}` : ''}`
     router.replace(`/login?returnTo=${encodeURIComponent(returnTo)}`)
-  }, [authLoading, isAuthenticated, router, checkoutSessionId])
+  }, [authLoading, isAuthenticated, router, checkoutSessionId, cartId])
 
   useEffect(() => {
     if (authLoading || !isAuthenticated) return
 
-    if (!hasCheckoutSession || !checkoutSessionId) {
+    if (!hasClaimIdentity) {
       setFetchState('not_found')
-      setFetchMessage('Checkout session not found. Please return to payment and try again.')
+      setFetchMessage('Purchase reference not found. Please return to payment and try again.')
       return
     }
 
@@ -106,11 +115,11 @@ function ConfirmationPageContent() {
 
     const finalizeAndLoadTickets = async () => {
       // Best-effort finalize to avoid stuck pending state
-      if (checkoutSessionId) {
+      if (checkoutSessionId || cartId) {
         void fetch('/api/payment/stripe/finalize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ checkoutSessionId }),
+          body: JSON.stringify({ checkoutSessionId, cartId }),
         }).catch(() => {})
       }
 
@@ -137,6 +146,7 @@ function ConfirmationPageContent() {
             credentials: 'include',
             body: JSON.stringify({
               checkout_session_id: checkoutSessionId,
+              cartId,
             }),
           })
 
@@ -162,7 +172,7 @@ function ConfirmationPageContent() {
               console.info('[confirmation] checkout not found', { checkoutSessionId })
             }
             setFetchState('not_found')
-            setFetchMessage('Purchase not found for this checkout_session_id.')
+            setFetchMessage('Purchase not found for this confirmation reference.')
             return
           }
 
@@ -237,7 +247,15 @@ function ConfirmationPageContent() {
     return () => {
       active = false
     }
-  }, [authLoading, isAuthenticated, hasCheckoutSession, reloadNonce, isDev, checkoutSessionId])
+  }, [authLoading, isAuthenticated, hasClaimIdentity, reloadNonce, isDev, checkoutSessionId, cartId])
+
+  useEffect(() => {
+    if (fetchState !== 'confirmed') return
+    if (hasClearedFlowRef.current) return
+
+    hasClearedFlowRef.current = true
+    void clearFlow()
+  }, [clearFlow, fetchState])
 
   useEffect(() => {
     if (fetchState !== 'confirmed') {

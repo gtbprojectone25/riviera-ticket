@@ -86,7 +86,14 @@ function LoginPageContent() {
   }
 
   return (
-    <div className="riviera-login-screen">
+    <div
+      className="riviera-login-screen"
+      style={{
+        minHeight: '100dvh',
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+      }}
+    >
       <div className="login-wrap">
         <div className="login-logo">RIVIERA</div>
         <div className="imax-badge">

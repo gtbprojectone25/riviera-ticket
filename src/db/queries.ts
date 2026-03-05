@@ -652,6 +652,69 @@ export async function releaseExpiredReservations() {
   return await releaseExpiredHolds()
 }
 
+export async function validateCartSeatHolds(
+  cartId: string,
+  tx: DbInstance = db,
+): Promise<{
+  valid: boolean
+  error: 'HOLD_EXPIRED' | 'SEAT_CONFLICT' | null
+  invalidSeatIds: string[]
+}> {
+  const now = new Date()
+
+  const items = await tx
+    .select({
+      seatId: seats.id,
+      status: seats.status,
+      heldByCartId: seats.heldByCartId,
+      heldUntil: seats.heldUntil,
+      soldCartId: seats.soldCartId,
+    })
+    .from(cartItems)
+    .innerJoin(seats, eq(seats.id, cartItems.seatId))
+    .where(eq(cartItems.cartId, cartId))
+
+  if (items.length === 0) {
+    return { valid: false, error: 'HOLD_EXPIRED', invalidSeatIds: [] }
+  }
+
+  const conflictSeatIds: string[] = []
+  const expiredSeatIds: string[] = []
+
+  for (const item of items) {
+    if (item.status === 'SOLD') {
+      if (item.soldCartId !== cartId) {
+        conflictSeatIds.push(item.seatId)
+      }
+      continue
+    }
+
+    if (item.status !== 'HELD') {
+      expiredSeatIds.push(item.seatId)
+      continue
+    }
+
+    if (item.heldByCartId !== cartId) {
+      conflictSeatIds.push(item.seatId)
+      continue
+    }
+
+    if (item.heldUntil && item.heldUntil <= now) {
+      expiredSeatIds.push(item.seatId)
+    }
+  }
+
+  if (conflictSeatIds.length > 0) {
+    return { valid: false, error: 'SEAT_CONFLICT', invalidSeatIds: conflictSeatIds }
+  }
+
+  if (expiredSeatIds.length > 0) {
+    return { valid: false, error: 'HOLD_EXPIRED', invalidSeatIds: expiredSeatIds }
+  }
+
+  return { valid: true, error: null, invalidSeatIds: [] }
+}
+
 // Cart operations
 export async function createCart(cartData: NewCart) {
   const [cart] = await db.insert(carts).values(cartData).returning()

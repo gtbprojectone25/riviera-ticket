@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { users, userSessions } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { tickets, users, userSessions } from '@/db/schema'
+import { and, eq } from 'drizzle-orm'
 
 async function getUserFromRequest(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -41,10 +41,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const [vipTicket] = await db
+      .select({ id: tickets.id })
+      .from(tickets)
+      .where(
+        and(
+          eq(tickets.userId, user.id),
+          eq(tickets.ticketType, 'VIP'),
+          eq(tickets.status, 'CONFIRMED'),
+        ),
+      )
+      .limit(1)
+
     return NextResponse.json({
       firstName: user.name || '',
       lastName: user.surname || '',
       email: user.email,
+      isVip: !!vipTicket,
     })
   } catch (error) {
     console.error('Error fetching user profile:', error)
