@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Loader2, RefreshCw, ArrowLeft } from 'lucide-react'
+import { Plus, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useSupportTickets } from '@/hooks/use-support-tickets'
 import { TicketList } from './TicketList'
@@ -57,10 +57,12 @@ export function SupportTab({ token, onExit }: Props) {
           {view.kind === 'list' && onExit && (
             <button
               onClick={onExit}
-              className="text-gray-400 hover:text-white transition-colors"
+              className="btn-account-back"
               aria-label="Back to Support Center"
+              type="button"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <span aria-hidden="true">&larr;</span>
+              <span></span>
             </button>
           )}
           <h2 className="text-lg font-semibold text-white">

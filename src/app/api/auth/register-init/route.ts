@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     )
 
     // Tentar enviar email com codigo (nao bloqueia se falhar)
-    const emailSent = await emailService.sendVerificationCode(email, code)
+    const emailSent = await emailService.sendVerificationCode(email, code, 'register')
 
     // Sempre retorna sucesso, mesmo se o email nao foi enviado.
     // O codigo foi salvo no banco e pode ser validado.

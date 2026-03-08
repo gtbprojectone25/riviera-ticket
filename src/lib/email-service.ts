@@ -15,6 +15,8 @@ interface EmailConfig {
   }
 }
 
+type VerificationContext = 'register' | 'password_reset'
+
 class EmailService {
   private transporter: nodemailer.Transporter | null = null
 
@@ -45,14 +47,18 @@ class EmailService {
   /**
    * Send verification code email
    */
-  async sendVerificationCode(email: string, code: string): Promise<boolean> {
+  async sendVerificationCode(
+    email: string,
+    code: string,
+    context: VerificationContext = 'register',
+  ): Promise<boolean> {
     if (!this.transporter) {
       console.warn('Email service not configured. Code:', code)
       return false
     }
 
     try {
-      const html = this.getVerificationEmailTemplate(code)
+      const { subject, html } = this.getVerificationEmailTemplate(code, context)
       
       await this.transporter.sendMail({
         from:
@@ -61,7 +67,7 @@ class EmailService {
           process.env.EMAIL_SERVER_USER ||
           process.env.SMTP_USER,
         to: email,
-        subject: 'Your Riviera Tickets Verification Code',
+        subject,
         html,
       })
 
@@ -109,33 +115,112 @@ class EmailService {
     }
   }
 
-  private getVerificationEmailTemplate(code: string): string {
-    return `
+  private getVerificationEmailTemplate(
+    code: string,
+    context: VerificationContext,
+  ): { subject: string; html: string } {
+    const isPasswordReset = context === 'password_reset'
+    const title = isPasswordReset ? 'Password Reset Verification Code' : 'Account Verification Code'
+    const intro = isPasswordReset
+      ? 'We received a request to reset your Riviera account password.'
+      : 'Use this code to verify your email and finish creating your Riviera account.'
+    const action = isPasswordReset ? 'Reset Password' : 'Verify Account'
+    const ignoreText = isPasswordReset
+      ? "If you didn't request a password change, ignore this email and your password will stay the same."
+      : "If you didn't start this account creation, you can safely ignore this email."
+
+    return {
+      subject: `Riviera - ${isPasswordReset ? 'Reset your password' : 'Verify your account'}`,
+      html: `
       <!DOCTYPE html>
       <html>
         <head>
           <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
           <style>
-            body { font-family: Arial, sans-serif; background-color: #000; color: #fff; padding: 20px; }
-            .container { max-width: 600px; margin: 0 auto; background-color: #1c1c1c; padding: 30px; border-radius: 10px; }
-            .code { font-size: 32px; font-weight: bold; letter-spacing: 8px; text-align: center; color: #0066FF; margin: 30px 0; }
-            .footer { margin-top: 30px; font-size: 12px; color: #666; text-align: center; }
+            body { margin: 0; padding: 0; background: #0b0f19; font-family: Arial, sans-serif; color: #f5f7fb; }
+            .wrap { width: 100%; padding: 28px 14px; box-sizing: border-box; }
+            .card {
+              max-width: 620px; margin: 0 auto; border-radius: 16px; overflow: hidden;
+              background: linear-gradient(180deg, #0f1728 0%, #0b1220 100%);
+              border: 1px solid rgba(102, 153, 255, 0.28);
+            }
+            .top {
+              padding: 24px 28px 18px 28px;
+              border-bottom: 1px solid rgba(255,255,255,0.08);
+              background: radial-gradient(120% 140% at 85% -20%, rgba(70,130,255,0.45) 0%, rgba(70,130,255,0) 58%);
+            }
+            .brand { font-size: 12px; letter-spacing: 1.6px; color: #8fb2ff; text-transform: uppercase; margin-bottom: 8px; font-weight: 700; }
+            .title { margin: 0; font-size: 26px; line-height: 1.2; color: #ffffff; }
+            .body { padding: 24px 28px 28px 28px; color: #d6def0; }
+            .body p { margin: 0 0 14px 0; font-size: 15px; line-height: 1.6; }
+            .code-box {
+              margin: 20px 0 18px 0; padding: 18px 12px;
+              border-radius: 12px;
+              background: rgba(24,40,74,0.65);
+              border: 1px solid rgba(130,172,255,0.32);
+              text-align: center;
+            }
+            .code {
+              margin: 0;
+              font-size: 40px;
+              letter-spacing: 10px;
+              font-weight: 700;
+              color: #6ea2ff;
+            }
+            .meta {
+              margin-top: 8px;
+              font-size: 12px;
+              color: #93a6cf;
+              letter-spacing: 0.3px;
+            }
+            .cta {
+              display: inline-block;
+              margin-top: 6px;
+              padding: 10px 16px;
+              border-radius: 10px;
+              background: rgba(50,120,255,0.18);
+              border: 1px solid rgba(109,165,255,0.44);
+              color: #dce8ff;
+              font-size: 13px;
+              font-weight: 700;
+              letter-spacing: 0.3px;
+              text-decoration: none;
+            }
+            .foot {
+              margin-top: 18px;
+              padding-top: 14px;
+              border-top: 1px solid rgba(255,255,255,0.08);
+              font-size: 12px;
+              color: #8698be;
+            }
           </style>
         </head>
         <body>
-          <div class="container">
-            <h1 style="color: #fff;">Verification Code</h1>
-            <p>Your verification code is:</p>
-            <div class="code">${code}</div>
-            <p>This code will expire in 10 minutes.</p>
-            <p>If you didn't request this code, please ignore this email.</p>
-            <div class="footer">
-              <p>Riviera Tickets - IMAX 70mm Experience</p>
+          <div class="wrap">
+            <div class="card">
+              <div class="top">
+                <div class="brand">Riviera Tickets</div>
+                <h1 class="title">${title}</h1>
+              </div>
+              <div class="body">
+                <p>${intro}</p>
+                <div class="code-box">
+                  <p class="code">${code}</p>
+                  <div class="meta">This code expires in 10 minutes</div>
+                </div>
+                <a class="cta">${action}</a>
+                <p style="margin-top: 14px;">${ignoreText}</p>
+                <div class="foot">
+                  Riviera Tickets • IMAX 70mm Experience
+                </div>
+              </div>
             </div>
           </div>
         </body>
       </html>
-    `
+    `,
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

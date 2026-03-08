@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { users, userSessions } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
 import { hashPassword, verifyPasswordWithMigration } from '@/lib/password'
 
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.email, normalizedEmail))
+      .where(sql`lower(${users.email}) = ${normalizedEmail}`)
       .limit(1)
 
     if (!user) {

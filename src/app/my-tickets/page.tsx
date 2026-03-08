@@ -76,7 +76,7 @@ export default function MyTicketsPage() {
           <div className="p-6 space-y-4">
             {/* Movie Title */}
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-white mb-1">Die Odyssee</h2>
+              <h2 className="text-2xl font-bold text-white mb-1">The Odyssey</h2>
               <p className="text-gray-400 text-sm">Roxy Cinema</p>
             </div>
 

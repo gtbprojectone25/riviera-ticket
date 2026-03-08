@@ -24,7 +24,6 @@ const formatSessionDateUTC = (ts: string | number | Date) => {
     timeZone: 'UTC',
   }).format(d)
 }
-
 const formatSessionTimeUTC = (ts: string | number | Date) => {
   const d = new Date(ts)
   return new Intl.DateTimeFormat('en-US', {
@@ -951,14 +950,17 @@ function AccountPageContent() {
               <div className="welcome-sub">Frequent doubts</div>
             </div>
             <button
-              className="btn-ghost-sm"
+              className="btn-account-back"
               onClick={() => {
                 setShowFaq(false)
                 setFaqExpandedIndex(null)
               }}
+              type="button"
+              aria-label="Back to support"
               style={{marginLeft: 'auto'}}
             >
-              Back
+              <span aria-hidden="true">&larr;</span>
+              <span>Back to Support</span>
             </button>
           </div>
           <div style={{display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 24}}>
@@ -1046,6 +1048,16 @@ function AccountPageContent() {
           <div className="welcome-name">ORDER HISTORY</div>
           <div className="welcome-sub">Your purchases and totals</div>
         </div>
+        <button
+          type="button"
+          className="btn-account-back"
+          onClick={() => setActiveTab('events')}
+          aria-label="Back to events"
+          style={{marginLeft: 'auto'}}
+        >
+          <span aria-hidden="true">&larr;</span>
+          <span>Back to Events</span>
+        </button>
       </div>
       {ordersLoading ? (
         <div className="text-riv-text2 text-sm">Loading orders...</div>
@@ -1239,7 +1251,9 @@ function AccountPageContent() {
         </div>
       </div>
       <nav className="navbar hidden md:flex">
-        <div className="nav-logo">RIVIERA<span>.</span></div>
+        <div className="nav-logo">
+          <img src="/riviera-logo.ico" alt="Riviera Logo" style={{ height: '24px' }} />
+        </div>
         <div className="nav-links">
           <button 
             className={`nav-link ${activeTab === 'events' ? 'active' : ''}`}
@@ -1329,4 +1343,5 @@ function AccountPageContent() {
     </div>
   )
 }
+
 

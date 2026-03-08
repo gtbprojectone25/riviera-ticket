@@ -4,7 +4,7 @@ import React, {
   createContext,
   useContext,
   useEffect,
-  useState,
+  useReducer,
   useCallback,
   useRef,
 } from 'react'
@@ -41,6 +41,89 @@ function normalizePath(pathname: string | null): string {
 }
 
 type TimerStatus = 'active' | 'popup' | 'expired'
+
+type TimerState = {
+  remainingSeconds: number
+  status: TimerStatus
+  hasExtended: boolean
+  popupCountdown: number
+  initialized: boolean
+}
+
+type TimerAction =
+  | { type: 'HYDRATE'; remainingSeconds: number | null; hasExtended: boolean }
+  | { type: 'TICK_MAIN' }
+  | { type: 'ENTER_POPUP' }
+  | { type: 'TICK_POPUP' }
+  | { type: 'START_TIMER' }
+  | { type: 'EXTEND_TIMER' }
+  | { type: 'CLEAR_FLOW' }
+
+const initialTimerState: TimerState = {
+  remainingSeconds: 0,
+  status: 'active',
+  hasExtended: false,
+  popupCountdown: EXTENSION_POPUP_SECONDS,
+  initialized: false,
+}
+
+function timerReducer(state: TimerState, action: TimerAction): TimerState {
+  switch (action.type) {
+    case 'HYDRATE': {
+      if (action.remainingSeconds === null) {
+        return { ...state, initialized: true }
+      }
+
+      return {
+        ...state,
+        remainingSeconds: action.remainingSeconds,
+        hasExtended: action.hasExtended,
+        status: action.remainingSeconds <= 0 ? 'popup' : 'active',
+        popupCountdown: EXTENSION_POPUP_SECONDS,
+        initialized: true,
+      }
+    }
+    case 'TICK_MAIN':
+      if (state.status === 'expired') return state
+      return { ...state, remainingSeconds: Math.max(state.remainingSeconds - 1, 0) }
+    case 'ENTER_POPUP':
+      if (state.status !== 'active' || state.remainingSeconds > 0) return state
+      return {
+        ...state,
+        status: 'popup',
+        popupCountdown: EXTENSION_POPUP_SECONDS,
+      }
+    case 'TICK_POPUP':
+      if (state.status !== 'popup') return state
+      return { ...state, popupCountdown: Math.max(state.popupCountdown - 1, 0) }
+    case 'START_TIMER':
+      return {
+        ...state,
+        remainingSeconds: INITIAL_TIMER_MINUTES * 60,
+        status: 'active',
+        hasExtended: false,
+        popupCountdown: EXTENSION_POPUP_SECONDS,
+      }
+    case 'EXTEND_TIMER':
+      if (state.hasExtended) return state
+      return {
+        ...state,
+        remainingSeconds: EXTENSION_MINUTES * 60,
+        status: 'active',
+        hasExtended: true,
+        popupCountdown: EXTENSION_POPUP_SECONDS,
+      }
+    case 'CLEAR_FLOW':
+      return {
+        ...state,
+        remainingSeconds: 0,
+        status: 'expired',
+        hasExtended: false,
+      }
+    default:
+      return state
+  }
+}
 
 interface CheckoutTimerContextType {
   /** Remaining time in seconds */
@@ -79,11 +162,7 @@ export function CheckoutTimerProvider({ children }: CheckoutTimerProviderProps) 
   const router = useRouter()
   const pathname = usePathname()
 
-  const [remainingSeconds, setRemainingSeconds] = useState<number>(0)
-  const [status, setStatus] = useState<TimerStatus>('active')
-  const [hasExtended, setHasExtended] = useState<boolean>(false)
-  const [popupCountdown, setPopupCountdown] = useState<number>(EXTENSION_POPUP_SECONDS)
-  const [initialized, setInitialized] = useState(false)
+  const [state, dispatch] = useReducer(timerReducer, initialTimerState)
 
   const popupTimerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -104,43 +183,41 @@ export function CheckoutTimerProvider({ children }: CheckoutTimerProviderProps) 
       const now = Date.now()
       const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000))
 
-      setRemainingSeconds(remaining)
-      setHasExtended(storedExtended === 'true')
-
-      if (remaining <= 0) {
-        setStatus('popup')
-        setPopupCountdown(EXTENSION_POPUP_SECONDS)
-      }
+      dispatch({
+        type: 'HYDRATE',
+        remainingSeconds: remaining,
+        hasExtended: storedExtended === 'true',
+      })
+      return
     }
 
-    setInitialized(true)
+    dispatch({ type: 'HYDRATE', remainingSeconds: null, hasExtended: false })
   }, [])
 
   // Main countdown timer
   useEffect(() => {
-    if (!initialized || !isOnFlowPage) return
-    if (status === 'expired') return
+    if (!state.initialized || !isOnFlowPage) return
+    if (state.status === 'expired') return
 
     const interval = setInterval(() => {
-      setRemainingSeconds(prev => {
-        if (prev <= 1) {
-          if (status === 'active') {
-            setStatus('popup')
-            setPopupCountdown(EXTENSION_POPUP_SECONDS)
-            return 0
-          }
-          return 0
-        }
-        return prev - 1
-      })
+      dispatch({ type: 'TICK_MAIN' })
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [initialized, isOnFlowPage, status])
+  }, [state.initialized, isOnFlowPage, state.status])
+
+  // Transition from active countdown to extension popup
+  useEffect(() => {
+    if (!state.initialized || !isOnFlowPage) return
+    if (state.status !== 'active') return
+    if (state.remainingSeconds > 0) return
+
+    dispatch({ type: 'ENTER_POPUP' })
+  }, [state.initialized, isOnFlowPage, state.status, state.remainingSeconds])
 
   // Popup countdown timer (10 seconds)
   useEffect(() => {
-    if (status !== 'popup' || !isOnFlowPage) {
+    if (state.status !== 'popup' || !isOnFlowPage) {
       if (popupTimerRef.current) {
         clearInterval(popupTimerRef.current)
         popupTimerRef.current = null
@@ -149,14 +226,7 @@ export function CheckoutTimerProvider({ children }: CheckoutTimerProviderProps) 
     }
 
     popupTimerRef.current = setInterval(() => {
-      setPopupCountdown(prev => {
-        if (prev <= 1) {
-          // Time's up, expire the flow
-          handleExpire()
-          return 0
-        }
-        return prev - 1
-      })
+      dispatch({ type: 'TICK_POPUP' })
     }, 1000)
 
     return () => {
@@ -165,8 +235,7 @@ export function CheckoutTimerProvider({ children }: CheckoutTimerProviderProps) 
         popupTimerRef.current = null
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, isOnFlowPage])
+  }, [state.status, isOnFlowPage])
 
   // Persist timer to localStorage
   const persistTimer = useCallback((expiresAt: number, extended: boolean) => {
@@ -178,24 +247,18 @@ export function CheckoutTimerProvider({ children }: CheckoutTimerProviderProps) 
   // Start the timer (10 minutes from now)
   const startTimer = useCallback(() => {
     const expiresAt = Date.now() + INITIAL_TIMER_MINUTES * 60 * 1000
-    setRemainingSeconds(INITIAL_TIMER_MINUTES * 60)
-    setStatus('active')
-    setHasExtended(false)
-    setPopupCountdown(EXTENSION_POPUP_SECONDS)
+    dispatch({ type: 'START_TIMER' })
     persistTimer(expiresAt, false)
   }, [persistTimer])
 
   // Extend timer by 3 minutes
   const extendTimer = useCallback(() => {
-    if (hasExtended) return
+    if (state.hasExtended) return
 
     const newExpiresAt = Date.now() + EXTENSION_MINUTES * 60 * 1000
-    setRemainingSeconds(EXTENSION_MINUTES * 60)
-    setStatus('active')
-    setHasExtended(true)
-    setPopupCountdown(EXTENSION_POPUP_SECONDS)
+    dispatch({ type: 'EXTEND_TIMER' })
     persistTimer(newExpiresAt, true)
-  }, [hasExtended, persistTimer])
+  }, [state.hasExtended, persistTimer])
 
   // Clear flow data and release seats
   const clearFlow = useCallback(async () => {
@@ -230,23 +293,27 @@ export function CheckoutTimerProvider({ children }: CheckoutTimerProviderProps) 
     localStorage.removeItem(STORAGE_KEY_EXTENDED)
     localStorage.removeItem(STORAGE_KEY_CART)
 
-    setRemainingSeconds(0)
-    setStatus('expired')
-    setHasExtended(false)
+    dispatch({ type: 'CLEAR_FLOW' })
   }, [])
 
   // Handle expiration
   const handleExpire = useCallback(async () => {
-    setStatus('expired')
     await clearFlow()
     router.push('/pre-order')
   }, [clearFlow, router])
 
+  // Expire flow once popup countdown reaches zero
+  useEffect(() => {
+    if (state.status !== 'popup' || !isOnFlowPage) return
+    if (state.popupCountdown > 0) return
+    void handleExpire()
+  }, [state.status, isOnFlowPage, state.popupCountdown, handleExpire])
+
   const value: CheckoutTimerContextType = {
-    remainingSeconds,
-    status,
-    hasExtended,
-    popupCountdown,
+    remainingSeconds: state.remainingSeconds,
+    status: state.status,
+    hasExtended: state.hasExtended,
+    popupCountdown: state.popupCountdown,
     startTimer,
     extendTimer,
     clearFlow,

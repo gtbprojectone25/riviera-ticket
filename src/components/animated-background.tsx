@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 /**
  * Background com vídeo em tela cheia
@@ -8,10 +8,27 @@ import { useEffect, useState } from 'react'
 export function AnimatedBackground() {
   const [failed, setFailed] = useState(false)
   const [shouldLoad, setShouldLoad] = useState(false)
+  const isMountedRef = useRef(false)
+
   useEffect(() => {
-    const id = setTimeout(() => setShouldLoad(true), 150)
-    return () => clearTimeout(id)
+    isMountedRef.current = true
+    const id = setTimeout(() => {
+      if (isMountedRef.current) {
+        setShouldLoad(true)
+      }
+    }, 150)
+    return () => {
+      isMountedRef.current = false
+      clearTimeout(id)
+    }
   }, [])
+
+  const handleMediaError = () => {
+    if (isMountedRef.current) {
+      setFailed(true)
+    }
+  }
+
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
       {shouldLoad && !failed ? (
@@ -23,8 +40,8 @@ export function AnimatedBackground() {
           playsInline
           preload="metadata"
           poster="/Frame 4.png"
-          onError={() => setFailed(true)}
-          onAbort={() => setFailed(true)}
+          onError={handleMediaError}
+          onAbort={handleMediaError}
         >
           <source src="/small-vecteezy_dark-blue-dramatic-background-with-smoke-clouds_27989987_small.mp4" type="video/mp4" />
           <source src="/small-vecteezy_orange.mp4" type="video/mp4" />
