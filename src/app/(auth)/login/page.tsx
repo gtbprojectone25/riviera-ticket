@@ -95,13 +95,15 @@ function LoginPageContent() {
       }}
     >
       <div className="login-wrap">
-        <div className="login-logo">RIVIERA</div>
-        <div className="imax-badge">
+        <div className="login-logo flex items-center justify-center gap-2 cursor-pointer"
+      onClick={() => router.push("/")}>  <img src="/riviera-logo.ico" alt="Riviera Logo" style={{ height: '24px' }} />
+        </div>
+        <div className="imax-badge mb-0">
           <span>OFFICIAL PARTNER</span>
           <strong>IMAX</strong>
         </div>
 
-        <div className="login-card animate-in">
+        <div className="login-card animate-in mt-1">
           <h2>WELCOME BACK</h2>
           <p>Sign in to manage your tickets and reservations</p>
 
@@ -127,7 +129,7 @@ function LoginPageContent() {
             </div>
 
             <div className="forgot">
-              <Link href="#">Forgot password?</Link>
+              <Link href="/forgot-password">Forgot password?</Link>
             </div>
 
             {error && (

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Loader2, Send, CircleDot, Clock, CheckCircle2 } from 'lucide-react'
+import { Loader2, Send, CircleDot, Clock, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { SupportTicket, TicketMessage } from '@/db/schema'
 
@@ -61,10 +61,12 @@ export function TicketDetails({ ticket, messages, loading, onBack, onSendMessage
       <div className="flex items-start gap-3">
         <button
           onClick={onBack}
-          className="mt-0.5 text-gray-400 hover:text-white transition-colors"
+          className="btn-account-back mt-0.5"
           aria-label="Back"
+          type="button"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <span aria-hidden="true">&larr;</span>
+          <span>Back to Tickets</span>
         </button>
         <div className="flex-1 min-w-0">
           <h3 className="text-white font-semibold text-base leading-snug">{ticket.subject}</h3>
