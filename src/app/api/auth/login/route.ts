@@ -7,6 +7,8 @@ import { users, userSessions } from '@/db/schema'
 import { eq, sql } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
 import { hashPassword, verifyPasswordWithMigration } from '@/lib/password'
+import { withDbRetry } from '@/lib/db-retry'
+import { isTransientDbError } from '@/lib/db-error'
 
 function generateSessionToken(): string {
   return randomBytes(32).toString('hex')
@@ -25,11 +27,13 @@ export async function POST(request: NextRequest) {
 
     const normalizedEmail = email.trim().toLowerCase()
 
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(sql`lower(${users.email}) = ${normalizedEmail}`)
-      .limit(1)
+    const [user] = await withDbRetry(() =>
+      db
+        .select()
+        .from(users)
+        .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+        .limit(1),
+    )
 
     if (!user) {
       return NextResponse.json(
@@ -59,20 +63,24 @@ export async function POST(request: NextRequest) {
 
     if (needsRehash) {
       const newHash = await hashPassword(password)
-      await db
-        .update(users)
-        .set({ hashedPassword: newHash, updatedAt: new Date() })
-        .where(eq(users.id, user.id))
+      await withDbRetry(() =>
+        db
+          .update(users)
+          .set({ hashedPassword: newHash, updatedAt: new Date() })
+          .where(eq(users.id, user.id)),
+      )
     }
 
     const sessionToken = generateSessionToken()
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
 
-    await db.insert(userSessions).values({
-      userId: user.id,
-      sessionToken,
-      expiresAt,
-    })
+    await withDbRetry(() =>
+      db.insert(userSessions).values({
+        userId: user.id,
+        sessionToken,
+        expiresAt,
+      }),
+    )
 
     const response = NextResponse.json({
       success: true,
@@ -95,6 +103,28 @@ export async function POST(request: NextRequest) {
     return response
   } catch (error) {
     console.error('Erro ao fazer login:', error)
+
+    if (isTransientDbError(error)) {
+      return NextResponse.json(
+        { error: 'Servico temporariamente indisponivel. Tente novamente.' },
+        { status: 503 }
+      )
+    }
+
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.toLowerCase().includes('database_url')) {
+      return NextResponse.json(
+        { error: 'Configuracao de banco ausente no ambiente de deploy.' },
+        { status: 503 }
+      )
+    }
+    if (message.toLowerCase().includes('user_sessions') || message.toLowerCase().includes('relation')) {
+      return NextResponse.json(
+        { error: 'Banco sem migracoes atualizadas para login.' },
+        { status: 503 }
+      )
+    }
+
     return NextResponse.json(
       { error: 'Erro interno do servidor' },
       { status: 500 }
