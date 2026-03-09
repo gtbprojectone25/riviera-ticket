@@ -5,7 +5,6 @@
  */
 
 import bcrypt from 'bcryptjs'
-import argon2 from 'argon2'
 
 // Bcrypt cost (10-12 recommended)
 const SALT_ROUNDS = 12
@@ -69,6 +68,8 @@ export async function verifyPasswordWithMigration(
 
   if (isArgon2Hash(storedHash)) {
     try {
+      const argon2 = await getArgon2()
+      if (!argon2) return { valid: false, needsRehash: false }
       const valid = await argon2.verify(storedHash, password)
       return { valid, needsRehash: valid }
     } catch {
@@ -83,4 +84,23 @@ export async function verifyPasswordWithMigration(
   }
 
   return { valid: false, needsRehash: false }
+}
+type Argon2Like = {
+  verify: (hash: string, plain: string) => Promise<boolean>
+}
+
+let argon2Loader: Promise<Argon2Like | null> | null = null
+
+async function getArgon2(): Promise<Argon2Like | null> {
+  if (!argon2Loader) {
+    argon2Loader = import('argon2')
+      .then((mod) => {
+        const maybe = (mod as unknown as { verify?: Argon2Like['verify']; default?: Argon2Like })
+        if (typeof maybe.verify === 'function') return { verify: maybe.verify }
+        if (maybe.default && typeof maybe.default.verify === 'function') return maybe.default
+        return null
+      })
+      .catch(() => null)
+  }
+  return argon2Loader
 }
