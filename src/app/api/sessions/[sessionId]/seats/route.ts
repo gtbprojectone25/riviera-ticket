@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { seats, sessions, tickets } from '@/db/schema'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, ne } from 'drizzle-orm'
 import { ensureSeatsForSession } from '@/server/seats/generateSeatsForSession'
 import { toSeatStateRows } from '@/server/seats/seatStateDTO'
+import { enforceConfirmedSeatsAsSold } from '@/server/seats/confirmedSeatGuard'
 import { withDbRetry } from '@/lib/db-retry'
 
 export const dynamic = 'force-dynamic'
@@ -103,7 +104,7 @@ export async function GET(
       }
     }
 
-    // Hard guarantee: if there is a confirmed ticket for a seat, it must be treated as SOLD in the map.
+    // Hard guarantee: if there is any non-cancelled ticket for a seat, it must be treated as SOLD in the map.
     const confirmedTicketSeats = await withDbRetry(() =>
       db
         .select({ seatId: tickets.seatId })
@@ -111,16 +112,14 @@ export async function GET(
         .where(
           and(
             eq(tickets.sessionId, id),
-            eq(tickets.status, 'CONFIRMED'),
+            ne(tickets.status, 'CANCELLED'),
           ),
         ),
     )
 
-    const confirmedSeatIds = new Set(confirmedTicketSeats.map((t) => t.seatId).filter(Boolean))
-    const normalizedSeats = dbSeats.map((seat) =>
-      confirmedSeatIds.has(seat.id)
-        ? { ...seat, status: 'SOLD' as const }
-        : seat,
+    const normalizedSeats = enforceConfirmedSeatsAsSold(
+      dbSeats,
+      confirmedTicketSeats.map((t) => t.seatId),
     )
 
     const rows: RowResponse[] = toSeatStateRows(normalizedSeats)

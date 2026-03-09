@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, ne } from 'drizzle-orm'
 
 import { db } from '@/db'
 import { seats, sessions, tickets } from '@/db/schema'
 import { ensureSeatsForSession } from '@/server/seats/generateSeatsForSession'
 import { toSeatStateRows } from '@/server/seats/seatStateDTO'
+import { enforceConfirmedSeatsAsSold } from '@/server/seats/confirmedSeatGuard'
 import { withDbRetry } from '@/lib/db-retry'
 
 export const dynamic = 'force-dynamic'
@@ -61,16 +62,14 @@ export async function GET(
         .where(
           and(
             eq(tickets.sessionId, sessionId),
-            eq(tickets.status, 'CONFIRMED'),
+            ne(tickets.status, 'CANCELLED'),
           ),
         ),
     )
 
-    const confirmedSeatIds = new Set(confirmedTicketSeats.map((t) => t.seatId).filter(Boolean))
-    const normalizedSeats = dbSeats.map((seat) =>
-      confirmedSeatIds.has(seat.id)
-        ? { ...seat, status: 'SOLD' as const }
-        : seat,
+    const normalizedSeats = enforceConfirmedSeatsAsSold(
+      dbSeats,
+      confirmedTicketSeats.map((t) => t.seatId),
     )
 
     const rows = toSeatStateRows(normalizedSeats)

@@ -30,11 +30,17 @@ describe('Availability Check E2E', () => {
     const sessionId = sessions[0].id
 
     // 2. Get seats and find an AVAILABLE one
-    // Ensure=true can be slow, so we wait
-    const rows = (await getJson(`${BASE_URL}/api/sessions/${sessionId}/seats?ensure=true`)) as any[]
-    const allSeats = rows.flatMap((r) => r.seats)
+    // First try without ensure for speed; fallback to ensure=true if needed.
+    let rows = (await getJson(`${BASE_URL}/api/sessions/${sessionId}/seats`)) as any[]
+    let allSeats = rows.flatMap((r) => r.seats)
+    let availableSeat = allSeats.find((s) => s.status === 'AVAILABLE' && s.type === 'STANDARD')
+
+    if (!availableSeat) {
+      rows = (await getJson(`${BASE_URL}/api/sessions/${sessionId}/seats?ensure=true`)) as any[]
+      allSeats = rows.flatMap((r) => r.seats)
+      availableSeat = allSeats.find((s) => s.status === 'AVAILABLE' && s.type === 'STANDARD')
+    }
     // Try to find a seat that is definitely available and standard
-    const availableSeat = allSeats.find((s) => s.status === 'AVAILABLE' && s.type === 'STANDARD')
     
     if (!availableSeat) {
       console.warn('No available standard seats found for test, skipping double booking test')
@@ -70,5 +76,5 @@ describe('Availability Check E2E', () => {
     // Should fail
     expect(resB.ok).toBe(false)
     expect(resB.status).toBe(409)
-  }, 20000) // Increase timeout to 20s
+  }, 60000) // E2E may be slow in local/dev environments
 })
